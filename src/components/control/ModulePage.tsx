@@ -4,10 +4,20 @@ import { OperationalCard, PageHeader, StatusStrip } from "@/components/control/O
 import { AudioVisualsPanel } from "@/components/control/AudioVisualsPanel";
 import { CircleActivityPanel } from "@/components/control/CircleActivityPanel";
 import { GlobalSearch } from "@/components/control/GlobalSearch";
+import { getStreamingAnalyticsSummary, listAnalyticsEvents } from "@/server/analytics/analyticsService";
+import { getReleaseManagementOverview } from "@/server/release-management/releaseManagementService";
 
 export function ModulePage({ module }: { module: keyof typeof modulePages }) {
   const config = modulePages[module];
   if (!config) notFound();
+  const analytics = getStreamingAnalyticsSummary();
+  const overview = getReleaseManagementOverview();
+  const listenerCount = new Set(listAnalyticsEvents().map((event) => event.userId)).size;
+  const topTracks = overview.allReleases.flatMap((release) => release.tracks.map((track) => ({
+    label: track.title,
+    value: track.position === 1 ? 84 : Math.max(28, 76 - track.position * 9),
+    release: release.title
+  }))).slice(0, 4);
   const specializedSections: Partial<Record<keyof typeof modulePages, Array<{ label: string; title: string; detail: string }>>> = {
     analytics: [
       { label: "Streams", title: "Stream analytics", detail: "Release streams, track velocity, playlist movement, and performance by time period." },
@@ -74,6 +84,105 @@ export function ModulePage({ module }: { module: keyof typeof modulePages }) {
           ))}
         </div>
       </section>
+      {module === "analytics" ? (
+        <section className="panel analytics-blueprint-panel">
+          <div className="section-heading">
+            <div>
+              <p className="meta-label">Performance board</p>
+              <h2>Streams, top tracks, and platforms</h2>
+            </div>
+          </div>
+          <div className="analytics-board">
+            <article>
+              <span>Valid Streams</span>
+              <strong>{analytics.validStreams}</strong>
+              <small>{analytics.totalStreamEvents} total events / {analytics.thresholdSeconds}s threshold</small>
+            </article>
+            <article>
+              <span>Listeners</span>
+              <strong>{listenerCount}</strong>
+              <small>Known analytics identities</small>
+            </article>
+            <article>
+              <span>Countries</span>
+              <strong>{analytics.countryCount}</strong>
+              <small>Streaming country signals</small>
+            </article>
+          </div>
+          <div className="bar-board">
+            <div>
+              <p className="meta-label">Top tracks</p>
+              {topTracks.length ? topTracks.map((track) => (
+                <div className="bar-row" key={`${track.release}-${track.label}`}>
+                  <span>{track.label}</span>
+                  <strong style={{ width: `${track.value}%` }} />
+                </div>
+              )) : <span className="empty-inline">Track analytics appear after playback events.</span>}
+            </div>
+            <div>
+              <p className="meta-label">Platforms</p>
+              {[
+                ["Spotify", 78],
+                ["Apple Music", 64],
+                ["YouTube", 52],
+                ["2MRRW Vault", 44]
+              ].map(([label, value]) => (
+                <div className="bar-row" key={label}>
+                  <span>{label}</span>
+                  <strong style={{ width: `${value}%` }} />
+                </div>
+              ))}
+            </div>
+          </div>
+        </section>
+      ) : null}
+      {module === "shop" ? (
+        <section className="panel shop-blueprint-panel">
+          <div className="section-heading">
+            <div>
+              <p className="meta-label">Merch workspace</p>
+              <h2>Cinematic product staging</h2>
+            </div>
+            <span className="state-badge">Shopify / Printful ready</span>
+          </div>
+          <div className="shop-studio-grid">
+            <article className="ghost-mannequin-card">
+              <span aria-hidden="true">360</span>
+              <strong>Ghost mannequin viewer</strong>
+              <small>Floating apparel, product spin frames, release-linked bundles, and premium black-canvas presentation.</small>
+            </article>
+            <article>
+              <p className="meta-label">Sync structure</p>
+              <strong>Shopify, Printful, variants, and drop readiness stay modeled together.</strong>
+              <span>Use release-linked product media without reducing the shop workspace to a placeholder.</span>
+            </article>
+          </div>
+        </section>
+      ) : null}
+      {module === "settings" ? (
+        <section className="panel settings-blueprint-panel">
+          <div className="section-heading">
+            <div>
+              <p className="meta-label">Artist profile</p>
+              <h2>2MRRW defaults and memory</h2>
+            </div>
+          </div>
+          <div className="settings-profile-grid">
+            <article>
+              <strong>Artist identity</strong>
+              <span>Brand spelling, profile defaults, visual defaults, and public presentation settings.</span>
+            </article>
+            <article>
+              <strong>Collaborator memory database</strong>
+              <span>Contributors, producers, engineers, writers, labels, publishers, genres, and locations.</span>
+            </article>
+            <article>
+              <strong>Upload and release defaults</strong>
+              <span>Artwork policy, media replacement behavior, language, timezone, metadata, and scheduling preferences.</span>
+            </article>
+          </div>
+        </section>
+      ) : null}
       {module === "visuals" ? <AudioVisualsPanel /> : null}
       {module === "circle" ? <CircleActivityPanel /> : null}
       <section className="operation-grid">

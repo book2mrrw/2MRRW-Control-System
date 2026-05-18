@@ -20,7 +20,7 @@ export const releaseSteps = [
   { id: "setup", label: "Choose Type", href: "/releases/new" },
   { id: "details", label: "Release Details", href: "/releases/new/details" },
   { id: "tracks", label: "Tracks & Credits", href: "/releases/new/tracks" },
-  { id: "uploads", label: "Media Uploads", href: "/releases/new/uploads" },
+  { id: "uploads", label: "Artwork & Media", href: "/releases/new/uploads" },
   { id: "review", label: "Review & Publish", href: "/releases/new/review" }
 ] as const;
 

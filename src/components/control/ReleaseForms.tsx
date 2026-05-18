@@ -13,29 +13,29 @@ const releaseTypeOptions = [
   {
     value: "single",
     label: "Single",
-    icon: "S",
-    detail: "1 track. Fastest path to publish.",
+    icon: "Music",
+    detail: "1 track release",
     defaultTrackCount: 1
   },
   {
     value: "ep",
     label: "EP",
-    icon: "EP",
-    detail: "2-4 tracks. Compact release.",
+    icon: "Layers",
+    detail: "2-4 tracks",
     defaultTrackCount: 4
   },
   {
     value: "album",
     label: "Album",
-    icon: "LP",
-    detail: "5+ tracks. Full sequence.",
+    icon: "Album",
+    detail: "5+ tracks",
     defaultTrackCount: 10
   },
   {
     value: "deluxe",
     label: "Deluxe Album",
-    icon: "DX",
-    detail: "Bonus-track version.",
+    icon: "Sparkles",
+    detail: "Album with bonus tracks",
     defaultTrackCount: 15
   }
 ] as const;
@@ -148,6 +148,15 @@ export function ReleaseMetadataForm({
     }, [])
   );
   const languageOptions = taxonomyOptions(lyricLanguages);
+  const scheduledDate = draft.scheduledPublishAt?.slice(0, 10) ?? "";
+  const scheduledTime = draft.scheduledPublishAt?.includes("T") ? draft.scheduledPublishAt.slice(11, 16) : "";
+
+  function scheduledPublishValue(form: FormData) {
+    const releaseDate = String(form.get("scheduledPublishAt") || "");
+    const releaseTime = String(form.get("releaseTime") || "");
+    if (!releaseDate) return undefined;
+    return releaseTime ? `${releaseDate}T${releaseTime}:00` : releaseDate;
+  }
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -162,7 +171,7 @@ export function ReleaseMetadataForm({
         recordLabel: form.get("recordLabelAdvanced") || form.get("recordLabel"),
         copyrightOwner: form.get("copyrightOwnerAdvanced") || form.get("copyrightOwner"),
         upc: form.get("upc"),
-        scheduledPublishAt: form.get("scheduledPublishAt"),
+        scheduledPublishAt: scheduledPublishValue(form),
         publisherName: form.get("publisherNameAdvanced") || form.get("publisherName"),
         recordingLocation: form.get("recordingLocation"),
         originalReleaseDate: form.get("originalReleaseDate"),
@@ -192,18 +201,22 @@ export function ReleaseMetadataForm({
       <fieldset className="span-2 form-fieldset essential-fields">
         <legend>Essential Details</legend>
         <label>
-          Release title
+          Release Title
           <input name="title" defaultValue={draft.title} required />
         </label>
-        <TypeaheadField label="Main Artist Name" defaultValue={draft.artistName} options={savedContributors} readOnly />
+        <TypeaheadField label="Main Artist Search/Add" defaultValue={draft.artistName} options={savedContributors} readOnly />
         <label>
-          Release date
-          <input name="scheduledPublishAt" type="date" />
+          Release Date
+          <input name="scheduledPublishAt" type="date" defaultValue={scheduledDate} />
         </label>
-        <TypeaheadField name="genreCategory" label="Primary genre" defaultValue={draft.primaryGenre?.category ?? primaryGenre?.category} options={genreOptions} emptyLabel="No genre found. Choose or create a genre tag." createLabel="+ Create New Genre" />
-        <TypeaheadField name="subgenre" label="Primary subgenre" defaultValue={draft.primaryGenre?.subgenre ?? primarySubgenre?.value} options={subgenreOptions} emptyLabel="No subgenre found. Create a metadata tag." createLabel="+ Create New Subgenre" />
-        <TypeaheadField name="secondaryGenreCategory" label="Secondary genre" defaultValue={draft.secondaryGenre?.category ?? "r-and-b-soul"} options={genreOptions} emptyLabel="No genre found. Choose or create a genre tag." createLabel="+ Create New Genre" />
+        <label>
+          Release Time
+          <input name="releaseTime" type="time" defaultValue={scheduledTime} />
+        </label>
         <TypeaheadField name="language" label="Language" defaultValue={draft.language} options={languageOptions} emptyLabel="No language found. Create a language note." createLabel="+ Create Language" />
+        <TypeaheadField name="genreCategory" label="Primary Genre" defaultValue={draft.primaryGenre?.category ?? primaryGenre?.category} options={genreOptions} emptyLabel="No genre found. Choose or create a genre tag." createLabel="+ Create New Genre" />
+        <TypeaheadField name="subgenre" label="Primary Subgenre" defaultValue={draft.primaryGenre?.subgenre ?? primarySubgenre?.value} options={subgenreOptions} emptyLabel="No subgenre found. Create a metadata tag." createLabel="+ Create New Subgenre" />
+        <TypeaheadField name="secondaryGenreCategory" label="Secondary Genre" defaultValue={draft.secondaryGenre?.category ?? "r-and-b-soul"} options={genreOptions} emptyLabel="No genre found. Choose or create a genre tag." createLabel="+ Create New Genre" />
       </fieldset>
       <div className="span-2 autosave-contract-card">
         <p className="meta-label">Collaborator memory</p>

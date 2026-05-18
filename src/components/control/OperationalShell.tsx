@@ -2,34 +2,59 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import type { ReactNode } from "react";
+import { useState, type ComponentType, type ReactNode } from "react";
+import {
+  BarChart3,
+  Bell,
+  ChevronLeft,
+  ChevronRight,
+  Gauge,
+  Images,
+  Package,
+  Plus,
+  Search,
+  Settings,
+  ShoppingBag
+} from "lucide-react";
 import { controlToneStyle } from "@/design/tokens";
 import { GlobalSearch } from "@/components/control/GlobalSearch";
 import { primaryNavigation } from "@/components/control/OperationalData";
 
 function NavigationIcon({ label }: { label: string }) {
-  const paths: Record<string, string> = {
-    Dashboard: "M3 10.5 12 3l9 7.5V21h-6v-6H9v6H3V10.5Z",
-    Releases: "M5 5h14v14H5V5Zm3 3v8h8V8H8Z",
-    Media: "M4 7h16v10H4V7Zm3 3 3 3 2-2 5 4",
-    Analytics: "M5 19V9m7 10V5m7 14v-7",
-    Shop: "M6 8h12l-1 12H7L6 8Zm2-3h8l2 3H6l2-3Z",
-    Settings: "M12 8a4 4 0 1 1 0 8 4 4 0 0 1 0-8Zm0-5v3m0 12v3M3 12h3m12 0h3"
+  const icons: Record<string, ComponentType<{ size?: number; strokeWidth?: number }>> = {
+    Dashboard: Gauge,
+    Releases: Package,
+    Media: Images,
+    Analytics: BarChart3,
+    Shop: ShoppingBag,
+    Settings
   };
-  const path = paths[label] ?? "M5 12h14";
+  const Icon = icons[label] ?? Gauge;
 
-  return (
-    <svg aria-hidden="true" className="rail-icon" viewBox="0 0 24 24">
-      <path d={path} />
-    </svg>
-  );
+  return <Icon size={18} strokeWidth={2} />;
+}
+
+function pageTitle(pathname: string) {
+  const match = primaryNavigation.find((item) => pathname === item.href || (item.href !== "/dashboard" && pathname.startsWith(`${item.href}/`)));
+  if (pathname.startsWith("/releases/new")) return "Add Release";
+  return match?.label ?? "Dashboard";
+}
+
+function pageSubtitle(pathname: string) {
+  if (pathname.startsWith("/releases/new")) return "Five-step release workflow";
+  if (pathname.startsWith("/media")) return "Uploads, ownership, and sync";
+  if (pathname.startsWith("/analytics")) return "Streams, platforms, and signals";
+  if (pathname.startsWith("/shop")) return "Merch, drops, and commerce";
+  if (pathname.startsWith("/settings")) return "Profile, memory, and defaults";
+  return "Creator Studio";
 }
 
 export function OperationalShell({ children }: { children: ReactNode }) {
   const pathname = usePathname();
+  const [collapsed, setCollapsed] = useState(false);
 
   return (
-    <div className="control-shell">
+    <div className="control-shell" data-sidebar-collapsed={collapsed ? "true" : "false"}>
       <a className="skip-link" href="#control-workspace">
         Skip to workspace
       </a>
@@ -41,7 +66,7 @@ export function OperationalShell({ children }: { children: ReactNode }) {
           </span>
           <span>
             <strong>2MRRW</strong>
-            <small>Creator Release System</small>
+            <small>Creator Studio</small>
           </span>
         </Link>
         <div className="sidebar-system-card">
@@ -68,18 +93,36 @@ export function OperationalShell({ children }: { children: ReactNode }) {
             );
           })}
         </nav>
+        <footer className="sidebar-footer">
+          <div className="sidebar-profile">
+            <span aria-hidden="true">2M</span>
+            <strong>2MRRW</strong>
+            <small>Creator System</small>
+          </div>
+          <button className="sidebar-collapse-button" onClick={() => setCollapsed((current) => !current)} type="button">
+            {collapsed ? <ChevronRight size={16} /> : <ChevronLeft size={16} />}
+            <span>{collapsed ? "Expand" : "Collapse"}</span>
+          </button>
+        </footer>
       </aside>
       <div className="app-main">
         <header className="top-status" aria-label="Control system status">
-          <div>
-            <p className="meta-label">Backend Creator OS</p>
-            <strong>Sequential releases, quiet sync, premium control</strong>
+          <div className="topbar-title">
+            <p className="meta-label">{pageSubtitle(pathname)}</p>
+            <strong>{pageTitle(pathname)}</strong>
           </div>
-          <GlobalSearch />
+          <div className="topbar-search">
+            <Search size={16} aria-hidden="true" />
+            <GlobalSearch />
+          </div>
           <div className="top-status-cluster">
-            <span>Autosave ready</span>
-            <span>Media pipeline</span>
-            <span>Frontend sync guarded</span>
+            <button className="topbar-icon-button" type="button" aria-label="Notifications">
+              <Bell size={17} />
+            </button>
+            <Link className="topbar-new-release" href="/releases/new">
+              <Plus size={16} />
+              New Release
+            </Link>
           </div>
         </header>
         <main className="workspace" id="control-workspace">

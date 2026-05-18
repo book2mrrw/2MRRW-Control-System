@@ -107,7 +107,7 @@ export function ReleaseIndexPage({ status, type }: { status?: ReleaseTab; type?:
         <GlobalSearch />
         <div className="release-filter-row" aria-label="Release filters">
           {[
-            { label: "All", href: "/releases", active: !status },
+            { label: "All", href: "/releases", active: !status && !type },
             { label: "Albums", href: "/releases?type=album", active: type === "album" },
             { label: "Singles", href: "/releases?type=single", active: type === "single" },
             { label: "EPs", href: "/releases?type=ep", active: type === "ep" },
@@ -164,13 +164,6 @@ export function ReleaseWizardPage({ step }: { step: ReleaseStepId }) {
   const currentStepIndex = stepOrder.indexOf(step);
   const nextStep = stepUrls[currentStepIndex + 1] ?? "/releases";
   const previousStep = stepUrls[currentStepIndex - 1] ?? "/releases";
-  const pageTitles: Record<ReleaseStepId, string> = {
-    setup: "What are you releasing?",
-    details: "Release details",
-    tracks: "Tracks & credits",
-    uploads: "Artwork & media",
-    review: "Review & publish"
-  };
   const pageDescriptions: Record<ReleaseStepId, string> = {
     setup: "Choose the format. The system will create the right draft shape and move you forward.",
     details: "Title, artist, genre, language, release date, collaborator memory, and metadata defaults.",
@@ -182,10 +175,10 @@ export function ReleaseWizardPage({ step }: { step: ReleaseStepId }) {
   return (
     <>
       <PageHeader
-        eyebrow="Sequential 5-step release workflow"
-        title={pageTitles[step]}
+        eyebrow="2MRRW RELEASE SYSTEM"
+        title="Add Release"
         description={pageDescriptions[step]}
-        actions={draft ? [{ label: "Open Draft", href: `/releases/${draft.id}` }] : [{ label: "All Releases", href: "/releases" }]}
+        actions={draft ? [{ label: "Save Draft", href: `/releases/${draft.id}` }] : [{ label: "Save Draft", href: "/releases" }]}
       />
       <div className="release-flow-layout">
         <WorkflowStepper current={step} />
@@ -204,7 +197,7 @@ export function ReleaseWizardPage({ step }: { step: ReleaseStepId }) {
             />
           ) : null}
           {step === "setup" ? (
-            <FormSection title="Choose release type" description="Single, EP, Album, or Deluxe Album. This creates the draft and the recommended track structure.">
+            <FormSection title="What would you like to release?" description="Single, EP, Album, or Deluxe Album. This creates the draft and the recommended track structure.">
               <CreateReleaseDraftForm />
               <Link className="control-button secondary workflow-cancel-link" href="/releases">
                 Cancel
@@ -231,11 +224,19 @@ export function ReleaseWizardPage({ step }: { step: ReleaseStepId }) {
                 <ReleaseMetadataForm draft={draft} contributorProfiles={contributorProfiles} metadataSuggestions={metadataSuggestions} />
               </FormSection>
               <aside className="workflow-side-notes">
-                <p className="meta-label">Clean form rules</p>
-                <strong>Save the release story before tracks.</strong>
-                <span>Autosuggest remembers collaborators, labels, publishers, locations, genres, and metadata defaults for future releases.</span>
-                <span>Release date feeds scheduling and review readiness.</span>
-                <span>Only required release details are visible first. Optional metadata stays folded until needed.</span>
+                <div className="cover-summary-panel">
+                  <p className="meta-label">Cover artwork</p>
+                  <strong>Upload the release cover.</strong>
+                  <span>3000x3000 recommended. 1400x1400 minimum.</span>
+                  <MediaUploadPanel draft={{ id: draft.id, title: draft.title, tracks: draft.tracks }} mode="artwork" />
+                </div>
+                <div className="release-summary-panel">
+                  <p className="meta-label">Release type summary</p>
+                  <span className="release-card-art" aria-hidden="true">{releaseArtworkLabel(draft)}</span>
+                  <strong>{draft.releaseType.replaceAll("_", " ")} / {draft.tracks.length} tracks</strong>
+                  <span>{releaseTypeRule(draft)}</span>
+                  <span>Release date feeds scheduling and review readiness.</span>
+                </div>
               </aside>
             </div>
           ) : null}
@@ -328,6 +329,7 @@ export function ReleaseWizardPage({ step }: { step: ReleaseStepId }) {
         </section>
       </div>
       <nav className="workflow-actions" aria-label="Workflow navigation">
+        <span className="autosave-indicator">Autosave ready</span>
         <Link className="control-button secondary" href={previousStep ?? "/releases"}>
           Back
         </Link>

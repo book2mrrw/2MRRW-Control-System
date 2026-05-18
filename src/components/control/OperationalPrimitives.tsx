@@ -83,12 +83,13 @@ export function WorkflowStepper({ current }: { current: ReleaseStepId }) {
   return (
     <nav className="workflow-stepper" aria-label="Release workflow steps">
       {releaseSteps.map((step, index) => {
-        const state = index < currentIndex ? "Complete" : index === currentIndex ? "Active" : "Queued";
+        const state = index < currentIndex ? "done" : index === currentIndex ? "active" : "queued";
+        const label = state === "done" ? "Complete" : state === "active" ? "Active" : "Queued";
         return (
-          <Link className="workflow-step" data-active={step.id === current ? "true" : "false"} href={step.href} key={step.id}>
+          <Link className="workflow-step" data-active={step.id === current ? "true" : "false"} data-state={state} href={step.href} key={step.id}>
             <span>{index + 1}</span>
             <strong>{step.label}</strong>
-            <small>{state}</small>
+            <small>{label}</small>
           </Link>
         );
       })}
