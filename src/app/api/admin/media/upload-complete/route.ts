@@ -15,7 +15,8 @@ const uploadCompleteSchema = z.object({
   radioId: z.string().min(1).optional(),
   collectorId: z.string().min(1).optional(),
   vaultContentId: z.string().min(1).optional(),
-  path: z.string().min(1)
+  path: z.string().min(1),
+  retryOfAssetId: z.string().min(1).optional()
 });
 
 export async function POST(request: Request) {

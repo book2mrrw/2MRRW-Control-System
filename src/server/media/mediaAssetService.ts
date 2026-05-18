@@ -2,6 +2,12 @@ import { mediaAssets, tracks } from "@/server/data/seedData";
 import { getAccountState } from "@/server/account/accountStateService";
 import { coverArtPolicy } from "@/server/release-management/taxonomies";
 import { classifyMediaAsset, type MediaAssetContract } from "@/server/media/mediaObjects";
+import {
+  getMediaDeleteWarning,
+  listMediaDependencies,
+  listMediaOptimizationJobs,
+  recordMediaDependency
+} from "@/server/release-management/releaseLifecycleService";
 
 export function getMediaAsset(assetId: string) {
   return mediaAssets.find((asset) => asset.id === assetId) ?? null;
@@ -61,4 +67,31 @@ export function getMediaObjectReadiness(input: {
     audioReady: input.audioAssetsState === "uploaded" || input.audioAssetsState === "approved",
     lyricsReady: input.lyricsState === "not_required" || input.lyricsState === "uploaded" || input.lyricsState === "approved"
   };
+}
+
+export function getMediaRelationshipGraph(assetId: string) {
+  const asset = getMediaAsset(assetId);
+  return {
+    asset,
+    dependencies: listMediaDependencies(assetId),
+    processingJobs: listMediaOptimizationJobs(assetId),
+    deleteWarning: getMediaDeleteWarning(assetId)
+  };
+}
+
+export function registerSeedMediaRelationships() {
+  mediaAssets.forEach((asset) => {
+    const owningTrack = tracks.find((track) => track.id === asset.ownerId);
+    const releaseId = asset.ownerType === "release" ? asset.ownerId : owningTrack?.releaseId;
+    if (!releaseId) return;
+    recordMediaDependency({
+      assetId: asset.id,
+      surfaceType: asset.ownerType === "release" ? "release" : "track",
+      surfaceId: asset.ownerId,
+      releaseId,
+      trackId: owningTrack?.id,
+      label: asset.ownerType === "release" ? "Release artwork" : "Track media",
+      visibility: asset.access === "public" ? "public" : "private"
+    });
+  });
 }

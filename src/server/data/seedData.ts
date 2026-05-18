@@ -6,7 +6,7 @@ export const profiles: Profile[] = [
   {
     id: "user_demo",
     email: "demo@2mrrw.local",
-    displayName: "Tomorrow Listener",
+    displayName: "2MRRW Listener",
     role: "user",
     createdAt: "2026-05-17T00:00:00.000Z"
   },
@@ -148,7 +148,7 @@ export const signals: Signal[] = [
 ];
 
 export const radioChannels: RadioChannel[] = [
-  { id: "radio_main", slug: "main", title: "Tomorrow Radio", enabled: true }
+  { id: "radio_main", slug: "main", title: "2MRRW Radio", enabled: true }
 ];
 
 export const radioFeed = [

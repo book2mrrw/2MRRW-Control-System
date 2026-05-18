@@ -14,7 +14,7 @@ export type Release = {
   title: string;
   artistId: string;
   releaseDate: string;
-  releaseType?: "single" | "album" | "ep" | "feature";
+  releaseType?: "single" | "album" | "ep" | "deluxe" | "remix_pack" | "feature";
   published: boolean;
   coverAssetId: string;
 };

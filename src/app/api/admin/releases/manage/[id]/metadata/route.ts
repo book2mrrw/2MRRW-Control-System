@@ -1,6 +1,6 @@
 import { fail, ok, parseJson, requireAdmin } from "@/server/http";
 import { updateReleaseMetadata } from "@/server/release-management/releaseManagementService";
-import { lyricReadinessStates, uploadReadinessStates } from "@/server/release-management/taxonomies";
+import { lyricReadinessStates, releaseVisibilityStates, uploadReadinessStates } from "@/server/release-management/taxonomies";
 import { z } from "zod";
 
 const genreSchema = z.object({
@@ -10,9 +10,16 @@ const genreSchema = z.object({
 
 const metadataSchema = z.object({
   title: z.string().min(1).optional(),
+  slug: z.string().min(1).optional(),
+  visibilityState: z.enum(releaseVisibilityStates).optional(),
   language: z.string().min(2).optional(),
   recordLabel: z.string().optional(),
   copyrightOwner: z.string().optional(),
+  publisherName: z.string().optional(),
+  recordingLocation: z.string().optional(),
+  originalReleaseDate: z.string().optional(),
+  catalogNumber: z.string().optional(),
+  metadataNotes: z.string().optional(),
   upc: z.string().optional(),
   scheduledPublishAt: z.string().optional(),
   primaryGenre: genreSchema.optional(),
@@ -27,6 +34,7 @@ const metadataSchema = z.object({
     })
     .optional(),
   famousArtistReferences: z.array(z.string()).max(3).optional(),
+  tags: z.array(z.string()).optional(),
   coverArtState: z.enum(uploadReadinessStates).optional(),
   audioAssetsState: z.enum(uploadReadinessStates).optional(),
   lyricsState: z.enum(lyricReadinessStates).optional()

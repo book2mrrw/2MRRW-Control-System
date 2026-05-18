@@ -23,6 +23,7 @@ import {
   buildMediaUploadPath,
   confirmMediaUpload,
   createMediaUploadIntent,
+  getMediaUploadPolicy,
   validateMediaUploadIntent
 } from "@/server/media/uploadIntentService";
 import {
@@ -40,6 +41,43 @@ import {
   updateTrackInformation,
   validateTrackSplits
 } from "@/server/release-management/releaseManagementService";
+import {
+  createOrSelectContributor,
+  getPreviousReleaseSettingsSuggestion,
+  listContributorProfiles,
+  listMetadataSuggestions,
+  searchContributorProfiles,
+  upsertContributorProfile
+} from "@/server/release-management/contributorDirectoryService";
+import { buildFrontendReleaseMetadataContract } from "@/server/release-management/frontendMetadataContractService";
+import { searchControlSystem } from "@/server/release-management/globalSearchService";
+import {
+  buildAdaptiveWorkflow,
+  buildFanPreviewTargets,
+  buildGracefulDegradationPlan,
+  buildComponentGovernanceContracts,
+  buildDesignGovernanceContract,
+  buildMediaIntelligenceProfile,
+  buildMediaStorageStrategy,
+  buildProductionHealthStatus,
+  buildRollbackPlan,
+  evaluateRateLimit,
+  getEnvironmentSafety,
+  getContentGovernanceRules,
+  getPlatformBoundaries,
+  indexSearchDocument,
+  recordMediaRightsAttribution,
+  recordObservabilityEvent,
+  searchIndexedDocuments,
+  setFeatureFlag,
+  isFeatureEnabled,
+  validateContentGovernance,
+  validateReleaseStateGovernance,
+  buildSmartProgress,
+  restoreDraftSession,
+  saveDraftSessionSnapshot
+} from "@/server/release-management/releaseLifecycleService";
+import { contributorRoleGroups, genreTaxonomy, lyricLanguages } from "@/server/release-management/taxonomies";
 import {
   getLatestReleases,
   getReleaseBySlug,
@@ -194,6 +232,10 @@ function testReleaseTypeValidation() {
   assert.throws(() => createReleaseDraft({ releaseType: "album", title: "Invalid Album", trackCount: 1 }), /at least 2/);
   const single = createReleaseDraft({ releaseType: "single", title: "Validated Single", trackCount: 1 });
   assert.equal(single.tracks.length, 1);
+  const deluxe = createReleaseDraft({ releaseType: "deluxe", title: "Validated Deluxe" });
+  const remixPack = createReleaseDraft({ releaseType: "remix_pack", title: "Validated Remix Pack" });
+  assert.equal(deluxe.tracks.length, 15);
+  assert.equal(remixPack.tracks.length, 5);
 }
 
 function testContributorSplitValidation() {
@@ -216,6 +258,69 @@ function testContributorSplitValidation() {
   assert.equal(validateTrackSplits(track.id).passed, true);
 }
 
+function testContributorDirectoryMemory() {
+  const frequent = upsertContributorProfile({
+    displayName: "Frequent Producer",
+    kind: "producer",
+    roles: ["producer"]
+  });
+  upsertContributorProfile({
+    displayName: "Frequent Producer",
+    kind: "producer",
+    roles: ["mixing_engineer"]
+  });
+  const selected = createOrSelectContributor({ displayName: "Frequent Producer", role: "producer" });
+  assert.equal(selected.id, frequent.id);
+  assert.ok(selected.usageCount >= 3);
+  assert.equal(searchContributorProfiles("frequent")[0]?.displayName, "Frequent Producer");
+
+  updateReleaseMetadata(createReleaseDraft({ releaseType: "single", title: "Memory Test", trackCount: 1 }).id, {
+    recordLabel: "2MRRW",
+    copyrightOwner: "2MRRW",
+    publisherName: "2MRRW Publishing",
+    recordingLocation: "2MRRW Studio"
+  });
+  assert.equal(listMetadataSuggestions("label")[0]?.value, "2MRRW");
+  assert.equal(getPreviousReleaseSettingsSuggestion()?.prompt, "Use previous release settings?");
+}
+
+function testTaxonomyCompleteness() {
+  assert.ok(lyricLanguages.some((language) => language.label === "Mandarin"));
+  assert.ok(lyricLanguages.some((language) => language.label === "Hindi"));
+  assert.ok(genreTaxonomy.some((genre) => genre.label === "Hip-Hop/Rap" && genre.subgenres.some((subgenre) => subgenre.label === "Drill")));
+  assert.ok(genreTaxonomy.some((genre) => genre.label === "Electronic" && genre.subgenres.some((subgenre) => subgenre.label === "Synthwave")));
+  assert.ok(contributorRoleGroups.some((group) => group.label === "Engineering" && group.roles.some((role) => role.label === "Mastering Engineer")));
+  assert.ok(contributorRoleGroups.some((group) => group.label === "Creative" && group.roles.some((role) => role.label === "Creative Director")));
+}
+
+function testGlobalSearchAndFrontendMetadataContract() {
+  const release = createReleaseDraft({ releaseType: "single", title: "Searchable Release", trackCount: 1 });
+  const track = release.tracks[0];
+  assert.ok(track);
+  updateTrackInformation(release.id, track.id, { title: "Searchable Track", producerNames: ["Search Producer"] });
+  attachTrackContribution(release.id, track.id, {
+    contributorName: "Search Writer",
+    contributionType: "songwriter",
+    isPublisher: false,
+    ownershipSplit: 100
+  });
+  attachTrackContribution(release.id, track.id, {
+    contributorName: "Search Mastering",
+    contributionType: "mastering_engineer",
+    isPublisher: false,
+    ownershipSplit: 0
+  });
+
+  assert.ok(searchControlSystem("Searchable").some((result) => result.type === "release"));
+  assert.ok(searchControlSystem("Search Producer").some((result) => result.type === "contributor"));
+
+  const contract = buildFrontendReleaseMetadataContract(release);
+  assert.equal(contract.title, "Searchable Release");
+  assert.ok(contract.tracks[0]?.producers.includes("Search Producer"));
+  assert.ok(contract.tracks[0]?.songwriters.includes("Search Writer"));
+  assert.ok(contract.tracks[0]?.fullCredits.engineering.some((credit) => credit.name === "Search Mastering"));
+}
+
 function testReleaseReadinessGates() {
   const release = createReleaseDraft({ releaseType: "single", title: "Readiness Test", trackCount: 1 });
   const track = release.tracks[0];
@@ -234,6 +339,85 @@ function testReleaseReadinessGates() {
     ownershipSplit: 100
   });
   assert.equal(getReadinessSummary(release.id).ready, true);
+}
+
+function testCreatorSessionContinuityAndFlowIntelligence() {
+  const release = createReleaseDraft({ releaseType: "single", title: "Continuity Test", trackCount: 1 });
+  const snapshot = saveDraftSessionSnapshot({
+    releaseId: release.id,
+    reason: "mobile_background",
+    step: "uploads",
+    activeTab: "artwork",
+    openSections: ["cover-art"],
+    scrollPosition: 420,
+    metadata: { title: release.title },
+    uploads: [{ uploadId: "upload_artwork", state: "retry_available", fileName: "cover.jpg" }],
+    cloudSynced: false
+  });
+  assert.equal(snapshot.recoveryMessage, "Restoring Draft");
+  const restored = restoreDraftSession({ releaseId: release.id });
+  assert.equal(restored.session.currentStep, "uploads");
+  assert.equal(restored.session.activeTab, "artwork");
+  assert.deepEqual(restored.session.pendingUploadIds, ["upload_artwork"]);
+
+  assert.equal(buildAdaptiveWorkflow({ releaseType: "single", lyricsEnabled: false }).find((rule) => rule.id === "track_count")?.visible, false);
+  assert.ok(buildFanPreviewTargets({ releaseId: release.id, slug: release.slug }).some((target) => target.surface === "mobile_frontend"));
+  assert.equal(buildMediaIntelligenceProfile({ assetId: "asset_test", width: 1920, height: 1080, sizeBytes: 80 * 1024 * 1024 }).responsiveStatus, "needs_mobile_crop");
+  assert.ok(buildSmartProgress(release.contentReadiness).some((item) => item.label === "Metadata Complete"));
+}
+
+function testRelationalLifecycleContracts() {
+  const release = createReleaseDraft({ releaseType: "single", title: "Lifecycle Test", trackCount: 1 });
+  const readiness = getReadinessSummary(release.id);
+  assert.ok(readiness.creatorConfidence.some((item) => item.label === "Audio Synced"));
+  assert.ok(readiness.conflicts.some((warning) => warning.key.startsWith("readiness_")));
+}
+
+function testProductionResilienceContracts() {
+  assert.equal(getEnvironmentSafety({ NODE_ENV: "production" }).requiresDryRun, true);
+  setFeatureFlag({ key: "publish-engine-v2", enabled: true, environment: "staging", description: "Safe publish testing" });
+  assert.equal(isFeatureEnabled("publish-engine-v2", "staging"), true);
+
+  recordObservabilityEvent({ area: "sync", severity: "error", message: "Frontend sync retry queued", releaseId: "rel_test" });
+  assert.equal(buildProductionHealthStatus("staging").ok, false);
+
+  const first = evaluateRateLimit({ key: "upload:user", limit: 1, windowMs: 1000 });
+  const second = evaluateRateLimit({ key: "upload:user", limit: 1, windowMs: 1000 });
+  assert.equal(first.allowed, true);
+  assert.equal(second.allowed, false);
+
+  const strategy = buildMediaStorageStrategy({
+    assetId: "asset_strategy",
+    storagePlan: {
+      bucket: "protected-media",
+      canonicalPath: "masters/release/track/audio.wav",
+      originalFileName: "Audio.wav",
+      canonicalFileName: "audio.wav",
+      ownerFolder: "masters/release/track",
+      variants: [{ label: "desktop", path: "masters/release/track/audio.desktop.mp3" }]
+    }
+  });
+  assert.equal(strategy.cdnCacheTag, "asset:asset_strategy");
+
+  const rollback = buildRollbackPlan({ releaseId: "rel_test", reason: "failed_frontend_sync", restorePointId: "restore_1" });
+  assert.ok(rollback.actions.some((action) => action.label === "Keep draft editing available"));
+
+  assert.equal(recordMediaRightsAttribution({ assetId: "asset_rights", owner: "2MRRW", contributors: [], usage: "artwork", verified: true }).verified, true);
+  indexSearchDocument({ id: "doc_release", type: "release", title: "Indexed Release", body: "lyrics metadata visual", tags: ["release"] });
+  assert.equal(searchIndexedDocuments("visual")[0]?.id, "doc_release");
+
+  assert.equal(buildGracefulDegradationPlan("processing").canContinueEditing, true);
+  assert.equal(validateReleaseStateGovernance({ status: "scheduled", visibilityState: "scheduled", readiness: { metadata: "ready", audio: "ready", artwork: "ready", credits: "ready", visuals: "ready", publishing: "ready" } }).ok, false);
+}
+
+function testPlatformGovernanceContracts() {
+  const design = buildDesignGovernanceContract();
+  assert.equal(design.philosophy, "cinematic_creator_os");
+  assert.equal(design.accessibility.reducedMotion, true);
+  assert.ok(buildComponentGovernanceContracts().every((contract) => contract.reusable));
+  assert.ok(getContentGovernanceRules().some((rule) => rule.key === "api_first"));
+  assert.equal(validateContentGovernance({ slug: "Bad Slug", fileName: "Cover Final!!.JPG", priorityCount: 2 }).ok, false);
+  assert.ok(getPlatformBoundaries().some((boundary) => boundary.domain === "media" && boundary.owns.includes("derivatives")));
 }
 
 function testMediaReadinessAndStreamAnalytics() {
@@ -307,6 +491,38 @@ async function testMediaUploadIntentFoundation() {
   });
   assert.match(albumCoverMp4Path, new RegExp(`^albums/${release.id}/cover/`));
 
+  const coverPolicy = getMediaUploadPolicy("single_cover_art");
+  assert.deepEqual(coverPolicy.extensions, ["jpg", "jpeg", "png", "gif", "mp4", "mov", "webm"]);
+  assert.deepEqual(masterIntent.audioQualityTarget, {
+    bitDepth: 24,
+    sampleRateHz: 44100,
+    validation: "metadata_required"
+  });
+
+  const coverIntent = await createMediaUploadIntent({
+    category: "single_cover_art",
+    releaseId: release.id,
+    fileName: "cover.webp",
+    mimeType: "image/webp",
+    sizeBytes: 1024
+  }).catch((error) => error as Error);
+  assert.ok(coverIntent instanceof Error);
+
+  const motionCoverIntent = await createMediaUploadIntent({
+    category: "single_cover_art",
+    releaseId: release.id,
+    fileName: "motion-cover.mov",
+    mimeType: "video/quicktime",
+    sizeBytes: 20 * 1024 * 1024
+  });
+  assert.deepEqual(motionCoverIntent.artworkQualityTarget, {
+    minimumDimensions: { width: 1400, height: 1400 },
+    recommendedDimensions: { width: 3000, height: 3000 },
+    aspectRatio: "1:1",
+    validation: "metadata_required",
+    helperText: "Upload square cover artwork. Minimum size: 1400x1400. Recommended size: 3000x3000."
+  });
+
   assert.throws(
     () =>
       validateMediaUploadIntent({
@@ -318,16 +534,14 @@ async function testMediaUploadIntentFoundation() {
       }),
     /Unsupported file extension/
   );
-  assert.throws(
-    () =>
-      validateMediaUploadIntent({
-        category: "single_cover_art",
-        releaseId: release.id,
-        fileName: "cover-loop.mov",
-        mimeType: "video/quicktime",
-        sizeBytes: 1024
-      }),
-    /Unsupported file extension/
+  assert.doesNotThrow(() =>
+    validateMediaUploadIntent({
+      category: "single_cover_art",
+      releaseId: release.id,
+      fileName: "cover-loop.webm",
+      mimeType: "video/webm",
+      sizeBytes: 1024
+    })
   );
   assert.throws(
     () =>
@@ -362,6 +576,30 @@ async function testMediaUploadIntentFoundation() {
       mimeType: "audio/mpeg",
       sizeBytes: 1024
     })
+  );
+  assert.throws(
+    () =>
+      validateMediaUploadIntent({
+        category: "audio_full_song",
+        releaseId: release.id,
+        trackId: track.id,
+        fileName: "song.flac",
+        mimeType: "audio/flac",
+        sizeBytes: 1024
+      }),
+    /Unsupported file extension/
+  );
+  assert.throws(
+    () =>
+      validateMediaUploadIntent({
+        category: "audio_full_song",
+        releaseId: release.id,
+        trackId: track.id,
+        fileName: "song.aiff",
+        mimeType: "audio/aiff",
+        sizeBytes: 1024
+      }),
+    /Unsupported file extension/
   );
 
   assert.doesNotThrow(() =>
@@ -550,7 +788,14 @@ testSupabaseServerKeyFallback();
 testYouTubeAudioVisualUrlParser();
 testReleaseTypeValidation();
 testContributorSplitValidation();
+testContributorDirectoryMemory();
+testTaxonomyCompleteness();
+testGlobalSearchAndFrontendMetadataContract();
 testReleaseReadinessGates();
+testCreatorSessionContinuityAndFlowIntelligence();
+testRelationalLifecycleContracts();
+testProductionResilienceContracts();
+testPlatformGovernanceContracts();
 testMediaReadinessAndStreamAnalytics();
 testCircleEventFoundation();
 await testMediaUploadIntentFoundation();

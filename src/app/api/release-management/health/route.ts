@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 
 import { getServerSupabase } from "@/server/supabase/client";
+import { buildProductionHealthStatus, getEnvironmentSafety } from "@/server/release-management/releaseLifecycleService";
 
 const requiredEnvKeys = [
   "NEXT_PUBLIC_SUPABASE_URL",
@@ -31,7 +32,22 @@ const checkedTables = [
   "artwork",
   "distribution_targets",
   "release_sessions",
-  "validation_flags"
+  "validation_flags",
+  "release_revisions",
+  "release_activity_events",
+  "system_tags",
+  "release_tags",
+  "media_dependencies",
+  "media_processing_jobs",
+  "release_role_assignments",
+  "creator_sessions",
+  "creator_notifications",
+  "draft_session_snapshots",
+  "feature_flags",
+  "observability_events",
+  "rollback_plans",
+  "media_rights_attributions",
+  "search_index_documents"
 ] as const;
 
 function hasEnv(key: string) {
@@ -81,7 +97,9 @@ export async function GET() {
         checkedTables,
         missingTables,
         error: databaseError
-      }
+      },
+      operations: buildProductionHealthStatus(),
+      environment: getEnvironmentSafety()
     }
   };
 

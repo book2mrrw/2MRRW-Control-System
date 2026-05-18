@@ -1,17 +1,17 @@
-# 2MRRW / Tomorrow Control System Backend
+# 2MRRW Artist Control System Backend
 
-Backend-first foundation for the official Control System.
+Backend-first foundation for the 2MRRW Artist Control System.
 
 ## Implemented Surface
 
-- Route-backed operational CMS:
+- Artist control workspace:
   - `/dashboard`
-  - `/releases`, `/releases/new`, `/releases/drafts`, `/releases/scheduled`, `/releases/published`, `/releases/[releaseId]`
+  - `/releases`, `/releases/new`, `/releases/drafts`, `/releases/scheduled`, `/releases/published`, `/releases/archived`, `/releases/[releaseId]`
   - `/tracks/[trackId]`, `/tracks/[trackId]/information`
   - `/media`, `/media/artwork`, `/media/audio`, `/media/videos`, `/media/loops`
-  - `/visuals`, `/vault`, `/analytics`, `/identity`, `/commerce`, `/notify`, `/audit`, `/signal`, `/circle`, `/settings`
-- Root `/` redirects to `/dashboard`; the Control System is an operational app entry point, not a scroll landing page.
-- Release wizard routes cover basic release information, track information, songwriter/splits, ISRCs, cover art, audio, lyrics, and review/publish readiness.
+  - `/visuals`, `/vault`, `/analytics`, `/identity`, `/commerce`, `/revenue`, `/notify`, `/audit`, `/signal`, `/circle`, `/settings`
+- Root `/` redirects to `/dashboard`; the Control System is the artist-facing management entry point, not a scroll landing page.
+- Release wizard routes cover release type, release details, track information, contributors/splits, audio upload, lyrics, cover art/visuals, scheduler, and review/publish.
 - `GET /api/account/state`
 - guest/session auth placeholders
 - releases list/detail plus admin create/publish routes
@@ -27,6 +27,15 @@ Backend-first foundation for the official Control System.
 - audio visuals admin/public routes
 - Circle event admin/public routes
 - media upload intent and completion routes with strict category, owner, extension, and path validation
+- Media categories are presented as Hero Media, Release Artwork, Audio Visuals, Vault Assets, Motion Graphics, Circle Content, and Background Loops. Uploaded media must be assigned to a release, section, destination, and media type before publishing.
+
+## Cover Artwork Policy
+
+- Display helper text exactly: “Upload square cover artwork. Minimum size: 1400x1400. Recommended size: 3000x3000.”
+- Minimum artwork size is 1400x1400; 3000x3000 is recommended.
+- Artwork must be perfectly square.
+- Accepted cover formats are JPG, PNG, GIF, MP4, and MOV.
+- The UI performs client-side format, file size, resolution, and preview-load validation. Server-side media probing is represented as explicit validation metadata until a durable probing service is added.
 
 ## Local Verification
 

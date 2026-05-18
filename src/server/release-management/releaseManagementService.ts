@@ -1,4 +1,39 @@
 import { artists } from "@/server/data/seedData";
+import { rememberContributorFromCredit, rememberReleaseMetadata } from "@/server/release-management/contributorDirectoryService";
+import {
+  buildFrontendPreviewLinks,
+  buildPublishDryRun,
+  buildCreatorExperienceContract,
+  buildCreatorConfidence,
+  buildAdaptiveWorkflow,
+  buildFanPreviewTargets,
+  buildReleaseHealthRecommendations,
+  buildReleaseMomentPlan,
+  buildSmartProgress,
+  buildDraftContinueCard,
+  createRestorePoint,
+  buildReleaseReadinessVector,
+  getPublishingStage,
+  getLatestUndoableRevision,
+  listCacheInvalidationPlans,
+  validatePublishConflicts,
+  listReleaseActivity,
+  listReleaseRevisions,
+  listRestorePoints,
+  listContentRelationships,
+  listCreatorNotifications,
+  recordReleaseActivity,
+  recordContentRelationship,
+  recordReleaseRevision,
+  reserveStableSlug,
+  createOrUpdateTag,
+  upsertContentEntity,
+  upsertCreatorSession,
+  type CreatorConfidence,
+  type DraftContinueCard,
+  type FrontendPreviewLink,
+  type ReleaseReadinessVector
+} from "@/server/release-management/releaseLifecycleService";
 import {
   compositionTypes,
   contributionTypes,
@@ -7,6 +42,7 @@ import {
   releaseTypes,
   type CompositionType,
   type ContributionType,
+  type ReleaseVisibilityState,
   type LyricReadinessState,
   type ReleaseManagementStatus,
   type ReleaseType,
@@ -58,15 +94,26 @@ export type TrackContribution = {
 export type ReleaseManagementDraft = {
   id: string;
   slug: string;
+  customSlug?: boolean;
   artistId: string;
   artistName: string;
   title: string;
   releaseType: ReleaseType;
   status: ReleaseManagementStatus;
+  visibilityState: ReleaseVisibilityState;
   readinessState: "metadata_incomplete" | "assets_pending" | "rights_pending" | "ready_for_review";
+  contentReadiness: ReleaseReadinessVector;
+  creatorConfidence: CreatorConfidence[];
+  publishingStage: ReturnType<typeof getPublishingStage>;
+  continueCard: DraftContinueCard;
   language: string;
   recordLabel?: string;
   copyrightOwner?: string;
+  publisherName?: string;
+  recordingLocation?: string;
+  originalReleaseDate?: string;
+  catalogNumber?: string;
+  metadataNotes?: string;
   upc?: string;
   internalUpc: string;
   scheduledPublishAt?: string;
@@ -80,10 +127,22 @@ export type ReleaseManagementDraft = {
     territory?: string;
   };
   famousArtistReferences: string[];
+  tags: string[];
   coverArtState: UploadReadinessState;
   audioAssetsState: UploadReadinessState;
   lyricsState: LyricReadinessState;
   tracks: ReleaseManagementTrack[];
+  archivedAt?: string;
+  archiveReason?: string;
+  deletedAt?: string;
+  recoveryAvailableUntil?: string;
+  previewLinks: FrontendPreviewLink[];
+  parentReleaseId?: string;
+  relationshipType?: "single_to_album" | "deluxe_parent" | "remaster_of" | "alternate_version";
+  priority?: "featured_release" | "homepage_hero" | "pinned_vault" | "featured_visual";
+  lastSyncedAt?: string;
+  saveState: "saving" | "saved" | "syncing" | "synced" | "publishing" | "published" | "failed";
+  timezone?: string;
   createdAt: string;
   updatedAt: string;
 };
@@ -110,6 +169,13 @@ function slugify(value: string) {
     .replace(/^-|-$/g, "");
 }
 
+function nextReleaseSlug(title: string, id: string) {
+  return reserveStableSlug({
+    desired: `${slugify(title) || "untitled"}-${id.slice(-4)}`,
+    ownerId: id
+  });
+}
+
 function nextId(prefix: string) {
   return `${prefix}_${Math.random().toString(36).slice(2, 10)}`;
 }
@@ -125,8 +191,8 @@ function assertTrackCount(releaseType: ReleaseType, trackCount: number) {
     throw new Error("Singles must contain exactly 1 track");
   }
 
-  if ((releaseType === "album" || releaseType === "ep") && trackCount < 2) {
-    throw new Error("Albums and EPs must contain at least 2 tracks");
+  if (releaseType !== "single" && trackCount < 2) {
+    throw new Error("Albums, EPs, deluxe editions, and remix packs must contain at least 2 tracks");
   }
 }
 
@@ -155,6 +221,78 @@ function getDraftOrThrow(id: string) {
   return draft;
 }
 
+function summarizeDraftForReadiness(draft: ReleaseManagementDraft) {
+  const checks = validateReleaseStructure(draft);
+  return buildReleaseReadinessVector({
+    id: draft.id,
+    slug: draft.slug,
+    title: draft.title,
+    status: draft.status,
+    scheduledPublishAt: draft.scheduledPublishAt,
+    updatedAt: draft.updatedAt,
+    coverArtState: draft.coverArtState,
+    audioAssetsState: draft.audioAssetsState,
+    lyricsState: draft.lyricsState,
+    tracks: draft.tracks,
+    metadataComplete: checks.some((check) => check.key === "metadata" && check.passed),
+    creditsComplete: checks.some((check) => check.key === "splits" && check.passed),
+    visualsComplete: draft.tracks.some((track) => track.lyricsState === "uploaded" || track.lyricsState === "approved"),
+    archivedAt: draft.archivedAt,
+    tags: draft.tags
+  });
+}
+
+function refreshLifecycleFields(draft: ReleaseManagementDraft) {
+  draft.contentReadiness = summarizeDraftForReadiness(draft);
+  draft.previewLinks = buildFrontendPreviewLinks({ releaseId: draft.id, slug: draft.slug });
+  const target = {
+    id: draft.id,
+    slug: draft.slug,
+    title: draft.title,
+    status: draft.status,
+    scheduledPublishAt: draft.scheduledPublishAt,
+    updatedAt: draft.updatedAt,
+    coverArtState: draft.coverArtState,
+    audioAssetsState: draft.audioAssetsState,
+    lyricsState: draft.lyricsState,
+    tracks: draft.tracks,
+    metadataComplete: draft.contentReadiness.metadata === "ready",
+    creditsComplete: draft.contentReadiness.credits === "ready",
+    visualsComplete: draft.contentReadiness.visuals === "ready",
+    archivedAt: draft.archivedAt,
+    tags: draft.tags
+  };
+  draft.creatorConfidence = buildCreatorConfidence(target);
+  draft.publishingStage = getPublishingStage(target);
+  draft.continueCard = buildDraftContinueCard(target);
+  upsertContentEntity({
+    id: draft.id,
+    kind: "release",
+    title: draft.title,
+    slug: draft.slug,
+    publishState: draft.publishingStage,
+    syncState: draft.saveState,
+    parentIds: draft.parentReleaseId ? [draft.parentReleaseId] : [],
+    childIds: [],
+    relationshipIds: listContentRelationships(draft.id).map((relationship) => relationship.id),
+    metadata: {
+      releaseType: draft.releaseType,
+      visibilityState: draft.visibilityState,
+      priority: draft.priority,
+      readiness: draft.contentReadiness,
+      previewLinks: draft.previewLinks,
+      adaptiveWorkflow: buildAdaptiveWorkflow({
+        releaseType: draft.releaseType,
+        lyricsEnabled: draft.lyricsState !== "not_required",
+        advancedMode: Boolean(draft.parentReleaseId || draft.metadataNotes)
+      })
+    },
+    createdAt: draft.createdAt,
+    updatedAt: draft.updatedAt
+  });
+  return draft;
+}
+
 export function createReleaseDraft(input: {
   releaseType: ReleaseType;
   title?: string;
@@ -162,7 +300,14 @@ export function createReleaseDraft(input: {
   trackCount?: number;
 }) {
   assertReleaseType(input.releaseType);
-  const trackCount = input.trackCount ?? (input.releaseType === "single" ? 1 : 2);
+  const defaultTrackCounts: Record<ReleaseType, number> = {
+    single: 1,
+    ep: 4,
+    album: 10,
+    deluxe: 15,
+    remix_pack: 5
+  };
+  const trackCount = input.trackCount ?? defaultTrackCounts[input.releaseType];
   assertTrackCount(input.releaseType, trackCount);
 
   const title = input.title?.trim() || (input.releaseType === "single" ? "Untitled Single" : "Untitled Release");
@@ -171,26 +316,63 @@ export function createReleaseDraft(input: {
   const artist = artists[0];
   const draft: ReleaseManagementDraft = {
     id,
-    slug: `${slugify(title) || "untitled"}-${id.slice(-4)}`,
+    slug: nextReleaseSlug(title, id),
     artistId: artist?.id ?? "artist_2mrrw",
     artistName: input.artistName?.trim() || artist?.name || "2MRRW",
     title,
     releaseType: input.releaseType,
     status: "metadata_incomplete",
+    visibilityState: "draft",
     readinessState: "metadata_incomplete",
+    contentReadiness: {
+      metadata: "not_started",
+      audio: "not_started",
+      artwork: "not_started",
+      credits: "not_started",
+      visuals: "not_started",
+      publishing: "not_started"
+    },
+    creatorConfidence: [],
+    publishingStage: "draft",
+    continueCard: {
+      releaseId: id,
+      title,
+      href: `/releases/${id}`,
+      nextAction: "Finish metadata",
+      percentComplete: 0,
+      lastModifiedAt: timestamp,
+      recoveryState: "active"
+    },
     language: "en",
     internalUpc: `2MRRW-${Date.now()}`,
     moodStyles: [],
     famousArtistReferences: [],
+    tags: [],
     coverArtState: "missing",
     audioAssetsState: "missing",
     lyricsState: "not_required",
     tracks: Array.from({ length: trackCount }, (_, index) => makeTrack(id, index + 1)),
+    previewLinks: buildFrontendPreviewLinks({ releaseId: id, slug: nextReleaseSlug(title, id) }),
+    saveState: "saved",
+    timezone: "America/New_York",
     createdAt: timestamp,
     updatedAt: timestamp
   };
 
+  refreshLifecycleFields(draft);
+  upsertCreatorSession({ releaseId: id, currentStep: "setup", focusMode: true });
   drafts.set(id, draft);
+  recordReleaseRevision({
+    releaseId: id,
+    kind: "release_revision",
+    label: "Release draft created",
+    after: { title: draft.title, releaseType: draft.releaseType, slug: draft.slug }
+  });
+  createRestorePoint({
+    releaseId: id,
+    label: "Initial draft restore point",
+    snapshot: draft
+  });
   return draft;
 }
 
@@ -216,24 +398,90 @@ export function updateReleaseMetadata(
       | "primaryGenre"
       | "secondaryGenre"
       | "artistLocation"
+      | "slug"
+      | "visibilityState"
+      | "parentReleaseId"
+      | "relationshipType"
+      | "priority"
+      | "timezone"
     >
   > & {
     moodStyles?: string[];
     famousArtistReferences?: string[];
+    publisherName?: string;
+    recordingLocation?: string;
+    originalReleaseDate?: string;
+    catalogNumber?: string;
+    metadataNotes?: string;
     coverArtState?: UploadReadinessState;
     audioAssetsState?: UploadReadinessState;
     lyricsState?: LyricReadinessState;
+    tags?: string[];
   }
 ) {
   const draft = getDraftOrThrow(id);
+  draft.saveState = "saving";
+  upsertCreatorSession({ releaseId: id, currentStep: "setup" });
+  const before = {
+    title: draft.title,
+    slug: draft.slug,
+    visibilityState: draft.visibilityState,
+    coverArtState: draft.coverArtState,
+    audioAssetsState: draft.audioAssetsState,
+    lyricsState: draft.lyricsState
+  };
   const nextReferences = input.famousArtistReferences?.filter(Boolean).slice(0, 3);
+  const requestedSlug = input.slug?.trim();
+  const slugChanged = Boolean(requestedSlug && requestedSlug !== draft.slug);
+  const generatedSlug = input.title && !draft.customSlug ? nextReleaseSlug(input.title, draft.id) : draft.slug;
   Object.assign(draft, {
     ...input,
-    ...(input.title ? { slug: `${slugify(input.title)}-${draft.id.slice(-4)}` } : {}),
+    ...(input.title ? { slug: generatedSlug } : {}),
+    ...(requestedSlug ? { slug: reserveStableSlug({ desired: requestedSlug, ownerId: draft.id }), customSlug: true } : {}),
     ...(nextReferences ? { famousArtistReferences: nextReferences } : {}),
+    ...(input.tags ? { tags: input.tags.map((tag) => createOrUpdateTag({ label: tag, scopes: ["release"] }).slug) } : {}),
     updatedAt: nowIso()
   });
+  if (draft.parentReleaseId && draft.relationshipType) {
+    recordContentRelationship({
+      sourceId: draft.id,
+      sourceKind: "release",
+      targetId: draft.parentReleaseId,
+      targetKind: "release",
+      relationshipKind: draft.relationshipType,
+      label: `${draft.title} relationship`
+    });
+  }
+  rememberReleaseMetadata({
+    artistName: draft.artistName,
+    featuredArtists: draft.famousArtistReferences,
+    recordLabel: draft.recordLabel,
+    copyrightOwner: draft.copyrightOwner,
+    publisherName: draft.publisherName,
+    recordingLocation: draft.recordingLocation
+  });
   draft.readinessState = getReadinessSummary(draft.id).ready ? "ready_for_review" : draft.readinessState;
+  draft.saveState = "saved";
+  refreshLifecycleFields(draft);
+  recordReleaseRevision({
+    releaseId: draft.id,
+    kind: slugChanged ? "slug_change" : input.coverArtState ? "artwork_replacement" : "metadata_edit",
+    label: slugChanged ? "Release link updated" : input.coverArtState ? "Artwork readiness updated" : "Release details saved",
+    before,
+    after: {
+      title: draft.title,
+      slug: draft.slug,
+      visibilityState: draft.visibilityState,
+      coverArtState: draft.coverArtState,
+      audioAssetsState: draft.audioAssetsState,
+      lyricsState: draft.lyricsState
+    }
+  });
+  createRestorePoint({
+    releaseId: draft.id,
+    label: "Before latest metadata save",
+    snapshot: before
+  });
   return draft;
 }
 
@@ -258,6 +506,8 @@ export function updateTrackInformation(
   >
 ) {
   const draft = getDraftOrThrow(releaseId);
+  draft.saveState = "saving";
+  upsertCreatorSession({ releaseId, currentStep: "tracks" });
   const track = draft.tracks.find((item) => item.id === trackId);
   if (!track) {
     throw new Error("Track not found");
@@ -268,12 +518,27 @@ export function updateTrackInformation(
   }
 
   Object.assign(track, input);
+  input.producerNames?.forEach((producerName) => {
+    rememberContributorFromCredit({
+      contributorName: producerName,
+      contributionType: "producer"
+    });
+  });
   draft.audioAssetsState = draft.tracks.every((item) => item.audioState === "approved" || item.audioState === "uploaded")
     ? "uploaded"
     : draft.tracks.some((item) => item.audioState !== "missing")
       ? "partial"
       : "missing";
   draft.updatedAt = nowIso();
+  draft.saveState = "saved";
+  refreshLifecycleFields(draft);
+  recordReleaseRevision({
+    releaseId,
+    kind: input.audioState ? "audio_replacement" : "metadata_edit",
+    label: input.audioState ? `${track.title} audio readiness updated` : `${track.title} track information saved`,
+    before: { trackId, audioState: track.audioState },
+    after: { trackId, title: track.title, audioState: track.audioState, lyricsState: track.lyricsState }
+  });
   return track;
 }
 
@@ -310,6 +575,20 @@ export function attachTrackContribution(
   const rows = contributions.get(trackId) ?? [];
   rows.push(row);
   contributions.set(trackId, rows);
+  rememberContributorFromCredit({
+    contributorName: input.contributorName,
+    contributionType: input.contributionType,
+    publisherName: input.publisherName
+  });
+  const draft = getDraftOrThrow(releaseId);
+  draft.saveState = "saved";
+  draft.updatedAt = nowIso();
+  refreshLifecycleFields(draft);
+  recordReleaseActivity({
+    releaseId,
+    kind: "metadata_edit",
+    message: `${input.contributorName} added to ${draft.tracks.find((track) => track.id === trackId)?.title ?? "track"} credits`
+  });
   return row;
 }
 
@@ -318,12 +597,11 @@ export function listTrackContributions(trackId: string) {
 }
 
 export function validateTrackSplits(trackId: string) {
-  const counted = listTrackContributions(trackId).filter((row) => row.contributionType !== "producer");
-  const total = counted.reduce((sum, row) => sum + row.ownershipSplit, 0);
+  const total = listTrackContributions(trackId).reduce((sum, row) => sum + row.ownershipSplit, 0);
   return {
     passed: Math.abs(total - 100) < 0.001,
     total,
-    message: total === 100 ? "Songwriter splits total exactly 100%" : `Songwriter splits total ${total}%`
+    message: total === 100 ? "Contributor splits are complete." : `You still need ${Math.max(0, 100 - total)}% remaining before continuing.`
   };
 }
 
@@ -332,44 +610,69 @@ export function validateReleaseStructure(draft: ReleaseManagementDraft): Readine
     {
       key: "track_count",
       passed: draft.releaseType === "single" ? draft.tracks.length === 1 : draft.tracks.length >= 2,
-      message: draft.releaseType === "single" ? "Single has exactly 1 track" : "Album/EP has at least 2 tracks"
+      message: draft.releaseType === "single" ? "Single has exactly 1 track" : "Multi-track release has at least 2 tracks"
     },
     {
       key: "metadata",
       passed: Boolean(draft.title && draft.language && draft.copyrightOwner && draft.primaryGenre),
-      message: "Title, language, copyright owner, and primary genre are required"
+      message: "Release details still need completion"
     },
     {
       key: "cover_art",
       passed: draft.coverArtState === "uploaded" || draft.coverArtState === "approved",
-      message: `Cover art accepts ${coverArtPolicy.allowedExtensions.join(", ")} with ${coverArtPolicy.targetSizeMb.min}-${coverArtPolicy.targetSizeMb.max}MB target metadata`
+      message: "Cover artwork must meet 2MRRW quality requirements."
     },
     {
       key: "audio",
       passed: draft.tracks.every((track) => track.audioState === "uploaded" || track.audioState === "approved"),
-      message: "Every track needs an uploaded or approved audio asset"
+      message: "Every track needs uploaded audio"
     },
     {
       key: "track_information",
       passed: draft.tracks.every((track) => Boolean(track.title && track.compositionType)),
-      message: "Every track needs title and composition metadata"
+      message: "Every track needs a title and track details"
     },
     {
       key: "splits",
       passed: draft.tracks.every((track) => validateTrackSplits(track.id).passed),
-      message: "Every track needs non-producer songwriter splits totaling exactly 100%"
+      message: "Every track needs contributor splits totaling exactly 100%"
     }
   ];
 }
 
 export function getReadinessSummary(releaseId: string) {
   const draft = getDraftOrThrow(releaseId);
+  refreshLifecycleFields(draft);
   const checks = validateReleaseStructure(draft);
   const ready = checks.every((check) => check.passed);
+  const conflicts = validatePublishConflicts(
+    {
+      id: draft.id,
+      slug: draft.slug,
+      title: draft.title,
+      status: draft.status,
+      scheduledPublishAt: draft.scheduledPublishAt,
+      updatedAt: draft.updatedAt,
+      coverArtState: draft.coverArtState,
+      audioAssetsState: draft.audioAssetsState,
+      lyricsState: draft.lyricsState,
+      tracks: draft.tracks,
+      metadataComplete: draft.contentReadiness.metadata === "ready",
+      creditsComplete: draft.contentReadiness.credits === "ready",
+      visualsComplete: draft.contentReadiness.visuals === "ready",
+      archivedAt: draft.archivedAt,
+      tags: draft.tags
+    },
+    listReleaseDrafts().map((item) => ({ id: item.id, title: item.title, scheduledPublishAt: item.scheduledPublishAt }))
+  );
   return {
     releaseId,
     ready,
     status: ready ? "ready_for_review" : draft.status,
+    contentReadiness: draft.contentReadiness,
+    creatorConfidence: draft.creatorConfidence,
+    publishingStage: draft.publishingStage,
+    conflicts,
     checks
   };
 }
@@ -383,10 +686,180 @@ export function getReleaseManagementOverview() {
       readyForReview: rows.filter((draft) => getReadinessSummary(draft.id).ready).length,
       published: rows.filter((draft) => draft.status === "published").length
     },
+    missionControl: {
+      addReleaseHref: "/releases/new",
+      scheduledReleases: rows.filter((draft) => draft.status === "scheduled"),
+      draftReleases: rows.filter((draft) => ["draft", "metadata_incomplete", "assets_pending", "rights_pending", "ready_for_review"].includes(draft.status)),
+      recentlyUpdated: rows.slice(0, 6),
+      continueCards: rows.map((draft) => refreshLifecycleFields(draft).continueCard),
+      systemConfidence: rows[0]?.creatorConfidence ?? [],
+      creatorExperience: buildCreatorExperienceContract(),
+      notifications: listCreatorNotifications().slice(0, 6)
+    },
     addNewRelease: releaseTypes,
     incompleteReleases: rows.filter((draft) => !getReadinessSummary(draft.id).ready),
     allReleases: rows
   };
 }
 
-createReleaseDraft({ releaseType: "single", title: "Tomorrow Control Draft", trackCount: 1 });
+export function dryRunReleasePublish(releaseId: string, options: { recordActivity?: boolean } = { recordActivity: true }) {
+  const draft = getDraftOrThrow(releaseId);
+  const summary = getReadinessSummary(releaseId);
+  const cachePlan = listCacheInvalidationPlans().filter((plan) => plan.releaseId === releaseId);
+  const result = buildPublishDryRun({
+    target: {
+      id: draft.id,
+      slug: draft.slug,
+      title: draft.title,
+      status: draft.status,
+      scheduledPublishAt: draft.scheduledPublishAt,
+      updatedAt: draft.updatedAt,
+      coverArtState: draft.coverArtState,
+      audioAssetsState: draft.audioAssetsState,
+      lyricsState: draft.lyricsState,
+      tracks: draft.tracks,
+      metadataComplete: draft.contentReadiness.metadata === "ready",
+      creditsComplete: draft.contentReadiness.credits === "ready",
+      visualsComplete: draft.contentReadiness.visuals === "ready",
+      archivedAt: draft.archivedAt,
+      tags: draft.tags
+    },
+    warnings: summary.conflicts,
+    previewLinks: draft.previewLinks,
+    cachePlan,
+    mode: draft.visibilityState === "public" ? "production" : "staging"
+  });
+  if (options.recordActivity !== false) {
+    recordReleaseActivity({ releaseId, kind: "dry_run", message: result.ok ? "Publish dry run passed" : "Publish dry run found items to review" });
+  }
+  return result;
+}
+
+export function undoLastReleaseChange(releaseId: string) {
+  const draft = getDraftOrThrow(releaseId);
+  const revision = getLatestUndoableRevision(releaseId);
+  if (!revision || typeof revision.before !== "object" || revision.before === null) {
+    throw new Error("No reversible release change is available");
+  }
+  const before = { ...draft };
+  Object.assign(draft, revision.before, {
+    updatedAt: nowIso(),
+    saveState: "saved"
+  });
+  refreshLifecycleFields(draft);
+  recordReleaseRevision({
+    releaseId,
+    kind: "undo",
+    label: `Undo applied: ${revision.label}`,
+    before,
+    after: revision.before
+  });
+  return draft;
+}
+
+export function archiveReleaseDraft(releaseId: string, reason = "Archived from Control System") {
+  const draft = getDraftOrThrow(releaseId);
+  const before = { status: draft.status, visibilityState: draft.visibilityState };
+  draft.status = "archived";
+  draft.visibilityState = "private";
+  draft.archivedAt = nowIso();
+  draft.archiveReason = reason;
+  draft.recoveryAvailableUntil = new Date(Date.now() + 1000 * 60 * 60 * 24 * 30).toISOString();
+  draft.updatedAt = nowIso();
+  draft.saveState = "synced";
+  refreshLifecycleFields(draft);
+  recordReleaseRevision({
+    releaseId,
+    kind: "archive",
+    label: "Release archived with recovery available",
+    before,
+    after: { status: draft.status, visibilityState: draft.visibilityState, recoveryAvailableUntil: draft.recoveryAvailableUntil }
+  });
+  return draft;
+}
+
+export function recoverReleaseDraft(releaseId: string) {
+  const draft = getDraftOrThrow(releaseId);
+  if (!draft.archivedAt) return draft;
+  const before = { status: draft.status, archivedAt: draft.archivedAt };
+  draft.status = "metadata_incomplete";
+  draft.visibilityState = "draft";
+  draft.archivedAt = undefined;
+  draft.archiveReason = undefined;
+  draft.deletedAt = undefined;
+  draft.updatedAt = nowIso();
+  draft.saveState = "saved";
+  refreshLifecycleFields(draft);
+  recordReleaseRevision({
+    releaseId,
+    kind: "recovery",
+    label: "Release recovered from archive",
+    before,
+    after: { status: draft.status, visibilityState: draft.visibilityState }
+  });
+  return draft;
+}
+
+export function markReleaseForDeletion(releaseId: string) {
+  const draft = archiveReleaseDraft(releaseId, "Marked for deletion; archived first");
+  draft.deletedAt = nowIso();
+  recordReleaseRevision({
+    releaseId,
+    kind: "archive",
+    label: "Release marked for deletion after archive",
+    after: { deletedAt: draft.deletedAt, recoveryAvailableUntil: draft.recoveryAvailableUntil }
+  });
+  return draft;
+}
+
+export function bulkUpdateReleaseDrafts(input: {
+  releaseIds: string[];
+  action: "archive" | "tag" | "publish_visibility" | "private_visibility";
+  tags?: string[];
+}) {
+  return input.releaseIds.map((releaseId) => {
+    const draft = getDraftOrThrow(releaseId);
+    if (input.action === "archive") return archiveReleaseDraft(releaseId, "Bulk archived");
+    if (input.action === "tag") {
+      const nextTags = [...new Set([...draft.tags, ...(input.tags ?? []).map((tag) => createOrUpdateTag({ label: tag, scopes: ["release"] }).slug)])];
+      draft.tags = nextTags;
+    }
+    if (input.action === "publish_visibility") draft.visibilityState = "public";
+    if (input.action === "private_visibility") draft.visibilityState = "private";
+    draft.updatedAt = nowIso();
+    refreshLifecycleFields(draft);
+    recordReleaseActivity({ releaseId, kind: "bulk_action", message: `Bulk action applied: ${input.action.replaceAll("_", " ")}` });
+    return draft;
+  });
+}
+
+export function getReleaseLifecycle(releaseId: string) {
+  const draft = getDraftOrThrow(releaseId);
+  refreshLifecycleFields(draft);
+  return {
+    releaseId,
+    readiness: draft.contentReadiness,
+    visibilityState: draft.visibilityState,
+    revisions: listReleaseRevisions(releaseId),
+    activity: listReleaseActivity(releaseId),
+    previewLinks: draft.previewLinks,
+    fanPreviewTargets: buildFanPreviewTargets({ releaseId: draft.id, slug: draft.slug }),
+    smartProgress: buildSmartProgress(draft.contentReadiness),
+    healthRecommendations: buildReleaseHealthRecommendations(draft.contentReadiness),
+    adaptiveWorkflow: buildAdaptiveWorkflow({
+      releaseType: draft.releaseType,
+      lyricsEnabled: draft.lyricsState !== "not_required",
+      advancedMode: Boolean(draft.parentReleaseId || draft.metadataNotes)
+    }),
+    releaseMomentPlan: buildReleaseMomentPlan({
+      releaseId,
+      readiness: draft.contentReadiness,
+      priority: draft.priority
+    }),
+    publishDryRun: dryRunReleasePublish(releaseId, { recordActivity: false }),
+    tags: draft.tags,
+    relationships: listContentRelationships(releaseId),
+    restorePoints: listRestorePoints(releaseId),
+    creatorExperience: buildCreatorExperienceContract()
+  };
+}

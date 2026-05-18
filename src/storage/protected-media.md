@@ -16,7 +16,7 @@ Required object prefixes:
 
 - `masters/<release-slug>/<track-position>.wav` for full-quality source audio.
 - `previews/<release-slug>/<track-position>.mp3` for public-safe preview audio.
-- `artwork/<release-slug>/cover.*` for release artwork and motion covers.
+- `artwork/<release-slug>/cover.*` for square release artwork and motion covers.
 - `loops/<release-slug>/<asset-name>.*` for visualizer loops and short motion assets.
 - `vault/<collection-slug>/<asset-name>.*` for membership or collector-gated files.
 - `lyrics/<release-slug>/<track-position>.txt` for lyrics/transcript assets.
@@ -24,10 +24,10 @@ Required object prefixes:
 Current upload intent prefixes use stable backend owner ids so phone, tablet, and desktop uploads can be
 created before final public slugs are locked:
 
-- `singles/{releaseId}/cover/...` for singles cover cards. Accepted files: JPG/JPEG/PNG/GIF static art or MP4 animated cover loops. MOV is intentionally rejected.
-- `albums/{releaseId}/cover/...` for albums cover cards. Accepted files: JPG/JPEG/PNG/GIF static art or MP4 animated cover loops. MOV is intentionally rejected.
+- `singles/{releaseId}/cover/...` for singles cover cards. Accepted files: JPG/JPEG/PNG, plus GIF/MP4/MOV when animated or motion covers are enabled.
+- `albums/{releaseId}/cover/...` for albums cover cards. Accepted files: JPG/JPEG/PNG, plus GIF/MP4/MOV when animated or motion covers are enabled.
 - `previews/{releaseId}/{trackId}/...` for audio previews. Accepted files: MP3/WAV.
-- `masters/{releaseId}/{trackId}/...` for full songs. Accepted files: MP3/WAV. Target quality is 24-bit / 44.1kHz; until server-side media probing/transcoding is added, the upload intent enforces extension/MIME and returns a metadata validation requirement.
+- `masters/{releaseId}/{trackId}/...` for full songs. Accepted files: MP3/WAV. Target quality is up to 24-bit with 44.1kHz minimum review; until server-side media probing/transcoding is added, the upload flow enforces extension/MIME and returns a metadata validation requirement.
 - `lyrics/{releaseId}/{trackId}/...` for pasted/exported TXT and uploadable PDF/DOCX lyric documents.
 - `signal/{signalId}/...` for 2MRRW Signal media/assets while text payloads remain database-backed.
 - `radio/{channelId or sessionId}/...` for retained 2MRRW Radio snippets, beds, bumpers, and visual assets.
@@ -46,6 +46,17 @@ Upload flow:
    applicable.
 4. Live deployment still requires the `protected-media` bucket and Storage policies to be applied. Service
    role credentials remain server-only; public clients only receive signed upload/read URLs.
+
+Cover artwork validation policy:
+
+- Helper text must display exactly: “Upload square cover artwork. Minimum size: 1400x1400. Recommended size: 3000x3000.”
+- Artwork must be perfectly square.
+- Minimum accepted resolution is 1400x1400.
+- 3000x3000 is recommended for the highest-quality 2MRRW presentation.
+- Accepted cover formats are JPG, PNG, GIF, MP4, MOV, and WEBM. Unsupported formats are rejected before processing.
+- File size must be validated against the active upload policy maximum.
+- Client upload flows should show live resolution validation, file-size validation, corrupted-file detection via media preview load failure, replace/remove actions, animated previews, motion cover previews, and a fullscreen preview modal.
+- Server-side image/video probing is not wired yet. Upload intents return explicit metadata validation requirements, and final review must not claim server probing is complete until a durable probing service records dimensions, square validation, and corruption status.
 
 Read contract:
 

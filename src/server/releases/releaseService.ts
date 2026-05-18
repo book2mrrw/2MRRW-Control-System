@@ -13,6 +13,7 @@ import {
   getReleaseDraft,
   type ReleaseManagementDraft
 } from "@/server/release-management/releaseManagementService";
+import { recordReleaseActivity, recordReleaseRevision } from "@/server/release-management/releaseLifecycleService";
 import type { Release, Track } from "@/server/types";
 
 // Shared sync-layer catalog: admin write services publish into this central state,
@@ -337,8 +338,20 @@ export function publishRelease(id: string): PublishReleaseResult | null {
 
     const status = draft.scheduledPublishAt && draft.scheduledPublishAt > nowIso() ? "scheduled" : "published";
     draft.status = status;
+    draft.visibilityState = status === "scheduled" ? "scheduled" : "public";
     draft.readinessState = "ready_for_review";
     draft.updatedAt = nowIso();
+    recordReleaseRevision({
+      releaseId: id,
+      kind: "status_change",
+      label: status === "scheduled" ? "Release scheduled" : "Release published",
+      after: { status, visibilityState: draft.visibilityState, scheduledPublishAt: draft.scheduledPublishAt }
+    });
+    recordReleaseActivity({
+      releaseId: id,
+      kind: "processing",
+      message: status === "scheduled" ? "Publishing release queued for schedule" : "Publishing release completed"
+    });
 
     const record = draftToCatalog(draft, status);
     publishedDrafts.set(id, record);
