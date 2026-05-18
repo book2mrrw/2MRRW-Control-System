@@ -58,19 +58,13 @@ export async function GET() {
     databaseError = "Supabase server client is not configured.";
     missingTables = [...checkedTables];
   } else {
-    const { data, error } = await supabase
-      .schema("information_schema")
-      .from("tables")
-      .select("table_name")
-      .eq("table_schema", "public")
-      .in("table_name", [...checkedTables]);
+    for (const table of checkedTables) {
+      const { error } = await supabase.from(table).select("*", { count: "exact", head: true });
 
-    if (error) {
-      databaseError = error.message;
-      missingTables = [...checkedTables];
-    } else {
-      const existingTables = new Set((data ?? []).map((table) => table.table_name));
-      missingTables = checkedTables.filter((table) => !existingTables.has(table));
+      if (error) {
+        missingTables.push(table);
+        databaseError ??= error.message;
+      }
     }
   }
 
