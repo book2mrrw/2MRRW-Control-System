@@ -35,8 +35,9 @@ export async function GET(request: Request) {
       let closed = false;
       const send = (event: EventPayload) => {
         if (closed) return;
+        const eventId = event.id ?? `${event.timestamp}`;
         controller.enqueue(
-          encoder.encode(`event: ${event.type}\ndata: ${JSON.stringify(event)}\n\n`)
+          encoder.encode(`id: ${eventId}\nevent: ${event.type}\ndata: ${JSON.stringify(event)}\n\n`)
         );
       };
 

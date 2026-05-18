@@ -10,7 +10,7 @@ export function useMediaSync(onMediaEvent?: (event: EventPayload) => void) {
 
   useEffect(() => {
     const latest = events[0];
-    if (!latest || (latest.type !== "media_updated" && latest.type !== "media_replaced")) return;
+    if (!latest || !["media.uploaded", "media.replaced", "media_updated", "media_replaced"].includes(latest.type)) return;
     setLastMediaEvent(latest);
     onMediaEvent?.(latest);
   }, [events, onMediaEvent]);

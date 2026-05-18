@@ -135,6 +135,11 @@ export const vaultContent = [
     collectionId: "vault_founder_room",
     slug: "session-notes",
     title: "Session Notes",
+    type: "document",
+    category: "Founder Room",
+    description: "Behind-the-scenes session notes from the Founder Room.",
+    teaser: "Studio notes and context from the private Vault.",
+    order: 10,
     assetId: "asset_vault_demo"
   }
 ];

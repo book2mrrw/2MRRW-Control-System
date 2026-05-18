@@ -1,5 +1,6 @@
 import "server-only";
 
+import { emitAfterSuccessfulAction } from "@/server/events/eventedWriteService";
 import { getServerSupabase } from "@/server/supabase/client";
 
 export type AudioVisualStatus = "draft" | "scheduled" | "published" | "archived";
@@ -253,10 +254,23 @@ export async function createAudioVisual(input: AudioVisualWriteInput) {
 
   if (supabase) {
     const { data, error } = await supabase.from("audio_visuals").insert(toRow(record)).select("*").single();
-    if (!error && data) return fromRow(data as AudioVisualRow);
+    if (!error && data) {
+      const persisted = fromRow(data as AudioVisualRow);
+      emitAfterSuccessfulAction({
+        type: "audio_visuals.updated",
+        entityId: persisted.id,
+        data: { visualId: persisted.id, slug: persisted.slug, status: persisted.status, action: "created" }
+      });
+      return persisted;
+    }
   }
 
   memoryAudioVisuals.set(record.id, record);
+  emitAfterSuccessfulAction({
+    type: "audio_visuals.updated",
+    entityId: record.id,
+    data: { visualId: record.id, slug: record.slug, status: record.status, action: "created" }
+  });
   return record;
 }
 
@@ -282,10 +296,23 @@ export async function updateAudioVisual(id: string, input: Partial<AudioVisualWr
 
   if (supabase) {
     const { data, error } = await supabase.from("audio_visuals").update(toRow(next)).eq("id", id).select("*").single();
-    if (!error && data) return fromRow(data as AudioVisualRow);
+    if (!error && data) {
+      const persisted = fromRow(data as AudioVisualRow);
+      emitAfterSuccessfulAction({
+        type: "audio_visuals.updated",
+        entityId: persisted.id,
+        data: { visualId: persisted.id, slug: persisted.slug, status: persisted.status, action: "updated" }
+      });
+      return persisted;
+    }
   }
 
   memoryAudioVisuals.set(id, next);
+  emitAfterSuccessfulAction({
+    type: "audio_visuals.updated",
+    entityId: next.id,
+    data: { visualId: next.id, slug: next.slug, status: next.status, action: "updated" }
+  });
   return next;
 }
 

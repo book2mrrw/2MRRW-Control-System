@@ -18,7 +18,24 @@ export function useRealtimeEvents() {
     };
 
     source.onmessage = handleMessage;
-    ["release_created", "release_updated", "release_published", "release_deleted", "media_updated", "media_replaced", "hero_updated"].forEach((type) => {
+    [
+      "release.created",
+      "release.updated",
+      "release.published",
+      "release.deleted",
+      "media.uploaded",
+      "media.replaced",
+      "hero.updated",
+      "vault.updated",
+      "audio_visuals.updated",
+      "release_created",
+      "release_updated",
+      "release_published",
+      "release_deleted",
+      "media_updated",
+      "media_replaced",
+      "hero_updated"
+    ].forEach((type) => {
       source.addEventListener(type, handleMessage);
     });
     source.onerror = () => setConnected(false);

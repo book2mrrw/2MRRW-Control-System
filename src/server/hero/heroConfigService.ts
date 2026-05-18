@@ -50,7 +50,7 @@ export async function updateHeroConfig(input: HeroConfigInput) {
   };
 
   return eventedWrite({
-    type: "hero_updated",
+    type: "hero.updated",
     entityId: "homepage_hero",
     data: heroConfig,
     write: async () => {

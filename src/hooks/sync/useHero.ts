@@ -33,7 +33,7 @@ export function useHero<THero = unknown>({ endpoint = "/api/admin/hero-config" }
   }, [refetch]);
 
   useEffect(() => {
-    if (events[0]?.type === "hero_updated") {
+    if (events[0]?.type === "hero.updated" || events[0]?.type === "hero_updated") {
       void refetch();
     }
   }, [events, refetch]);

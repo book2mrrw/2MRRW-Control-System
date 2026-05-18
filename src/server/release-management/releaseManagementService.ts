@@ -403,7 +403,7 @@ export function createReleaseDraft(input: {
   upsertCreatorSession({ releaseId: id, currentStep: "setup", focusMode: true });
   drafts.set(id, draft);
   emitAfterSuccessfulAction({
-    type: "release_created",
+    type: "release.created",
     entityId: id,
     data: {
       releaseId: id,
@@ -516,7 +516,7 @@ export function updateReleaseMetadata(
   draft.saveState = "saved";
   refreshLifecycleFields(draft);
   emitAfterSuccessfulAction({
-    type: "release_updated",
+    type: "release.updated",
     entityId: draft.id,
     data: {
       releaseId: draft.id,
@@ -598,7 +598,7 @@ export function updateTrackInformation(
   draft.saveState = "saved";
   refreshLifecycleFields(draft);
   emitAfterSuccessfulAction({
-    type: "release_updated",
+    type: "release.updated",
     entityId: releaseId,
     data: {
       releaseId,

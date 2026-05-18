@@ -1,4 +1,13 @@
 export type SyncEvent =
+  | "release.created"
+  | "release.updated"
+  | "release.published"
+  | "release.deleted"
+  | "media.uploaded"
+  | "media.replaced"
+  | "hero.updated"
+  | "vault.updated"
+  | "audio_visuals.updated"
   | "release_created"
   | "release_updated"
   | "release_published"
@@ -19,7 +28,16 @@ export type EventPayload = {
 const listeners = new Set<(event: EventPayload) => void>();
 const eventHistory: EventPayload[] = [];
 const lastEventMap = new Map<string, number>();
-const highPriorityEvents = new Set<SyncEvent>(["release_published", "media_replaced", "hero_updated"]);
+const highPriorityEvents = new Set<SyncEvent>([
+  "release.published",
+  "media.replaced",
+  "hero.updated",
+  "vault.updated",
+  "audio_visuals.updated",
+  "release_published",
+  "media_replaced",
+  "hero_updated"
+]);
 
 function nextEventId() {
   return globalThis.crypto?.randomUUID?.() ?? `evt_${Date.now()}_${Math.random().toString(36).slice(2, 10)}`;

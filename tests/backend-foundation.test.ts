@@ -89,6 +89,7 @@ import { getSupabaseServerKey } from "@/server/supabase/client";
 import { listInbox } from "@/server/notifications/notificationService";
 import { listActiveSignals, updateSignalState } from "@/server/signal/signalDeliveryService";
 import { handleStripeWebhook } from "@/server/stripe/stripeWebhookService";
+import { getVaultContentMedia, listVaultContent } from "@/server/vault/vaultService";
 
 async function testAccountState() {
   const state = getAccountState("user_demo");
@@ -146,6 +147,32 @@ async function testSignedMediaAccess() {
   if (!anonymousFullAudio.ok) {
     assert.equal(anonymousFullAudio.status, 403);
   }
+}
+
+function testVaultPublicPreviewContract() {
+  const anonymousContent = listVaultContent("anon_contract_user");
+  const sessionNotes = anonymousContent.find((item) => item.slug === "session-notes");
+
+  assert.ok(sessionNotes);
+  assert.equal(sessionNotes.locked, true);
+  assert.equal(sessionNotes.unlocked, false);
+  assert.equal(sessionNotes.canPreview, true);
+  assert.equal(sessionNotes.hasPreview, true);
+  assert.equal(sessionNotes.hasMedia, false);
+  assert.equal(sessionNotes.mediaAsset, undefined);
+  assert.equal(sessionNotes.mediaAssetId, undefined);
+  assert.equal(sessionNotes.entitlement.requiredGrant, "vault");
+  assert.equal(sessionNotes.accessTier, "founder");
+  assert.equal(getVaultContentMedia("anon_contract_user", "session-notes"), null);
+
+  const entitledContent = listVaultContent("admin_demo");
+  const entitledSessionNotes = entitledContent.find((item) => item.slug === "session-notes");
+  assert.ok(entitledSessionNotes);
+  assert.equal(entitledSessionNotes.locked, false);
+  assert.equal(entitledSessionNotes.unlocked, true);
+  assert.equal(entitledSessionNotes.mediaAsset?.signedUrlRequired, true);
+  assert.match(entitledSessionNotes.mediaAsset?.signedUrlEndpoint ?? "", /^\/api\/media\/asset_vault_demo\/signed-url$/);
+  assert.equal(getVaultContentMedia("admin_demo", "session-notes")?.assetId, "asset_vault_demo");
 }
 
 function testSignalSuppression() {
@@ -777,6 +804,7 @@ await testAccountState();
 testEntitlementResolution();
 await testWebhookIdempotency();
 await testSignedMediaAccess();
+testVaultPublicPreviewContract();
 testSignalSuppression();
 testRadioIndependence();
 testPlaybackPersistence();

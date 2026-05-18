@@ -588,15 +588,36 @@ export function confirmMediaUpload(input: {
     durable: false
   };
   emitAfterSuccessfulAction({
-    type: "media_updated",
+    type: "media.uploaded",
     entityId: input.releaseId ?? input.trackId ?? ownerId,
     data: mediaEventData
   });
   if (input.retryOfAssetId || category === "audio_full_song" || category === "audio_preview") {
     emitAfterSuccessfulAction({
-      type: "media_replaced",
+      type: "media.replaced",
       entityId: input.releaseId ?? input.trackId ?? ownerId,
       data: { ...mediaEventData, newAudioUrl: record.path }
+    });
+  }
+  if (routing.frontendDestinations.includes("hero")) {
+    emitAfterSuccessfulAction({
+      type: "hero.updated",
+      entityId: "homepage_hero",
+      data: mediaEventData
+    });
+  }
+  if (routing.frontendDestinations.includes("vault")) {
+    emitAfterSuccessfulAction({
+      type: "vault.updated",
+      entityId: ownerId,
+      data: mediaEventData
+    });
+  }
+  if (routing.frontendDestinations.includes("audio_visuals")) {
+    emitAfterSuccessfulAction({
+      type: "audio_visuals.updated",
+      entityId: ownerId,
+      data: mediaEventData
     });
   }
   createCreatorNotification({
