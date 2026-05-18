@@ -1,0 +1,30 @@
+.next/
+node_modules/
+dist/
+coverage/
+.tmp/
+.local-home/
+.npm-cache/
+.vscode/
+tsconfig.tsbuildinfo
+
+# Local environment and deployment state
+.env
+.env.local
+.env.*
+.env.*.local
+!.env.example
+.vercel/
+
+# Local Supabase CLI state
+supabase/.branches/
+supabase/.temp/
+
+# Local secret material
+*.pem
+*.key
+*.p8
+*.p12
+npm-debug.log*
+.vercel
+.env*.local
