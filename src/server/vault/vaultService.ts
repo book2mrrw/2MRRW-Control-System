@@ -9,7 +9,7 @@ export function listVaultContent(userId: string) {
 }
 
 export function getVaultContentMedia(userId: string, contentId: string) {
-  return listVaultContent(userId).find((item) => item.id === contentId) ?? null;
+  return listVaultContent(userId).find((item) => item.id === contentId || item.slug === contentId) ?? null;
 }
 
 export function updateVaultProgress(userId: string, contentId: string, completed: boolean) {

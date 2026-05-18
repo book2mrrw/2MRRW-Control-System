@@ -111,7 +111,7 @@ export function DataTable({ rows }: { rows: Array<Record<string, string | number
         <tbody>
           {rows.length === 0 ? (
             <tr>
-              <td colSpan={Math.max(columns.length, 1)}>No records available for this lane.</td>
+              <td colSpan={Math.max(columns.length, 1)}>Nothing here yet.</td>
             </tr>
           ) : (
             rows.map((row, index) => (

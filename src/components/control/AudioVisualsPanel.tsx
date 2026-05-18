@@ -16,7 +16,7 @@ type AudioVisual = {
 
 export function AudioVisualsPanel() {
   const [visuals, setVisuals] = useState<AudioVisual[]>([]);
-  const [status, setStatus] = useState("Paste a YouTube URL or embed link to stage a backend-managed visual.");
+  const [status, setStatus] = useState("Paste a YouTube URL or embed link to prepare a visual.");
   const [form, setForm] = useState({
     title: "",
     youtubeUrl: "",
@@ -37,12 +37,12 @@ export function AudioVisualsPanel() {
   }
 
   useEffect(() => {
-    refresh().catch(() => setStatus("Audio Visuals API unavailable."));
+    refresh().catch(() => setStatus("Audio Visuals are not available yet."));
   }, []);
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    setStatus("Creating Audio Visual record...");
+    setStatus("Creating Audio Visual...");
     const response = await fetch("/api/admin/audio-visuals", {
       method: "POST",
       headers: { "Content-Type": "application/json", "x-admin": "true" },
@@ -58,7 +58,7 @@ export function AudioVisualsPanel() {
     const payload = await response.json().catch(() => null);
 
     if (!response.ok) {
-      setStatus(payload?.error?.message || "Audio Visual record rejected.");
+      setStatus(payload?.error?.message || "Audio Visual could not be created.");
       return;
     }
 
@@ -81,10 +81,9 @@ export function AudioVisualsPanel() {
   return (
     <section className="release-command-card audio-visuals-card" id="audio-visuals" style={controlToneStyle("signal")}>
       <p className="meta-label">Audio Visuals</p>
-      <h3>YouTube embed control lane</h3>
+      <h3>YouTube embeds</h3>
       <p>
-        Audio Visuals stay as YouTube embeds. The backend stores normalized video IDs, embed URLs, thumbnails,
-        optional release/track links, and publishing state for the public frontend to read.
+        Audio Visuals stay as YouTube embeds. Published visuals can sync to the frontend after they are saved.
       </p>
 
       <form className="release-form audio-visuals-form" onSubmit={submit}>
@@ -97,12 +96,12 @@ export function AudioVisualsPanel() {
           <input value={form.youtubeUrl} onChange={(event) => setForm((current) => ({ ...current, youtubeUrl: event.target.value }))} placeholder="https://www.youtube.com/watch?v=..." required />
         </label>
         <label>
-          Release ID optional
-          <input value={form.releaseId} onChange={(event) => setForm((current) => ({ ...current, releaseId: event.target.value }))} placeholder="rel_..." />
+          Release link
+          <input value={form.releaseId} onChange={(event) => setForm((current) => ({ ...current, releaseId: event.target.value }))} placeholder="Optional release reference" />
         </label>
         <label>
-          Track ID optional
-          <input value={form.trackId} onChange={(event) => setForm((current) => ({ ...current, trackId: event.target.value }))} placeholder="trk_..." />
+          Track link
+          <input value={form.trackId} onChange={(event) => setForm((current) => ({ ...current, trackId: event.target.value }))} placeholder="Optional track reference" />
         </label>
         <label>
           Status
@@ -118,7 +117,7 @@ export function AudioVisualsPanel() {
 
       <div className="audio-visuals-list" aria-label="Audio Visual records">
         {visuals.length === 0 ? (
-          <p>No backend visuals yet. Public frontend fallback visuals remain active.</p>
+          <p>No visuals yet. Create your first Audio Visual when you are ready.</p>
         ) : (
           visuals.slice(0, 6).map((visual) => (
             <article key={visual.id}>

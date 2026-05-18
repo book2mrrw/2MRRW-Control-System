@@ -1,5 +1,5 @@
-import { ReleaseWizardPage } from "@/components/control/ReleasePages";
+import { redirect } from "next/navigation";
 
 export default function ReleaseIsrcStepPage() {
-  return <ReleaseWizardPage step="isrc" />;
+  redirect("/releases/new/tracks");
 }

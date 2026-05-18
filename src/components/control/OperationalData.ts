@@ -8,30 +8,20 @@ export type NavItem = {
 };
 
 export const primaryNavigation: NavItem[] = [
-  { href: "/dashboard", label: "Dashboard", detail: "Operating overview", tone: "signal" },
-  { href: "/releases", label: "Releases", detail: "Release pipeline", tone: "signal" },
-  { href: "/media", label: "Media", detail: "Upload operations", tone: "signal" },
-  { href: "/visuals", label: "Visuals", detail: "Video embeds", tone: "signal" },
-  { href: "/vault", label: "Vault", detail: "Protected catalog", tone: "vault" },
-  { href: "/analytics", label: "Analytics", detail: "Stream signals", tone: "success" },
-  { href: "/identity", label: "Identity", detail: "Access control", tone: "vault" },
-  { href: "/commerce", label: "Commerce", detail: "Checkout ops", tone: "commerce" },
-  { href: "/notify", label: "Notify", detail: "Inbox dispatch", tone: "signal" },
-  { href: "/audit", label: "Audit", detail: "Risk review", tone: "danger" },
-  { href: "/signal", label: "Signal", detail: "Transmission state", tone: "signal" },
-  { href: "/circle", label: "Circle", detail: "Community events", tone: "signal" },
-  { href: "/settings", label: "Settings", detail: "System config", tone: "vault" }
+  { href: "/dashboard", label: "Dashboard", detail: "Today / focus", tone: "vault" },
+  { href: "/releases", label: "Releases", detail: "Discography", tone: "vault" },
+  { href: "/media", label: "Media", detail: "Uploads / assets", tone: "signal" },
+  { href: "/analytics", label: "Analytics", detail: "Audience", tone: "success" },
+  { href: "/shop", label: "Shop", detail: "Merch / drops", tone: "commerce" },
+  { href: "/settings", label: "Settings", detail: "Defaults", tone: "vault" }
 ];
 
 export const releaseSteps = [
-  { id: "basic", label: "Basic Release Information", href: "/releases/new" },
-  { id: "tracks", label: "Track Information", href: "/releases/new/tracks" },
-  { id: "songwriters", label: "Songwriter Information", href: "/releases/new/songwriters" },
-  { id: "isrc", label: "ISRC Management", href: "/releases/new/isrc" },
-  { id: "cover-art", label: "Cover Art Upload", href: "/releases/new/cover-art" },
-  { id: "audio", label: "Audio Upload", href: "/releases/new/audio" },
-  { id: "lyrics", label: "Lyrics Upload", href: "/releases/new/lyrics" },
-  { id: "review", label: "Review + Publish", href: "/releases/new/review" }
+  { id: "setup", label: "Choose Type", href: "/releases/new" },
+  { id: "details", label: "Release Details", href: "/releases/new/details" },
+  { id: "tracks", label: "Tracks & Credits", href: "/releases/new/tracks" },
+  { id: "uploads", label: "Media Uploads", href: "/releases/new/uploads" },
+  { id: "review", label: "Review & Publish", href: "/releases/new/review" }
 ] as const;
 
 export type ReleaseStepId = (typeof releaseSteps)[number]["id"];
@@ -48,113 +38,139 @@ export const modulePages: Record<
   }
 > = {
   visuals: {
-    title: "Visuals Management",
-    eyebrow: "Video operations",
-    description: "Manage official YouTube visual records, release links, publishing state, and embed readiness.",
+    title: "Audio Visuals",
+    eyebrow: "Video embeds",
+    description: "Manage music videos, looping visuals, visualizers, YouTube embeds, and cinematic release assets.",
     tone: "signal",
-    actions: [{ label: "Create visual record", href: "/visuals#create" }, { label: "Review media", href: "/media/videos" }],
+    actions: [{ label: "Add Audio Visual", href: "/visuals#create" }, { label: "Media Library", href: "/media/videos" }],
     rows: [
-      { Item: "Official music video", State: "Draft queue", Contract: "/api/admin/audio-visuals" },
-      { Item: "Release visualizer", State: "Embeddable", Contract: "/api/audio-visuals" }
+      { Item: "Official music video", State: "Draft", Sync: "Publishes to frontend after approval" },
+      { Item: "Release visualizer", State: "Ready", Sync: "Embeddable YouTube player" }
     ]
   },
   vault: {
-    title: "Vault Management",
-    eyebrow: "Protected media",
-    description: "Operate gated content, signed media access, entitlement checks, and vault upload readiness.",
+    title: "Vault Media",
+    eyebrow: "Protected content",
+    description: "Prepare private media for members, collectors, and gated experiences.",
     tone: "vault",
     actions: [{ label: "Upload vault asset", href: "/media/loops" }, { label: "Review identity", href: "/identity" }],
     rows: [
-      { Item: "Founder Room", State: "Entitled", Contract: "/api/vault/content" },
-      { Item: "Session notes", State: "Signed URL required", Contract: "/api/vault/content/[id]/media" }
+      { Item: "Founder Room", State: "Ready", Sync: "Protected audience only" },
+      { Item: "Session notes", State: "Private", Sync: "Available after publish" }
     ]
   },
   analytics: {
-    title: "Analytics Operations",
-    eyebrow: "Streaming signal",
-    description: "Track valid streams, playback events, country aggregation, and listener thresholds.",
+    title: "Analytics",
+    eyebrow: "Audience",
+    description: "Track streams, listeners, countries, saves, playlist adds, release performance, and revenue trends.",
     tone: "success",
-    actions: [{ label: "Audit playback events", href: "/audit" }, { label: "Open signal", href: "/signal" }],
+    actions: [{ label: "Open releases", href: "/releases" }, { label: "Open shop", href: "/shop" }],
     rows: [
-      { Item: "Valid stream threshold", State: "30 seconds", Contract: "/api/analytics/events" },
-      { Item: "Playback progress", State: "Persisted", Contract: "/api/playback/progress" }
+      { Item: "Streams over time", State: "Tracking", Snapshot: "Release performance" },
+      { Item: "Top regions", State: "Tracking", Snapshot: "Audience map" },
+      { Item: "Top tracks", State: "Tracking", Snapshot: "Saves and playlist adds" }
     ]
   },
   identity: {
-    title: "Identity + Permissions",
-    eyebrow: "Access resolver",
-    description: "Inspect account state, membership grants, library permissions, and admin-only control paths.",
+    title: "Account Access",
+    eyebrow: "Audience access",
+    description: "Review membership, library, and content access states.",
     tone: "vault",
     actions: [{ label: "Review vault grants", href: "/vault" }, { label: "Commerce grants", href: "/commerce" }],
     rows: [
-      { Item: "Admin headers", State: "Server gated", Contract: "x-admin protected APIs" },
-      { Item: "Entitlements", State: "Derived", Contract: "/api/account/state" }
+      { Item: "Membership", State: "Active", Scope: "Vault and collector access" },
+      { Item: "Library", State: "Ready", Scope: "Saved releases" }
     ]
   },
   commerce: {
-    title: "Commerce Operations",
-    eyebrow: "Checkout + fulfillment",
-    description: "Manage product readiness, checkout creation, webhook fulfillment, and post-payment access grants.",
+    title: "Revenue",
+    eyebrow: "Royalties and access",
+    description: "Review payout readiness, checkout creation, webhook fulfillment, and post-payment access grants.",
     tone: "commerce",
-    actions: [{ label: "Audit webhooks", href: "/audit" }, { label: "Inspect identity", href: "/identity" }],
+    actions: [{ label: "Open revenue", href: "/revenue" }, { label: "Open settings", href: "/settings" }],
     rows: [
-      { Item: "Checkout session", State: "Webhook gated", Contract: "/api/checkout" },
-      { Item: "Membership grant", State: "Idempotent", Contract: "/api/stripe/webhook" }
+      { Item: "Products", State: "Connected", Scope: "Purchases and grants" },
+      { Item: "Membership", State: "Connected", Scope: "Access after payment" }
+    ]
+  },
+  revenue: {
+    title: "Revenue",
+    eyebrow: "Royalties and payouts",
+    description: "Review streaming revenue, vault revenue, subscriptions, royalties, and pending payouts.",
+    tone: "commerce",
+    actions: [{ label: "Open media", href: "/media" }, { label: "Review settings", href: "/settings" }],
+    rows: [
+      { Item: "Royalty summary", State: "Ready for payout wiring", Snapshot: "Revenue by release" },
+      { Item: "Product access", State: "Connected", Snapshot: "Purchases and memberships" }
+    ]
+  },
+  shop: {
+    title: "Shop",
+    eyebrow: "Merch and commerce",
+    description: "Manage merch, cinematic product presentation, Shopify structure, Printful support, and premium drop readiness.",
+    tone: "commerce",
+    actions: [{ label: "Add product", href: "/shop#create" }, { label: "Release drops", href: "/releases" }],
+    rows: [
+      { Item: "Merch management", State: "Ready", Snapshot: "Products, variants, bundles" },
+      { Item: "360 viewer", State: "Structured", Snapshot: "Cinematic product spin" },
+      { Item: "Shopify", State: "Integration layer", Snapshot: "Storefront sync path" },
+      { Item: "Printful", State: "Support planned", Snapshot: "Fulfillment provider" },
+      { Item: "Ghost mannequin", State: "Visual system", Snapshot: "Floating apparel view" }
     ]
   },
   notify: {
-    title: "Notify Center",
-    eyebrow: "Dispatch queue",
-    description: "Operate inbox records, notification preferences, Circle triggers, and user-facing dispatch state.",
+    title: "Notifications",
+    eyebrow: "Fan updates",
+    description: "Prepare inbox updates, preferences, and Circle notifications.",
     tone: "signal",
     actions: [{ label: "Trigger Circle", href: "/circle" }, { label: "Review inbox", href: "/notify#inbox" }],
     rows: [
-      { Item: "Inbox", State: "Readable", Contract: "/api/notifications/inbox" },
-      { Item: "Preferences", State: "User controlled", Contract: "/api/notifications/preferences" }
+      { Item: "Inbox", State: "Ready", Channel: "In-app updates" },
+      { Item: "Preferences", State: "Fan controlled", Channel: "Notification settings" }
     ]
   },
   audit: {
-    title: "Audit Room",
-    eyebrow: "Operational risk",
-    description: "Review blocked releases, failed upload intents, webhook mismatch risks, and admin action trails.",
+    title: "Release Review",
+    eyebrow: "Quality check",
+    description: "Review releases that need attention before submission.",
     tone: "danger",
-    actions: [{ label: "Readiness gates", href: "/releases" }, { label: "Media contracts", href: "/media" }],
+    actions: [{ label: "Releases", href: "/releases" }, { label: "Media Library", href: "/media" }],
     rows: [
-      { Item: "Release readiness", State: "Gate enforced", Contract: "/api/admin/releases/manage/[id]/readiness" },
-      { Item: "Media access", State: "Entitlement checked", Contract: "/api/media/[assetId]/signed-url" }
+      { Item: "Release readiness", State: "Checked", Result: "Submit when complete" },
+      { Item: "Media access", State: "Checked", Result: "Preview before publish" }
     ]
   },
   signal: {
-    title: "Signal Control",
-    eyebrow: "Transmission lane",
-    description: "Manage active signal windows, suppression state, radio independence, and delivery health.",
+    title: "2MRRW Signals",
+    eyebrow: "Broadcasts",
+    description: "Create broadcast updates, release announcements, fan transmissions, and scheduled notifications.",
     tone: "signal",
     actions: [{ label: "Open analytics", href: "/analytics" }, { label: "Notify users", href: "/notify" }],
     rows: [
-      { Item: "Active signal", State: "Windowed", Contract: "/api/signal/active" },
-      { Item: "Signal state", State: "Suppression aware", Contract: "/api/signal/state" }
+      { Item: "Release announcement", State: "Draft", Channel: "Fan transmission" },
+      { Item: "Delivery update", State: "Ready", Channel: "Scheduled announcement" }
     ]
   },
   circle: {
-    title: "Circle Management",
-    eyebrow: "Community operations",
-    description: "Trigger operational artist events and route them into notification and public community surfaces.",
+    title: "Circle",
+    eyebrow: "Community moments",
+    description: "Create artist moments for community surfaces and notifications.",
     tone: "signal",
     actions: [{ label: "Create event", href: "/circle#create" }, { label: "Notify center", href: "/notify" }],
     rows: [
-      { Item: "2MRRW active", State: "Event ready", Contract: "/api/admin/circle/events" },
-      { Item: "Highlighted comment", State: "Dispatch ready", Contract: "/api/circle/events" }
+      { Item: "2MRRW active", State: "Ready", Channel: "Circle" },
+      { Item: "Highlighted comment", State: "Ready", Channel: "Circle and notifications" }
     ]
   },
   settings: {
     title: "Settings",
-    eyebrow: "System configuration",
-    description: "Review environment posture, route contracts, release policy, and integration readiness.",
+    eyebrow: "Account and defaults",
+    description: "Manage profile, payout settings, metadata defaults, upload defaults, release preferences, timezone, and notifications.",
     tone: "vault",
     actions: [{ label: "Release policy", href: "/releases/new/review" }, { label: "Upload policy", href: "/media" }],
     rows: [
-      { Item: "Supabase", State: "Server-only keys", Contract: "server/supabase" },
-      { Item: "Vercel", State: "Build verified", Contract: "next.config.mjs" }
+      { Item: "Release policy", State: "Ready", Area: "Submission rules" },
+      { Item: "Upload policy", State: "Ready", Area: "Media requirements" }
     ]
   }
 };

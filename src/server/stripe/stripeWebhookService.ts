@@ -21,6 +21,10 @@ async function parseStripeEvent(request: Request) {
     return stripe.webhooks.constructEvent(rawBody, signature, webhookSecret);
   }
 
+  if (process.env.NODE_ENV === "production") {
+    throw new Error("Stripe webhook signature verification is required in production");
+  }
+
   return JSON.parse(rawBody) as Stripe.Event;
 }
 

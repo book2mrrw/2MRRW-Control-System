@@ -1,4 +1,4 @@
-import { getSessionId, getUserId, ok, parseJson } from "@/server/http";
+import { fail, getSessionId, getUserId, ok } from "@/server/http";
 import { trackPlaybackEvent } from "@/server/releases/releaseReadService";
 import { z } from "zod";
 
@@ -10,7 +10,17 @@ const progressSchema = z.object({
 });
 
 export async function POST(request: Request) {
-  const body = await parseJson(request, progressSchema);
+  const raw = await request.json().catch(() => ({}));
+  const parsed = progressSchema.safeParse({
+    ...raw,
+    trackId: raw.trackId ?? raw.controlSystemTrackId ?? raw.control_system_track_id ?? raw.slug,
+    releaseId: raw.releaseId ?? raw.controlSystemReleaseId ?? raw.control_system_release_id
+  });
+  if (!parsed.success) {
+    return fail("Invalid playback progress payload", 400, parsed.error.flatten());
+  }
+
+  const body = parsed.data;
   return ok(
     trackPlaybackEvent(getUserId(request), {
       ...body,

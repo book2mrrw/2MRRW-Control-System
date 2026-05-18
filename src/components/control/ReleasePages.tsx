@@ -1,10 +1,13 @@
 import Link from "next/link";
 import { EmptyState, FormSection, PageHeader, StatusStrip, DataTable, WorkflowStepper } from "@/components/control/OperationalPrimitives";
-import { CreateReleaseDraftForm, ReleaseMetadataForm, SongwriterContributionForm, TrackInformationForm } from "@/components/control/ReleaseForms";
+import { CreateReleaseDraftForm, LyricsEditorForm, ReleaseMetadataForm, SongwriterContributionForm, TrackInformationForm } from "@/components/control/ReleaseForms";
+import { GlobalSearch } from "@/components/control/GlobalSearch";
 import { MediaUploadPanel } from "@/components/control/MediaUploadPanel";
 import { getMediaUploadPolicy } from "@/server/media/uploadIntentService";
+import { listContributorProfiles, listMetadataSuggestions } from "@/server/release-management/contributorDirectoryService";
 import {
   getReadinessSummary,
+  getReleaseLifecycle,
   getReleaseDraft,
   getReleaseManagementOverview,
   listReleaseDrafts,
@@ -18,33 +21,69 @@ function primaryDraft() {
   return listReleaseDrafts()[0] ?? null;
 }
 
-function releaseRows(drafts: ReleaseManagementDraft[]) {
-  return drafts.map((draft) => ({
-    Title: draft.title,
-    Type: draft.releaseType.toUpperCase(),
-    Status: draft.status,
-    Readiness: draft.readinessState,
-    Tracks: draft.tracks.length,
-    Updated: draft.updatedAt.slice(0, 10)
-  }));
+function releaseStatusLabel(status: ReleaseManagementDraft["status"]) {
+  const labels: Record<ReleaseManagementDraft["status"], string> = {
+    draft: "Draft",
+    metadata_incomplete: "Incomplete",
+    assets_pending: "Incomplete",
+    rights_pending: "Incomplete",
+    ready_for_review: "Ready",
+    scheduled: "Scheduled",
+    published: "Live",
+    archived: "Archived"
+  };
+  return labels[status] ?? status.replaceAll("_", " ");
 }
 
-export function ReleaseIndexPage({ status }: { status?: "draft" | "scheduled" | "published" }) {
+function completionPercent(draft: ReleaseManagementDraft) {
+  const summary = getReadinessSummary(draft.id);
+  if (!summary.checks.length) return 0;
+  return Math.round((summary.checks.filter((check) => check.passed).length / summary.checks.length) * 100);
+}
+
+function releaseDateLabel(draft: ReleaseManagementDraft) {
+  return draft.scheduledPublishAt?.slice(0, 10) ?? "Date not set";
+}
+
+type ReleaseTab = "draft" | "scheduled" | "published" | "archived";
+type ReleaseTypeFilter = "single" | "album" | "ep";
+
+function tabMatchesRelease(tab: ReleaseTab | undefined, draft: ReleaseManagementDraft) {
+  if (!tab) return true;
+  if (tab === "draft") return ["draft", "metadata_incomplete", "assets_pending", "rights_pending", "ready_for_review"].includes(draft.status);
+  return draft.status === tab;
+}
+
+function typeMatchesRelease(type: ReleaseTypeFilter | undefined, draft: ReleaseManagementDraft) {
+  if (!type) return true;
+  if (type === "album") return draft.releaseType === "album" || draft.releaseType === "deluxe";
+  return draft.releaseType === type;
+}
+
+function releaseArtworkLabel(draft: ReleaseManagementDraft) {
+  return draft.releaseType === "single" ? "S" : draft.releaseType === "ep" ? "EP" : draft.releaseType === "deluxe" ? "DX" : "LP";
+}
+
+function releaseTypeRule(draft: ReleaseManagementDraft) {
+  if (draft.releaseType === "single") return "Single rule: exactly 1 track.";
+  if (draft.releaseType === "ep") return "EP rule: 2-4 tracks.";
+  if (draft.releaseType === "album") return "Album rule: 5+ tracks.";
+  return "Deluxe rule: optional bonus-track version.";
+}
+
+export function ReleaseIndexPage({ status, type }: { status?: ReleaseTab; type?: ReleaseTypeFilter }) {
   const overview = getReleaseManagementOverview();
-  const drafts = overview.allReleases.filter((draft) => (status ? draft.status === status : true));
-  const title = status ? `${status[0]?.toUpperCase()}${status.slice(1)} Releases` : "Release Management";
+  const drafts = overview.allReleases.filter((draft) => tabMatchesRelease(status, draft) && typeMatchesRelease(type, draft));
+  const title = status ? `${status[0]?.toUpperCase()}${status.slice(1)} Releases` : "Discography";
 
   return (
     <>
       <PageHeader
-        eyebrow="Distribution operations"
+        eyebrow="Creator discography"
         title={title}
-        description="Operate the release pipeline as route-backed workflow software: draft creation, metadata, tracks, splits, assets, readiness, scheduling, and publish gates."
+        description="Artwork-first release management for drafts, scheduled drops, published catalog, and unfinished ideas."
         actions={[
-          { label: "New Release", href: "/releases/new" },
-          { label: "Drafts", href: "/releases/drafts" },
-          { label: "Scheduled", href: "/releases/scheduled" },
-          { label: "Published", href: "/releases/published" }
+          { label: "Add Release", href: "/releases/new" }
         ]}
       />
       <StatusStrip
@@ -55,25 +94,62 @@ export function ReleaseIndexPage({ status }: { status?: "draft" | "scheduled" | 
           { label: "Published", value: String(overview.accountDashboard.published), tone: "commerce" }
         ]}
       />
-      <section className="panel">
+      <section className="panel discography-workspace">
         <div className="section-heading">
           <div>
-            <p className="meta-label">Release records</p>
-            <h2>Pipeline table</h2>
+            <p className="meta-label">Release library</p>
+            <h2>Discography cards</h2>
           </div>
           <Link className="control-button" href="/releases/new">
-            Start Workflow
+            Add Release
           </Link>
         </div>
-        <DataTable rows={releaseRows(drafts)} />
-        <div className="record-link-grid">
-          {drafts.map((draft) => (
-            <Link className="record-link" href={`/releases/${draft.id}`} key={draft.id}>
-              <strong>{draft.title}</strong>
-              <span>{draft.releaseType} / {draft.status} / {draft.tracks.length} track(s)</span>
+        <GlobalSearch />
+        <div className="release-filter-row" aria-label="Release filters">
+          {[
+            { label: "All", href: "/releases", active: !status },
+            { label: "Albums", href: "/releases?type=album", active: type === "album" },
+            { label: "Singles", href: "/releases?type=single", active: type === "single" },
+            { label: "EPs", href: "/releases?type=ep", active: type === "ep" },
+            { label: "Drafts", href: "/releases/drafts", active: status === "draft" },
+            { label: "Scheduled", href: "/releases/scheduled", active: status === "scheduled" },
+            { label: "Published", href: "/releases/published", active: status === "published" }
+          ].map((filter) => (
+            <Link className="filter-chip" data-active={filter.active ? "true" : "false"} href={filter.href} key={filter.href}>
+              {filter.label}
             </Link>
           ))}
         </div>
+        {drafts.length ? (
+          <div className="release-card-grid">
+            {drafts.map((draft) => (
+              <article className="release-card" key={draft.id}>
+                <Link className="release-card-main" href={`/releases/${draft.id}`}>
+                  <span className="release-card-art" aria-hidden="true">{releaseArtworkLabel(draft)}</span>
+                  <span className="release-card-body">
+                    <strong>{draft.title}</strong>
+                    <span>{draft.releaseType.replaceAll("_", " ")} / {releaseDateLabel(draft)}</span>
+                    <span>{draft.tracks.length} tracks / {completionPercent(draft)}% complete</span>
+                    <span className="release-status-badge">{releaseStatusLabel(draft.status)}</span>
+                  </span>
+                </Link>
+                <span className="release-card-actions">
+                  <Link href="/releases/new">Edit Release</Link>
+                  <button type="button">Duplicate Release</button>
+                  <button type="button">Archive Release</button>
+                  <button type="button">Publish Release</button>
+                  <Link href={`/api/releases/${draft.slug}`}>View Frontend</Link>
+                </span>
+              </article>
+            ))}
+          </div>
+        ) : (
+          <EmptyState
+            title="No releases yet"
+            detail="Create your first release for the 2MRRW ecosystem."
+            action={{ label: "+ Add Release", href: "/releases/new" }}
+          />
+        )}
       </section>
     </>
   );
@@ -81,88 +157,182 @@ export function ReleaseIndexPage({ status }: { status?: "draft" | "scheduled" | 
 
 export function ReleaseWizardPage({ step }: { step: ReleaseStepId }) {
   const draft = primaryDraft();
-  const currentStepIndex = ["basic", "tracks", "songwriters", "isrc", "cover-art", "audio", "lyrics", "review"].indexOf(step);
-  const nextStep = ["/releases/new/tracks", "/releases/new/songwriters", "/releases/new/isrc", "/releases/new/cover-art", "/releases/new/audio", "/releases/new/lyrics", "/releases/new/review", "/releases"][currentStepIndex];
-  const previousStep = ["/releases", "/releases/new", "/releases/new/tracks", "/releases/new/songwriters", "/releases/new/isrc", "/releases/new/cover-art", "/releases/new/audio", "/releases/new/lyrics"][currentStepIndex];
+  const contributorProfiles = listContributorProfiles();
+  const metadataSuggestions = listMetadataSuggestions();
+  const stepOrder: ReleaseStepId[] = ["setup", "details", "tracks", "uploads", "review"];
+  const stepUrls = ["/releases/new", "/releases/new/details", "/releases/new/tracks", "/releases/new/uploads", "/releases/new/review"];
+  const currentStepIndex = stepOrder.indexOf(step);
+  const nextStep = stepUrls[currentStepIndex + 1] ?? "/releases";
+  const previousStep = stepUrls[currentStepIndex - 1] ?? "/releases";
+  const pageTitles: Record<ReleaseStepId, string> = {
+    setup: "What are you releasing?",
+    details: "Release details",
+    tracks: "Tracks & credits",
+    uploads: "Artwork & media",
+    review: "Review & publish"
+  };
+  const pageDescriptions: Record<ReleaseStepId, string> = {
+    setup: "Choose the format. The system will create the right draft shape and move you forward.",
+    details: "Title, artist, genre, language, release date, collaborator memory, and metadata defaults.",
+    tracks: "Track rows, lyrics, explicit states, collaborator memory, contributor roles, and credits.",
+    uploads: "Cover art, hero media, audio visuals, vault assets, preview states, replacement paths, and sync readiness.",
+    review: "Resolve missing metadata, preview the release, publish now, or schedule for later."
+  };
 
   return (
     <>
       <PageHeader
-        eyebrow="Release wizard"
-        title="New Release Workflow"
-        description="Every step is a real route that either writes to the existing admin APIs or exposes the exact backend contract needed for integration."
+        eyebrow="Sequential 5-step release workflow"
+        title={pageTitles[step]}
+        description={pageDescriptions[step]}
         actions={draft ? [{ label: "Open Draft", href: `/releases/${draft.id}` }] : [{ label: "All Releases", href: "/releases" }]}
       />
-      <WorkflowStepper current={step} />
-      <section className="panel">
-        {step === "basic" ? (
-          <>
-            <FormSection title="Step 1 Basic Release Information" description="Create a release draft and save distribution-level metadata. Draft creation uses `/api/admin/releases/manage`; metadata saves use `/api/admin/releases/manage/[id]/metadata`.">
-              {draft ? <ReleaseMetadataForm draft={draft} /> : <CreateReleaseDraftForm />}
+      <div className="release-flow-layout">
+        <WorkflowStepper current={step} />
+        <section className="panel release-workflow-panel">
+          <Link className="workflow-back-link" href={previousStep ?? "/releases"}>
+            Back
+          </Link>
+          {draft ? (
+            <StatusStrip
+              items={[
+                { label: "Draft", value: "Autosaved", tone: "vault" },
+                { label: "Complete", value: `${completionPercent(draft)}%`, tone: "success" },
+                { label: "Status", value: releaseStatusLabel(draft.status), tone: "signal" },
+                { label: "Release Date", value: releaseDateLabel(draft), tone: "commerce" }
+              ]}
+            />
+          ) : null}
+          {step === "setup" ? (
+            <FormSection title="Choose release type" description="Single, EP, Album, or Deluxe Album. This creates the draft and the recommended track structure.">
+              <CreateReleaseDraftForm />
+              <Link className="control-button secondary workflow-cancel-link" href="/releases">
+                Cancel
+              </Link>
+              {draft ? (
+                <Link className="workflow-continue-card" href="/releases/new/details">
+                  <span className="release-card-art" aria-hidden="true">{releaseArtworkLabel(draft)}</span>
+                  <span>
+                    <strong>Continue existing draft: {draft.title}</strong>
+                    <small>{draft.releaseType.replaceAll("_", " ")} / {completionPercent(draft)}% complete / autosaved</small>
+                  </span>
+                </Link>
+              ) : null}
             </FormSection>
-          </>
-        ) : null}
-        {step === "tracks" && draft ? (
-          <FormSection title="Step 2 Track Information" description="Track information is edited per-track and persisted through the existing release-management track route.">
-            <div className="stack">
-              {draft.tracks.map((track) => (
-                <article className="sub-panel" key={track.id}>
-                  <div className="section-heading">
-                    <div>
-                      <p className="meta-label">Track {track.position}</p>
-                      <h2>{track.title}</h2>
-                    </div>
-                    <Link className="control-button" href={`/tracks/${track.id}/information`}>
-                      Full Track Page
-                    </Link>
+          ) : null}
+          {step === "details" && draft ? (
+            <div className="release-editor-grid">
+              <FormSection title="Release details" description="Clean metadata first. These fields drive storefront, sync, publishing, and release review.">
+                <div className="release-rule-card">
+                  <p className="meta-label">Progress persists</p>
+                  <strong>{releaseTypeRule(draft)}</strong>
+                  <span>Draft state and saved metadata persist through the release-management service after save.</span>
+                </div>
+                <ReleaseMetadataForm draft={draft} contributorProfiles={contributorProfiles} metadataSuggestions={metadataSuggestions} />
+              </FormSection>
+              <aside className="workflow-side-notes">
+                <p className="meta-label">Clean form rules</p>
+                <strong>Save the release story before tracks.</strong>
+                <span>Autosuggest remembers collaborators, labels, publishers, locations, genres, and metadata defaults for future releases.</span>
+                <span>Release date feeds scheduling and review readiness.</span>
+                <span>Only required release details are visible first. Optional metadata stays folded until needed.</span>
+              </aside>
+            </div>
+          ) : null}
+          {step === "tracks" && draft ? (
+            <FormSection title="Tracks & credits" description="Add tracks, lyrics, producer credits, engineer credits, songwriter splits, and collaborator memory.">
+              <div className="track-command-row">
+                <button className="control-button secondary" type="button">Add Track</button>
+                <button className="control-button secondary" type="button">Drag Reorder</button>
+                <button className="control-button secondary" type="button">Duplicate Track</button>
+              </div>
+              <div className="release-rule-card">
+                <p className="meta-label">Track validation</p>
+                <strong>{releaseTypeRule(draft)}</strong>
+                <span>Audio is tied to the exact track, lyrics to the exact song, and collaborator roles are remembered for future autocomplete.</span>
+              </div>
+              <div className="track-row-list">
+                {draft.tracks.map((track) => (
+                  <article className="track-row-card" key={track.id}>
+                    <span>{track.position}</span>
+                    <strong>{track.title}</strong>
+                    <small>{track.position === 1 ? "3:24" : "3:08"} / {track.audioState} / lyrics {track.lyricsState.replaceAll("_", " ")} / {track.explicit ? "explicit" : "clean"}</small>
+                  </article>
+                ))}
+              </div>
+              <div className="accordion-stack">
+                {draft.tracks.map((track) => (
+                  <details key={track.id} open={track.position === 1}>
+                    <summary>{track.position}. {track.title}</summary>
+                    <TrackInformationForm releaseId={draft.id} track={track} contributorProfiles={contributorProfiles} />
+                  </details>
+                ))}
+                <details>
+                  <summary>Lyrics</summary>
+                  <LyricsEditorForm draft={draft} />
+                </details>
+                <details open>
+                  <summary>Credits, contributors, and splits</summary>
+                  <div className="track-command-row">
+                    <button className="control-button secondary" type="button">Add Collaborator</button>
+                    <button className="control-button secondary" type="button">Producer Credits</button>
+                    <button className="control-button secondary" type="button">Engineer Credits</button>
                   </div>
-                  <TrackInformationForm releaseId={draft.id} track={track} />
+                  <SongwriterContributionForm draft={draft} contributorProfiles={contributorProfiles} />
+                  <SongwriterTable draft={draft} />
+                </details>
+              </div>
+            </FormSection>
+          ) : null}
+          {step === "uploads" && draft ? (
+            <FormSection title="Artwork & media" description="Upload cover art, hero media, audio visuals, vault media, and preview replacements before publish.">
+              <div className="sync-contract-strip">
+                <span>Backend</span>
+                <span>Website</span>
+                <span>Mobile app</span>
+                <span>Tablet app</span>
+                <span>Desktop app</span>
+              </div>
+              <div className="media-workflow-grid">
+                <article className="media-workflow-card">
+                  <p className="meta-label">Cover art</p>
+                  <strong>1400x1400 minimum</strong>
+                  <span>Tied to release: {draft.title}. 3000x3000 recommended.</span>
+                  <MediaUploadPanel draft={{ id: draft.id, title: draft.title, tracks: draft.tracks }} mode="artwork" />
                 </article>
-              ))}
-            </div>
-          </FormSection>
-        ) : null}
-        {step === "songwriters" && draft ? (
-          <FormSection title="Step 3 Songwriter Information" description="Add publishing rows to a track and use exact 100% split validation before review. Producer rows do not count toward ownership totals.">
-            <SongwriterContributionForm draft={draft} />
-            <SongwriterTable draft={draft} />
-          </FormSection>
-        ) : null}
-        {step === "isrc" && draft ? (
-          <FormSection title="Step 4 ISRC Management" description="Assign manual ISRCs or track generated ISRC placeholders per track before distribution handoff.">
-            <div className="stack">
-              {draft.tracks.map((track) => (
-                <TrackInformationForm releaseId={draft.id} track={track} key={track.id} />
-              ))}
-            </div>
-          </FormSection>
-        ) : null}
-        {step === "cover-art" && draft ? (
-          <FormSection title="Step 5 Cover Art Upload" description="Request signed upload intents for release cover art. Policy accepts JPG/JPEG/PNG/GIF static art and MP4 animated loops, not MOV.">
-            <MediaUploadPanel draft={{ id: draft.id, title: draft.title, tracks: draft.tracks }} mode="artwork" />
-          </FormSection>
-        ) : null}
-        {step === "audio" && draft ? (
-          <FormSection title="Step 6 Audio Upload" description="Request track-scoped upload intents for preview or full-song audio. The service validates MP3/WAV file types and tracks 24-bit / 44.1kHz metadata requirements for masters.">
-            <MediaUploadPanel draft={{ id: draft.id, title: draft.title, tracks: draft.tracks }} mode="audio" />
-          </FormSection>
-        ) : null}
-        {step === "lyrics" && draft ? (
-          <FormSection title="Step 7 Lyrics Upload" description="Attach lyrics documents to track context and preserve upload-completion state without pretending bytes uploaded when Storage is not configured.">
-            <MediaUploadPanel draft={{ id: draft.id, title: draft.title, tracks: draft.tracks }} mode="lyrics" />
-          </FormSection>
-        ) : null}
-        {step === "review" && draft ? <ReviewPanel draft={draft} /> : null}
-        {step !== "basic" && !draft ? (
-          <EmptyState title="Create a draft first" detail="The route is ready, but workflow steps need a draft release ID before they can persist changes." action={{ label: "Create Draft", href: "/releases/new" }} />
-        ) : null}
-      </section>
+                <article className="media-workflow-card">
+                  <p className="meta-label">Hero media</p>
+                  <strong>Release page atmosphere</strong>
+                  <span>Tied to homepage hero, landing hero, or release page hero.</span>
+                  <MediaUploadPanel draft={{ id: draft.id, title: draft.title, tracks: draft.tracks }} mode="videos" />
+                </article>
+                <article className="media-workflow-card">
+                  <p className="meta-label">Audio visual</p>
+                  <strong>Visualizer and video assets</strong>
+                  <span>Tied to the audiovisual section with preview and replacement states.</span>
+                  <MediaUploadPanel draft={{ id: draft.id, title: draft.title, tracks: draft.tracks }} mode="loops" />
+                </article>
+                <article className="media-workflow-card">
+                  <p className="meta-label">Vault media</p>
+                  <strong>Protected extras</strong>
+                  <span>Tied to vault panels without changing public frontend styling.</span>
+                  <MediaUploadPanel draft={{ id: draft.id, title: draft.title, tracks: draft.tracks }} mode="all" />
+                </article>
+              </div>
+            </FormSection>
+          ) : null}
+          {step === "review" && draft ? <ReviewPanel draft={draft} /> : null}
+          {step !== "setup" && !draft ? (
+            <EmptyState title="Create a release first" detail="Choose a release type before continuing." action={{ label: "Create Release", href: "/releases/new" }} />
+          ) : null}
+        </section>
+      </div>
       <nav className="workflow-actions" aria-label="Workflow navigation">
         <Link className="control-button secondary" href={previousStep ?? "/releases"}>
           Back
         </Link>
         <Link className="control-button" href={nextStep ?? "/releases"}>
-          Next
+          {step === "review" ? "Back to Releases" : "Save & Continue"}
         </Link>
       </nav>
     </>
@@ -175,41 +345,69 @@ export function ReleaseDetailPage({ releaseId }: { releaseId: string }) {
     return <EmptyState title="Release draft not found" detail="No release-management draft exists for this ID." action={{ label: "Back to Releases", href: "/releases" }} />;
   }
   const readiness = getReadinessSummary(draft.id);
+  const lifecycle = getReleaseLifecycle(draft.id);
 
   return (
     <>
       <PageHeader
-        eyebrow="Release workspace"
+        eyebrow="Release"
         title={draft.title}
-        description="Route-backed release command page for metadata, tracks, songwriter splits, media states, readiness, and public catalog publish status."
-        status={readiness.ready ? "Ready for review" : "Incomplete"}
+        description="Review this release, finish missing items, and prepare it for submission."
+        status={draft.saveState === "synced" ? "Synced" : readiness.ready ? "Ready" : "Saved"}
         actions={[
-          { label: "Wizard", href: "/releases/new" },
-          { label: "Media", href: "/media" }
+          { label: "Continue Release", href: "/releases/new/details" },
+          { label: "Media", href: "/media" },
+          { label: "Preview Contract", href: lifecycle.previewLinks[0]?.href ?? `/api/admin/releases/manage/${draft.id}?preview=contract` }
         ]}
       />
       <StatusStrip
         items={[
-          { label: "Release Type", value: draft.releaseType.toUpperCase(), tone: "signal" },
-          { label: "Cover Art", value: draft.coverArtState, tone: draft.coverArtState === "missing" ? "danger" : "success" },
-          { label: "Audio", value: draft.audioAssetsState, tone: draft.audioAssetsState === "missing" ? "danger" : "success" },
-          { label: "Lyrics", value: draft.lyricsState, tone: "vault" }
+          { label: "Save", value: draft.saveState, tone: draft.saveState === "failed" ? "danger" : "success" },
+          { label: "Stage", value: draft.publishingStage, tone: "signal" },
+          { label: "Frontend", value: readiness.creatorConfidence.find((item) => item.key === "frontend_updated")?.state ?? "syncing", tone: "vault" },
+          { label: "Last Updated", value: draft.updatedAt.slice(0, 10), tone: "commerce" }
         ]}
       />
       <section className="panel">
         <div className="section-heading">
           <div>
-            <p className="meta-label">Readiness checks</p>
-            <h2>Publish gates</h2>
+            <p className="meta-label">Creator health</p>
+            <h2>Content confidence</h2>
+          </div>
+          <span className="state-badge">Safe mode ready</span>
+        </div>
+        <DataTable
+          rows={readiness.creatorConfidence.map((item) => ({
+            Check: item.label,
+            State: item.state.replaceAll("_", " "),
+            Detail: item.detail,
+            Updated: item.updatedAt.slice(0, 10)
+          }))}
+        />
+      </section>
+      <section className="panel">
+        <div className="section-heading">
+          <div>
+            <p className="meta-label">Release checklist</p>
+            <h2>Before you submit</h2>
           </div>
         </div>
-        <DataTable rows={readiness.checks.map((check) => ({ Gate: check.key, Passed: check.passed ? "Yes" : "No", Message: check.message }))} />
+        <DataTable rows={readiness.checks.map((check) => ({ Checklist: checklistLabel(check.key), Status: check.passed ? "Complete" : "Needs attention", Notes: check.message }))} />
+      </section>
+      <section className="panel">
+        <div className="section-heading">
+          <div>
+            <p className="meta-label">Release timeline</p>
+            <h2>What changed</h2>
+          </div>
+        </div>
+        <DataTable rows={lifecycle.activity.map((event) => ({ Event: event.message, Type: event.kind.replaceAll("_", " "), Time: event.createdAt.slice(0, 19) }))} />
       </section>
       <section className="panel">
         <div className="section-heading">
           <div>
             <p className="meta-label">Tracks</p>
-            <h2>Track management</h2>
+            <h2>Tracks</h2>
           </div>
         </div>
         <div className="record-link-grid">
@@ -233,16 +431,17 @@ export function TrackInformationPage({ trackId }: { trackId: string }) {
   }
   const contributions = listTrackContributions(track.id);
   const split = validateTrackSplits(track.id);
+  const contributorProfiles = listContributorProfiles();
 
   return (
     <>
       <PageHeader
-        eyebrow="Track operations"
-        title={`Track Information — ${track.title || "Untitled Track"}`}
-        description="Dedicated track information page for artist metadata, collaborators, advisory state, language, composition type, ISRCs, and publishing splits."
+        eyebrow="Track"
+        title={track.title || "Untitled Track"}
+        description="Edit track details, collaborators, advisory state, language, composition type, ISRCs, and splits."
         actions={[
           { label: "Release", href: `/releases/${draft.id}` },
-          { label: "Wizard Step", href: "/releases/new/tracks" }
+          { label: "Tracks Step", href: "/releases/new/tracks" }
         ]}
       />
       <StatusStrip
@@ -254,28 +453,28 @@ export function TrackInformationPage({ trackId }: { trackId: string }) {
         ]}
       />
       <section className="panel">
-        <FormSection title="Track metadata" description="This form writes through `/api/admin/releases/manage/[id]/tracks/[trackId]`, keeping track metadata out of decorative dashboard cards.">
-          <TrackInformationForm releaseId={draft.id} track={track} />
+        <FormSection title="Track Information" description="Save the details 2MRRW uses for this track.">
+          <TrackInformationForm releaseId={draft.id} track={track} contributorProfiles={contributorProfiles} />
         </FormSection>
       </section>
       <section className="panel">
         <div className="section-heading">
           <div>
             <p className="meta-label">Publishing splits</p>
-            <h2>Songwriter administration</h2>
+            <h2>Contributors & splits</h2>
           </div>
           <span className="state-badge">{split.message}</span>
         </div>
         <DataTable
           rows={contributions.map((row) => ({
             Contributor: row.contributorName,
-            Type: row.contributionType,
+            Role: row.contributionType.replaceAll("_", " "),
             Publisher: row.isPublisher ? "Yes" : "No",
-            Split: `${row.ownershipSplit}%`,
-            PublisherName: row.publisherName ?? "-"
+            Royalty: `${row.ownershipSplit}%`,
+            Publishing: row.publisherName ? "Recorded" : "-"
           }))}
         />
-        <SongwriterContributionForm draft={draft} />
+        <SongwriterContributionForm draft={draft} contributorProfiles={contributorProfiles} />
       </section>
     </>
   );
@@ -286,10 +485,10 @@ export function SongwriterTable({ draft }: { draft: ReleaseManagementDraft }) {
     listTrackContributions(track.id).map((row) => ({
       Track: track.title,
       Contributor: row.contributorName,
-      Type: row.contributionType,
-      Publisher: row.isPublisher ? "Yes" : "No",
-      Split: `${row.ownershipSplit}%`,
-      Validation: validateTrackSplits(track.id).message
+      Role: row.contributionType.replaceAll("_", " "),
+      Royalty: `${row.ownershipSplit}%`,
+      Publishing: row.publisherName ? "Recorded" : "-",
+      Total: validateTrackSplits(track.id).message
     }))
   );
   return <DataTable rows={rows} />;
@@ -297,26 +496,90 @@ export function SongwriterTable({ draft }: { draft: ReleaseManagementDraft }) {
 
 function ReviewPanel({ draft }: { draft: ReleaseManagementDraft }) {
   const readiness = getReadinessSummary(draft.id);
+  const scheduleReady = Boolean(draft.scheduledPublishAt);
+  const readinessByKey = new Map(readiness.checks.map((check) => [check.key, check]));
+  const rows = [
+    { Checklist: "Release Details", Status: readinessByKey.get("metadata")?.passed ? "Complete" : "Missing", Notes: readinessByKey.get("metadata")?.message ?? "Confirm title, artist, genre, language, and release date." },
+    { Checklist: "Tracks & Credits", Status: readinessByKey.get("track_information")?.passed && readinessByKey.get("splits")?.passed ? "Complete" : "Missing", Notes: "Tracks, lyrics, credits, roles, and splits must be ready." },
+    { Checklist: "Artwork", Status: readinessByKey.get("cover_art")?.passed ? "Complete" : "Missing", Notes: readinessByKey.get("cover_art")?.message ?? "Upload approved release artwork." },
+    { Checklist: "Distribution", Status: readiness.ready ? "Complete" : "Needs attention", Notes: "Stores and delivery state follow release readiness." },
+    { Checklist: "Pricing & Stores", Status: readiness.ready && scheduleReady ? "Ready" : "Needs attention", Notes: "Confirm shop, store, and schedule settings before publish." }
+  ];
   return (
-    <FormSection title="Step 8 Review + Publish" description="Review the exact service-layer readiness checks used before publish. Failed checks block public catalog propagation.">
-      <DataTable rows={readiness.checks.map((check) => ({ Gate: check.key, Passed: check.passed ? "Yes" : "No", Requirement: check.message }))} />
+    <FormSection title="Review & publish" description="Confirm the release summary, resolve warnings, preview, publish, or schedule for later.">
+      <div className="review-publish-grid">
+        <article className="review-summary-card">
+          <span className="release-card-art" aria-hidden="true">{releaseArtworkLabel(draft)}</span>
+          <div>
+            <p className="meta-label">Release summary</p>
+            <strong>{draft.title}</strong>
+            <span>{draft.artistName} / {draft.releaseType.replaceAll("_", " ")} / {draft.tracks.length} tracks</span>
+            <span>{releaseDateLabel(draft)} / {completionPercent(draft)}% complete</span>
+          </div>
+        </article>
+        <div className="review-checklist">
+          {rows.map((row) => {
+            const complete = row.Status === "Complete" || row.Status === "Ready";
+            return (
+            <article className="checklist-card" data-complete={complete ? "true" : "false"} key={row.Checklist}>
+              <span aria-hidden="true">{complete ? "OK" : "!"}</span>
+              <div>
+                <strong>{row.Checklist}</strong>
+                <small>{row.Notes}</small>
+              </div>
+            </article>
+            );
+          })}
+        </div>
+      </div>
       <p className="form-status">
-        {readiness.ready ? "Ready for publish via the admin publish route." : "Not ready. Resolve all metadata, media, track information, and split checks first."}
+        {readiness.ready && scheduleReady ? "Ready to publish release." : "Resolve missing warnings, then publish or schedule for later."}
       </p>
+      <div className="publish-action-row">
+        <button className="control-button" disabled={!readiness.ready || !scheduleReady} type="button">
+          Publish Release
+        </button>
+        <Link className="control-button secondary" href="/releases/new/scheduler">
+          Schedule for Later
+        </Link>
+        <Link className="control-button secondary" href={`/releases/${draft.id}`}>
+          Preview Release
+        </Link>
+      </div>
     </FormSection>
   );
+}
+
+function checklistLabel(key: string) {
+  const labels: Record<string, string> = {
+    track_count: "Track count",
+    metadata: "Metadata complete",
+    cover_art: "Artwork approved",
+    audio: "Audio uploaded",
+    track_information: "Track information",
+    splits: "Contributors balanced"
+  };
+  return labels[key] ?? key.replaceAll("_", " ");
 }
 
 export function MediaPage({ mode = "all" }: { mode?: "all" | "artwork" | "audio" | "videos" | "loops" }) {
   const draft = primaryDraft();
   const artworkPolicy = getMediaUploadPolicy("single_cover_art");
-  const audioPolicy = getMediaUploadPolicy("audio_full_song");
+  const mediaSections = [
+    { label: "Hero", title: "Hero section uploads", detail: "Hero media ties to homepage hero, landing hero, or release hero.", mode: "videos" },
+    { label: "Visuals", title: "Audio visual uploads", detail: "Visualizer, YouTube, video, loop, and release visual media lanes.", mode: "loops" },
+    { label: "Vault", title: "Vault uploads", detail: "Protected extras and member-only assets with assignment state.", mode: "all" },
+    { label: "Images", title: "Image uploads", detail: "Cover art, editorial images, and release page supporting artwork.", mode: "artwork" },
+    { label: "MP4", title: "MP4 uploads", detail: "Motion artwork, videos, background loops, and hero media.", mode: "videos" },
+    { label: "GIF", title: "GIF uploads", detail: "Animated covers, small motion accents, and promotional media.", mode: "artwork" },
+    { label: "Merch", title: "Merch media", detail: "Merch media ties to product visuals and shop presentation contracts.", mode: "all" }
+  ] as const;
   return (
     <>
       <PageHeader
-        eyebrow="Media operations"
-        title={mode === "all" ? "Media Upload System" : `${mode[0]?.toUpperCase()}${mode.slice(1)} Uploads`}
-        description="Route-backed upload panels request signed upload intents, enforce file type/owner validation, and never report completed uploads unless the completion contract runs."
+        eyebrow="Media"
+        title={mode === "all" ? "Media System" : `${mode[0]?.toUpperCase()}${mode.slice(1)} Uploads`}
+        description="Upload, preview, replace, confirm deletion, assign media, and prepare instant frontend sync without changing the public frontend aesthetic."
         actions={[
           { label: "Artwork", href: "/media/artwork" },
           { label: "Audio", href: "/media/audio" },
@@ -326,13 +589,38 @@ export function MediaPage({ mode = "all" }: { mode?: "all" | "artwork" | "audio"
       />
       <StatusStrip
         items={[
-          { label: "Cover Ext", value: artworkPolicy.extensions.join(", "), tone: "signal" },
+          { label: "Artwork Formats", value: artworkPolicy.extensions.join(", "), tone: "signal" },
           { label: "Cover Max", value: `${artworkPolicy.maxSizeMb}MB`, tone: "vault" },
-          { label: "Audio Ext", value: audioPolicy.extensions.join(", "), tone: "success" },
-          { label: "Master Max", value: `${audioPolicy.maxSizeMb}MB`, tone: "commerce" }
+          { label: "Artwork Minimum", value: "1400x1400", tone: "success" },
+          { label: "Recommended", value: "3000x3000", tone: "commerce" },
         ]}
       />
       <section className="panel">
+        <div className="section-heading">
+          <div>
+            <p className="meta-label">Search media</p>
+            <h2>Find uploads, drafts, and assignments</h2>
+          </div>
+        </div>
+        <GlobalSearch />
+        <div className="module-card-grid media-capability-grid">
+          {mediaSections.map((section) => (
+            <article className="module-feature-card" key={section.title}>
+              <p className="meta-label">{section.label}</p>
+              <strong>{section.title}</strong>
+              <span>{section.detail}</span>
+            </article>
+          ))}
+        </div>
+      </section>
+      <section className="panel">
+        <div className="section-heading">
+          <div>
+            <p className="meta-label">Upload console</p>
+            <h2>Replacement, preview, and sync</h2>
+          </div>
+          <span className="state-badge">Instant frontend sync</span>
+        </div>
         <MediaUploadPanel draft={draft ? { id: draft.id, title: draft.title, tracks: draft.tracks } : null} mode={mode} />
       </section>
     </>

@@ -3,8 +3,6 @@ import type { NormalizedPermissions, Release, Track } from "@/server/types";
 export type MediaAssetContract = {
   id: string;
   assetId: string;
-  bucket: string;
-  path: string;
   kind: "artwork" | "preview" | "full_audio" | "loop" | "vault" | "lyrics" | "unknown";
   access: "public" | "entitled" | "admin";
   signedUrlRequired: boolean;
@@ -63,6 +61,14 @@ export type ReleaseMediaObject = {
   scheduledPublishAt?: string;
   artworkAssetId?: string;
   artwork?: MediaAssetContract;
+  products?: Array<{
+    id: string;
+    slug: string;
+    title: string;
+    priceCents?: number | null;
+    currency?: string | null;
+  }>;
+  price?: number;
   tracks: TrackMediaObject[];
   entitlement: EntitlementSummary;
   playback: {
@@ -96,6 +102,7 @@ type MediaObjectInput = {
   artist?: ArtistSource | null;
   tracks: Track[];
   mediaAssets: readonly MediaAssetSource[];
+  products?: ReleaseMediaObject["products"];
   permissions?: NormalizedPermissions;
   savedReleaseIds?: string[];
   playback?: PlaybackSource;
@@ -116,8 +123,6 @@ export function toMediaAssetContract(asset: MediaAssetSource): MediaAssetContrac
   return {
     id: asset.id,
     assetId: asset.id,
-    bucket: asset.bucket,
-    path: asset.path,
     kind: classifyMediaAsset(asset),
     access: asset.access === "public" || asset.access === "admin" ? asset.access : "entitled",
     signedUrlRequired: true,
@@ -204,6 +209,7 @@ export function buildReleaseMediaObject(input: MediaObjectInput): ReleaseMediaOb
   const trackEntitlements = tracks.map((track) => track.entitlement);
   const canStream = trackEntitlements.some((entitlement) => entitlement.canStream);
   const canDownload = trackEntitlements.some((entitlement) => entitlement.canDownload);
+  const firstPricedProduct = input.products?.find((product) => typeof product.priceCents === "number" && product.priceCents >= 0);
 
   return {
     id: input.release.id,
@@ -216,6 +222,8 @@ export function buildReleaseMediaObject(input: MediaObjectInput): ReleaseMediaOb
     scheduledPublishAt: input.release.scheduledPublishAt,
     artworkAssetId: artwork?.id,
     artwork: artwork ? toMediaAssetContract(artwork) : undefined,
+    products: input.products,
+    price: firstPricedProduct ? (firstPricedProduct.priceCents ?? 0) / 100 : undefined,
     tracks,
     entitlement: {
       canStream,

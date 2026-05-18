@@ -1,5 +1,5 @@
-import { ReleaseWizardPage } from "@/components/control/ReleasePages";
+import { redirect } from "next/navigation";
 
 export default function ReleaseCoverArtStepPage() {
-  return <ReleaseWizardPage step="cover-art" />;
+  redirect("/releases/new/uploads");
 }
