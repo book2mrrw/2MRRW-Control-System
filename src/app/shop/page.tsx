@@ -1,5 +1,5 @@
-import { ModulePage } from "@/components/control/ModulePage";
+import { ShopView } from "@/components/control/ReleaseControlViews";
 
 export default function ShopPage() {
-  return <ModulePage module="shop" />;
+  return <ShopView />;
 }

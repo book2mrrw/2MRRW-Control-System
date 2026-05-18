@@ -11,6 +11,7 @@ export const primaryNavigation: NavItem[] = [
   { href: "/dashboard", label: "Dashboard", detail: "Today / focus", tone: "vault" },
   { href: "/releases", label: "Releases", detail: "Discography", tone: "vault" },
   { href: "/media", label: "Media", detail: "Uploads / assets", tone: "signal" },
+  { href: "/hero-editor", label: "Hero Editor", detail: "Public hero", tone: "signal" },
   { href: "/analytics", label: "Analytics", detail: "Audience", tone: "success" },
   { href: "/shop", label: "Shop", detail: "Merch analytics", tone: "commerce" },
   { href: "/settings", label: "Settings", detail: "Defaults", tone: "vault" }

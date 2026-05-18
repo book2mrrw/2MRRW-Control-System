@@ -1,5 +1,5 @@
-import { MediaPage } from "@/components/control/ReleasePages";
+import { MediaLibraryView } from "@/components/control/ReleaseControlViews";
 
 export default function MediaRoute() {
-  return <MediaPage />;
+  return <MediaLibraryView />;
 }

@@ -1,5 +1,5 @@
-import { ModulePage } from "@/components/control/ModulePage";
+import { AnalyticsView } from "@/components/control/ReleaseControlViews";
 
 export default function AnalyticsRoute() {
-  return <ModulePage module="analytics" />;
+  return <AnalyticsView />;
 }

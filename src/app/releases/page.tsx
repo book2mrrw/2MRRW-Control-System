@@ -1,9 +1,5 @@
-import { ReleaseIndexPage } from "@/components/control/ReleasePages";
+import { ReleasesView } from "@/components/control/ReleaseControlViews";
 
-type ReleaseTypeFilter = "single" | "album" | "ep";
-
-export default async function ReleasesPage({ searchParams }: { searchParams?: Promise<{ type?: string }> }) {
-  const params = await searchParams;
-  const type = params?.type === "single" || params?.type === "album" || params?.type === "ep" ? (params.type as ReleaseTypeFilter) : undefined;
-  return <ReleaseIndexPage type={type} />;
+export default function ReleasesPage() {
+  return <ReleasesView />;
 }

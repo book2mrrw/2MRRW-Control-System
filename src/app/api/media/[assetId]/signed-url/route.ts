@@ -9,7 +9,7 @@ export function OPTIONS(request: Request) {
 
 export async function GET(request: Request, { params }: { params: Promise<{ assetId: string }> }) {
   const { assetId } = await params;
-  const result = await createSignedMediaUrl(request.headers.get("x-user-id"), assetId, {
+  const result = await createSignedMediaUrl(getUserId(request), assetId, {
     publicKinds: [...PUBLIC_SIGNABLE_KINDS]
   });
   return withCors(result.ok ? ok(result) : fail(result.message, result.status), request);

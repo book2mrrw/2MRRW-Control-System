@@ -8,7 +8,7 @@ import {
   Bell,
   ChevronLeft,
   ChevronRight,
-  Globe2,
+  Eye,
   Gauge,
   Images,
   Package,
@@ -18,14 +18,15 @@ import {
   ShoppingBag
 } from "lucide-react";
 import { controlToneStyle } from "@/design/tokens";
-import { GlobalSearch } from "@/components/control/GlobalSearch";
 import { primaryNavigation } from "@/components/control/OperationalData";
+import { useReleaseControl } from "@/components/control/ReleaseControlStore";
 
 function NavigationIcon({ label }: { label: string }) {
   const icons: Record<string, ComponentType<{ size?: number; strokeWidth?: number }>> = {
     Dashboard: Gauge,
     Releases: Package,
     Media: Images,
+    "Hero Editor": Eye,
     Analytics: BarChart3,
     Shop: ShoppingBag,
     Settings
@@ -47,12 +48,13 @@ function pageSubtitle(pathname: string) {
   if (pathname.startsWith("/analytics")) return "Streams, platforms, and signals";
   if (pathname.startsWith("/shop")) return "Merch performance analytics";
   if (pathname.startsWith("/settings")) return "Profile, memory, and defaults";
-  return "Control System";
+  return "Creator Studio";
 }
 
 export function OperationalShell({ children }: { children: ReactNode }) {
   const pathname = usePathname();
   const [collapsed, setCollapsed] = useState(false);
+  const { setPreviewOpen } = useReleaseControl();
 
   return (
     <div className="control-shell" data-sidebar-collapsed={collapsed ? "true" : "false"}>
@@ -67,14 +69,9 @@ export function OperationalShell({ children }: { children: ReactNode }) {
           </span>
           <span>
             <strong>2MRRW</strong>
-            <small>Control System</small>
+            <small>Creator Studio</small>
           </span>
         </Link>
-        <div className="sidebar-system-card">
-          <p className="meta-label">Creator OS</p>
-          <strong>Release-first workspace</strong>
-          <small>Drafts, media, analytics, sync, and publishing stay in one calm operational surface.</small>
-        </div>
         <nav className="control-rail">
           {primaryNavigation.map((item) => {
             const active = pathname === item.href || (item.href !== "/dashboard" && pathname.startsWith(`${item.href}/`));
@@ -98,7 +95,7 @@ export function OperationalShell({ children }: { children: ReactNode }) {
           <div className="sidebar-profile">
             <span aria-hidden="true">2M</span>
             <strong>2MRRW</strong>
-            <small>Creator System</small>
+            <small>Creator Studio</small>
           </div>
           <button className="sidebar-collapse-button" onClick={() => setCollapsed((current) => !current)} type="button">
             {collapsed ? <ChevronRight size={16} /> : <ChevronLeft size={16} />}
@@ -112,19 +109,17 @@ export function OperationalShell({ children }: { children: ReactNode }) {
             <p className="meta-label">{pageSubtitle(pathname)}</p>
             <strong>{pageTitle(pathname)}</strong>
           </div>
-          <div className="topbar-search">
-            <Search size={16} aria-hidden="true" />
-            <GlobalSearch />
-          </div>
           <div className="top-status-cluster">
-            <span className="topbar-sync-badge">Synced</span>
+            <button className="topbar-icon-button" type="button" aria-label="Search">
+              <Search size={17} />
+            </button>
             <button className="topbar-icon-button" type="button" aria-label="Notifications">
               <Bell size={17} />
             </button>
-            <Link className="topbar-preview-action" href="/api/releases" title="Backend preview contract">
-              <Globe2 size={16} />
-              Preview
-            </Link>
+            <button className="topbar-live-site" type="button" onClick={() => setPreviewOpen(true)}>
+              <Eye size={16} />
+              View Live Site
+            </button>
             <Link className="topbar-new-release" href="/releases/new">
               <Plus size={16} />
               New Release

@@ -1,5 +1,5 @@
-import { ModulePage } from "@/components/control/ModulePage";
+import { SettingsView } from "@/components/control/ReleaseControlViews";
 
 export default function SettingsRoute() {
-  return <ModulePage module="settings" />;
+  return <SettingsView />;
 }
