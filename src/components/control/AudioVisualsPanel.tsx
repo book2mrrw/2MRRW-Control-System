@@ -14,6 +14,27 @@ type AudioVisual = {
   trackId?: string | null;
 };
 
+function youtubeEmbedUrl(value: string) {
+  const trimmed = value.trim();
+  if (!trimmed) return "";
+  const iframeMatch = /src=["']([^"']+)["']/.exec(trimmed);
+  const source = iframeMatch?.[1] ?? trimmed;
+  try {
+    const url = new URL(source);
+    const host = url.hostname.replace(/^www\./, "");
+    if (host === "youtu.be") return `https://www.youtube.com/embed/${url.pathname.slice(1)}`;
+    if (host.endsWith("youtube.com")) {
+      if (url.pathname.startsWith("/embed/")) return source;
+      if (url.pathname.startsWith("/shorts/")) return `https://www.youtube.com/embed/${url.pathname.split("/")[2] ?? ""}`;
+      const id = url.searchParams.get("v");
+      return id ? `https://www.youtube.com/embed/${id}` : "";
+    }
+  } catch {
+    return "";
+  }
+  return "";
+}
+
 export function AudioVisualsPanel() {
   const [visuals, setVisuals] = useState<AudioVisual[]>([]);
   const [status, setStatus] = useState("Paste a YouTube URL or embed link to prepare a visual.");
@@ -24,6 +45,7 @@ export function AudioVisualsPanel() {
     trackId: "",
     status: "draft"
   });
+  const embedPreviewUrl = youtubeEmbedUrl(form.youtubeUrl);
 
   async function refresh() {
     const response = await fetch("/api/admin/audio-visuals", {
@@ -114,6 +136,11 @@ export function AudioVisualsPanel() {
         </label>
         <button className="release-upload-button" type="submit">Create Audio Visual</button>
       </form>
+      {embedPreviewUrl ? (
+        <div className="audio-visual-embed-preview">
+          <iframe title="Audio Visual embed preview" src={embedPreviewUrl} allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowFullScreen />
+        </div>
+      ) : null}
 
       <div className="audio-visuals-list" aria-label="Audio Visual records">
         {visuals.length === 0 ? (

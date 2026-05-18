@@ -9,6 +9,8 @@ import { z } from "zod";
 
 const trackInfoSchema = z.object({
   title: z.string().min(1).optional(),
+  audioFile: z.string().optional(),
+  credits: z.string().optional(),
   explicit: z.boolean().optional(),
   lyricsLanguage: z.string().optional(),
   isLiveVersion: z.boolean().optional(),

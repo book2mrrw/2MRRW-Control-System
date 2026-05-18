@@ -108,14 +108,14 @@ export type ManagedMediaAssetRecord = {
 };
 
 const MB = 1024 * 1024;
-const imageMimeTypes = ["image/jpeg", "image/png", "image/gif"] as const;
-const imageExtensions = ["jpg", "jpeg", "png", "gif"] as const;
+const imageMimeTypes = ["image/jpeg", "image/png", "image/gif", "image/webp"] as const;
+const imageExtensions = ["jpg", "jpeg", "png", "gif", "webp"] as const;
 const mp4MimeTypes = ["video/mp4"] as const;
 const motionCoverMimeTypes = [...mp4MimeTypes, "video/quicktime", "video/webm"] as const;
 const coverMimeTypes = [...imageMimeTypes, ...motionCoverMimeTypes] as const;
 const coverExtensions = [...imageExtensions, "mp4", "mov", "webm"] as const;
-const audioMimeTypes = ["audio/wav", "audio/x-wav", "audio/mpeg", "audio/mp3"] as const;
-const audioExtensions = ["wav", "mp3"] as const;
+const audioMimeTypes = ["audio/wav", "audio/x-wav", "audio/mpeg", "audio/mp3", "audio/flac", "audio/aiff", "audio/x-aiff"] as const;
+const audioExtensions = ["wav", "mp3", "flac", "aif", "aiff"] as const;
 const docMimeTypes = ["text/plain", "application/pdf", "application/vnd.openxmlformats-officedocument.wordprocessingml.document"] as const;
 const docExtensions = ["txt", "pdf", "docx"] as const;
 const coverArtworkTarget = {

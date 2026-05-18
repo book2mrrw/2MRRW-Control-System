@@ -288,7 +288,7 @@ export function ReleaseMetadataForm({
             </label>
             <label className="span-2">
               Release Description
-              <textarea placeholder="Short release description for 2MRRW announcements, storefront pages, and vault context." rows={4} />
+              <textarea placeholder="Short release description for 2MRRW announcements, distribution pages, and vault context." rows={4} />
             </label>
           </div>
         </details>
@@ -323,6 +323,8 @@ export function TrackInformationForm({
       headers: { "Content-Type": "application/json", "x-admin": "true" },
       body: JSON.stringify({
         title: form.get("title"),
+        audioFile: form.get("audioFile"),
+        credits: form.get("credits"),
         explicit: form.get("explicit") === "on",
         lyricsLanguage: form.get("lyricsLanguage"),
         isLiveVersion: form.get("isLiveVersion") === "on",
@@ -360,6 +362,10 @@ export function TrackInformationForm({
       <label>
         Preview start
         <input placeholder="0:30" />
+      </label>
+      <label>
+        Audio file reference
+        <input name="audioFile" defaultValue={track.audioFile} placeholder="Selected upload path or audio file reference" />
       </label>
       <label>
         BPM
@@ -406,6 +412,10 @@ export function TrackInformationForm({
         <input placeholder="Cinematic, high-energy, reflective" />
       </label>
       <TypeaheadField name="producerNames" label="Producers / engineers / collaborators" defaultValue={track.producerNames.join(", ")} options={savedContributors} placeholder="Producer, engineer, designer, collaborator" />
+      <label className="span-2">
+        Track credits
+        <textarea name="credits" defaultValue={track.credits} placeholder="Credits attached to this track" rows={3} />
+      </label>
       <label>
         Track sequence number
         <input min="1" type="number" defaultValue={track.position} />

@@ -58,6 +58,8 @@ export type ReleaseManagementTrack = {
   id: string;
   releaseId: string;
   title: string;
+  audioFile?: string;
+  credits?: string;
   position: number;
   explicit: boolean;
   lyricsLanguage?: string;
@@ -191,8 +193,16 @@ function assertTrackCount(releaseType: ReleaseType, trackCount: number) {
     throw new Error("Singles must contain exactly 1 track");
   }
 
-  if (releaseType !== "single" && trackCount < 2) {
-    throw new Error("Albums, EPs, deluxe editions, and remix packs must contain at least 2 tracks");
+  if (releaseType === "ep" && (trackCount < 2 || trackCount > 4)) {
+    throw new Error("EPs must contain 2-4 tracks");
+  }
+
+  if (releaseType === "album" && trackCount < 5) {
+    throw new Error("Albums must contain at least 5 tracks");
+  }
+
+  if ((releaseType === "deluxe" || releaseType === "remix_pack") && trackCount < 1) {
+    throw new Error("Deluxe editions and remix packs must contain at least 1 track");
   }
 }
 
@@ -210,6 +220,34 @@ function makeTrack(releaseId: string, position: number): ReleaseManagementTrack 
     audioState: "missing",
     lyricsState: "not_required"
   };
+}
+
+function defaultEmptyTrack(releaseId: string) {
+  return makeTrack(releaseId, 1);
+}
+
+function normalizeTrackArrayForRelease(draft: ReleaseManagementDraft) {
+  if (draft.releaseType === "single") {
+    const firstTrack = draft.tracks[0] ?? defaultEmptyTrack(draft.id);
+    firstTrack.position = 1;
+    firstTrack.releaseId = draft.id;
+    draft.tracks = [firstTrack];
+    return draft.tracks;
+  }
+
+  draft.tracks = draft.tracks
+    .filter(Boolean)
+    .map((track, index) => ({
+      ...track,
+      releaseId: draft.id,
+      position: index + 1
+    }));
+  return draft.tracks;
+}
+
+function normalizeTrackArrayForReleaseDraft(draft: ReleaseManagementDraft) {
+  normalizeTrackArrayForRelease(draft);
+  return draft;
 }
 
 function getDraftOrThrow(id: string) {
@@ -351,7 +389,7 @@ export function createReleaseDraft(input: {
     coverArtState: "missing",
     audioAssetsState: "missing",
     lyricsState: "not_required",
-    tracks: Array.from({ length: trackCount }, (_, index) => makeTrack(id, index + 1)),
+    tracks: Array.from({ length: input.releaseType === "single" ? 1 : trackCount }, (_, index) => makeTrack(id, index + 1)),
     previewLinks: buildFrontendPreviewLinks({ releaseId: id, slug: nextReleaseSlug(title, id) }),
     saveState: "saved",
     timezone: "America/New_York",
@@ -359,6 +397,7 @@ export function createReleaseDraft(input: {
     updatedAt: timestamp
   };
 
+  normalizeTrackArrayForRelease(draft);
   refreshLifecycleFields(draft);
   upsertCreatorSession({ releaseId: id, currentStep: "setup", focusMode: true });
   drafts.set(id, draft);
@@ -377,11 +416,12 @@ export function createReleaseDraft(input: {
 }
 
 export function listReleaseDrafts() {
-  return [...drafts.values()].sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
+  return [...drafts.values()].map(normalizeTrackArrayForReleaseDraft).sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
 }
 
 export function getReleaseDraft(id: string) {
-  return drafts.get(id) ?? null;
+  const draft = drafts.get(id) ?? null;
+  return draft ? normalizeTrackArrayForReleaseDraft(draft) : null;
 }
 
 export function updateReleaseMetadata(
@@ -420,6 +460,7 @@ export function updateReleaseMetadata(
   }
 ) {
   const draft = getDraftOrThrow(id);
+  normalizeTrackArrayForRelease(draft);
   draft.saveState = "saving";
   upsertCreatorSession({ releaseId: id, currentStep: "setup" });
   const before = {
@@ -492,6 +533,8 @@ export function updateTrackInformation(
     Pick<
       ReleaseManagementTrack,
       | "title"
+      | "audioFile"
+      | "credits"
       | "explicit"
       | "lyricsLanguage"
       | "isLiveVersion"
@@ -506,6 +549,7 @@ export function updateTrackInformation(
   >
 ) {
   const draft = getDraftOrThrow(releaseId);
+  normalizeTrackArrayForRelease(draft);
   draft.saveState = "saving";
   upsertCreatorSession({ releaseId, currentStep: "tracks" });
   const track = draft.tracks.find((item) => item.id === trackId);
@@ -606,11 +650,27 @@ export function validateTrackSplits(trackId: string) {
 }
 
 export function validateReleaseStructure(draft: ReleaseManagementDraft): ReadinessCheck[] {
+  const normalizedTracks = normalizeTrackArrayForRelease(draft);
+  const trackCountPassed = draft.releaseType === "single"
+    ? normalizedTracks.length === 1
+    : draft.releaseType === "ep"
+      ? normalizedTracks.length >= 2 && normalizedTracks.length <= 4
+      : draft.releaseType === "album"
+        ? normalizedTracks.length >= 5
+        : normalizedTracks.length >= 1;
+  const trackCountMessage = draft.releaseType === "single"
+    ? "Single has exactly 1 track"
+    : draft.releaseType === "ep"
+      ? "EP has 2-4 tracks"
+      : draft.releaseType === "album"
+        ? "Album has 5 or more tracks"
+        : "Release has at least 1 track";
+
   return [
     {
       key: "track_count",
-      passed: draft.releaseType === "single" ? draft.tracks.length === 1 : draft.tracks.length >= 2,
-      message: draft.releaseType === "single" ? "Single has exactly 1 track" : "Multi-track release has at least 2 tracks"
+      passed: trackCountPassed,
+      message: trackCountMessage
     },
     {
       key: "metadata",
@@ -624,17 +684,17 @@ export function validateReleaseStructure(draft: ReleaseManagementDraft): Readine
     },
     {
       key: "audio",
-      passed: draft.tracks.every((track) => track.audioState === "uploaded" || track.audioState === "approved"),
+      passed: normalizedTracks.every((track) => track.audioState === "uploaded" || track.audioState === "approved"),
       message: "Every track needs uploaded audio"
     },
     {
       key: "track_information",
-      passed: draft.tracks.every((track) => Boolean(track.title && track.compositionType)),
+      passed: normalizedTracks.every((track) => Boolean(track.title && track.compositionType)),
       message: "Every track needs a title and track details"
     },
     {
       key: "splits",
-      passed: draft.tracks.every((track) => validateTrackSplits(track.id).passed),
+      passed: normalizedTracks.every((track) => validateTrackSplits(track.id).passed),
       message: "Every track needs contributor splits totaling exactly 100%"
     }
   ];

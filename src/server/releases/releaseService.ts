@@ -1,12 +1,12 @@
-import { getAccountState } from "@/server/account/accountStateService";
-import { artists, mediaAssets, releases, tracks } from "@/server/data/seedData";
-import { recordStreamAnalytics } from "@/server/analytics/analyticsService";
+import { getAccountState, getLibraryDurable } from "@/server/account/accountStateService";
+import { artists, mediaAssets, products, releases, tracks } from "@/server/data/seedData";
+import { recordStreamAnalytics, recordStreamAnalyticsDurable } from "@/server/analytics/analyticsService";
 import {
   buildReleaseMediaObject,
   type MediaAssetContract,
   type ReleaseMediaObject
 } from "@/server/media/mediaObjects";
-import { markRecentlyPlayed, updatePlaybackProgress } from "@/server/playback/playbackService";
+import { markRecentlyPlayed, updatePlaybackProgress, updatePlaybackProgressDurable } from "@/server/playback/playbackService";
 import {
   createReleaseDraft,
   getReadinessSummary,
@@ -38,9 +38,12 @@ type CatalogMediaAsset = {
 type CatalogProduct = {
   id: string;
   slug: string;
+  productSlug: string;
   title: string;
   priceCents?: number | null;
+  priceLabel?: string | null;
   currency?: string | null;
+  stripePriceId?: string | null;
 };
 
 type CatalogRow = {
@@ -103,6 +106,10 @@ function isVisibleRelease(release: PublishedCatalogRelease) {
 }
 
 function getSeedCatalogRows() {
+  if (process.env.CONTROL_SYSTEM_SHOW_SEED_DATA !== "true") {
+    return [];
+  }
+
   return releases.filter((release) => release.published).map((release) => ({
     release: {
       ...release,
@@ -110,7 +117,8 @@ function getSeedCatalogRows() {
     },
     tracks: tracks.filter((track) => track.releaseId === release.id),
     mediaAssets: [...mediaAssets].filter((asset) => asset.ownerId === release.id || tracks.some((track) => track.releaseId === release.id && asset.ownerId === track.id)),
-    artist: artists.find((artist) => artist.id === release.artistId) ?? null
+    artist: artists.find((artist) => artist.id === release.artistId) ?? null,
+    products: products.filter((product) => productGrantsRelease(product.grants, release.id)).map(normalizeProduct)
   }));
 }
 
@@ -177,24 +185,57 @@ function normalizePersistedRelease(row: {
 function normalizeProduct(row: {
   id: string;
   slug: string;
-  name: string;
+  name?: string | null;
+  title?: string | null;
   price_cents?: number | null;
+  priceCents?: number | null;
   currency?: string | null;
+  stripe_price_id?: string | null;
+  stripePriceId?: string | null;
 }): CatalogProduct {
+  const priceCents = row.price_cents ?? row.priceCents ?? null;
+  const currency = row.currency ?? "usd";
+  const priceLabel =
+    typeof priceCents === "number" && priceCents >= 0
+      ? new Intl.NumberFormat("en-US", { style: "currency", currency }).format(priceCents / 100)
+      : null;
+
   return {
     id: row.id,
     slug: row.slug,
-    title: row.name,
-    priceCents: row.price_cents ?? null,
-    currency: row.currency ?? null
+    productSlug: row.slug,
+    title: row.name ?? row.title ?? row.slug,
+    priceCents,
+    priceLabel,
+    currency,
+    stripePriceId: row.stripe_price_id ?? row.stripePriceId ?? null
   };
 }
 
 function productGrantsRelease(grants: unknown, releaseId: string) {
   return Array.isArray(grants) && grants.some((grant) => {
     if (!grant || typeof grant !== "object") return false;
-    return "type" in grant && grant.type === "release" && "releaseId" in grant && grant.releaseId === releaseId;
+    const candidate = "releaseId" in grant ? grant.releaseId : "release_id" in grant ? grant.release_id : null;
+    return "type" in grant && grant.type === "release" && candidate === releaseId;
   });
+}
+
+async function getActiveProductRows(supabase: NonNullable<ReturnType<typeof getServerSupabase>>) {
+  const baseColumns = "id, slug, name, stripe_price_id, grants";
+  const enhancedColumns = `${baseColumns}, price_cents, currency`;
+  const enhanced = await supabase.from("products").select(enhancedColumns).eq("active", true);
+
+  if (!enhanced.error) {
+    return { data: enhanced.data ?? [], error: null };
+  }
+
+  const missingPriceColumn = /price_cents|currency/i.test(enhanced.error.message ?? "");
+  if (!missingPriceColumn) {
+    return { data: null, error: enhanced.error };
+  }
+
+  // Deploys remain compatible until the 0008 product price migration is applied.
+  return supabase.from("products").select(baseColumns).eq("active", true);
 }
 
 async function getPersistedCatalogRows({ includeUnpublished = false } = {}): Promise<CatalogRow[] | null> {
@@ -216,7 +257,7 @@ async function getPersistedCatalogRows({ includeUnpublished = false } = {}): Pro
       supabase.from("tracks").select("id, release_id, title, duration_seconds, position"),
       supabase.from("media_assets").select("id, owner_type, owner_id, bucket, storage_path, access_level"),
       supabase.from("artists").select("id, name, slug"),
-      supabase.from("products").select("id, slug, name, price_cents, currency, grants").eq("active", true)
+      getActiveProductRows(supabase)
     ]);
 
   if (releaseError || trackError || mediaError || artistError || productError || !releaseRows?.length) return null;
@@ -392,6 +433,24 @@ export function getUserLibrary(userId: string) {
   };
 }
 
+export async function getUserLibraryDurable(userId: string) {
+  const library = await getLibraryDurable(userId);
+  const visibleRows = await getDurableCatalogRows();
+  const savedTrackIds = new Set(library.savedTrackIds);
+
+  return {
+    savedTrackIds: library.savedTrackIds,
+    savedReleaseIds: library.savedReleaseIds,
+    purchasedProductIds: library.purchasedProductIds,
+    releases: visibleRows
+      .filter((row) => library.savedReleaseIds.includes(row.release.id))
+      .map((row) => toReleaseObject(row, userId)),
+    tracks: visibleRows
+      .flatMap((row) => toReleaseObject(row, userId).tracks)
+      .filter((track) => savedTrackIds.has(track.id))
+  };
+}
+
 export function getMediaObjectsForRelease(slug: string, userId?: string) {
   return getReleaseBySlug(slug, { userId });
 }
@@ -459,6 +518,41 @@ export function trackPlaybackEvent(userId: string, input: PlaybackEventInput) {
   };
 }
 
+export async function trackPlaybackEventDurable(userId: string, input: PlaybackEventInput) {
+  const progress =
+    typeof input.positionSeconds === "number"
+      ? await updatePlaybackProgressDurable(userId, {
+          trackId: input.trackId,
+          positionSeconds: input.positionSeconds,
+          sessionId: input.sessionId
+        })
+      : null;
+
+  if (input.eventType === "play" || input.eventType === "complete") {
+    markRecentlyPlayed(userId, input.trackId);
+  }
+
+  const analytics =
+    typeof input.listenedSeconds === "number"
+      ? await recordStreamAnalyticsDurable(userId, {
+          trackId: input.trackId,
+          releaseId: input.releaseId,
+          listenedSeconds: input.listenedSeconds,
+          countryCode: input.countryCode
+        })
+      : null;
+
+  return {
+    userId,
+    trackId: input.trackId,
+    releaseId: input.releaseId,
+    eventType: input.eventType,
+    progress,
+    analytics,
+    recordedAt: nowIso()
+  };
+}
+
 export function upsertRelease(input: {
   id?: string;
   slug: string;
@@ -488,7 +582,7 @@ export function upsertRelease(input: {
     releaseDate: input.releaseDate ?? nowIso().slice(0, 10),
     releaseType: input.releaseType,
     published: input.published ?? false,
-    coverAssetId: "asset_cover_afterhours"
+    coverAssetId: `asset_cover_${input.slug.replace(/[^a-z0-9]+/gi, "_").toLowerCase()}`
   };
   releases.push(release);
   return release;

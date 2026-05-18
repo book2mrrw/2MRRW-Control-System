@@ -2,6 +2,8 @@ import Link from "next/link";
 import { EmptyState, FormSection, PageHeader, StatusStrip, DataTable, WorkflowStepper } from "@/components/control/OperationalPrimitives";
 import { CreateReleaseDraftForm, LyricsEditorForm, ReleaseMetadataForm, SongwriterContributionForm, TrackInformationForm } from "@/components/control/ReleaseForms";
 import { GlobalSearch } from "@/components/control/GlobalSearch";
+import { AudioVisualsPanel } from "@/components/control/AudioVisualsPanel";
+import { HeroConfigPanel } from "@/components/control/HeroConfigPanel";
 import { MediaUploadPanel } from "@/components/control/MediaUploadPanel";
 import { getMediaUploadPolicy } from "@/server/media/uploadIntentService";
 import { listContributorProfiles, listMetadataSuggestions } from "@/server/release-management/contributorDirectoryService";
@@ -169,8 +171,10 @@ export function ReleaseWizardPage({ step }: { step: ReleaseStepId }) {
     details: "Title, artist, genre, language, release date, collaborator memory, and metadata defaults.",
     tracks: "Track rows, lyrics, explicit states, collaborator memory, contributor roles, and credits.",
     uploads: "Cover art, hero media, audio visuals, vault assets, preview states, replacement paths, and sync readiness.",
-    review: "Resolve missing metadata, preview the release, publish now, or schedule for later."
+    review: "Distribution readiness, release summary, publish checks, and final review."
   };
+  const normalizedTracks = draft?.releaseType === "single" ? draft.tracks.slice(0, 1) : draft?.tracks ?? [];
+  const isSingle = draft?.releaseType === "single";
 
   return (
     <>
@@ -215,7 +219,7 @@ export function ReleaseWizardPage({ step }: { step: ReleaseStepId }) {
           ) : null}
           {step === "details" && draft ? (
             <div className="release-editor-grid">
-              <FormSection title="Release details" description="Clean metadata first. These fields drive storefront, sync, publishing, and release review.">
+              <FormSection title="Release details" description="Clean metadata first. These fields drive distribution, sync, publishing, and release review.">
                 <div className="release-rule-card">
                   <p className="meta-label">Progress persists</p>
                   <strong>{releaseTypeRule(draft)}</strong>
@@ -243,17 +247,17 @@ export function ReleaseWizardPage({ step }: { step: ReleaseStepId }) {
           {step === "tracks" && draft ? (
             <FormSection title="Tracks & credits" description="Add tracks, lyrics, producer credits, engineer credits, songwriter splits, and collaborator memory.">
               <div className="track-command-row">
-                <button className="control-button secondary" type="button">Add Track</button>
+                <button className="control-button secondary" disabled={isSingle} type="button">{isSingle ? "Single locked to 1 track" : "Add Track"}</button>
                 <button className="control-button secondary" type="button">Drag Reorder</button>
-                <button className="control-button secondary" type="button">Duplicate Track</button>
+                <button className="control-button secondary" disabled={isSingle} type="button">Duplicate Track</button>
               </div>
               <div className="release-rule-card">
                 <p className="meta-label">Track validation</p>
                 <strong>{releaseTypeRule(draft)}</strong>
-                <span>Audio is tied to the exact track, lyrics to the exact song, and collaborator roles are remembered for future autocomplete.</span>
+                <span>{isSingle ? "Singles cannot add or render extra track slots. The one track keeps its audio file, credits, and metadata." : "Audio is tied to the exact track, lyrics to the exact song, and collaborator roles are remembered for future autocomplete."}</span>
               </div>
               <div className="track-row-list">
-                {draft.tracks.map((track) => (
+                {normalizedTracks.map((track) => (
                   <article className="track-row-card" key={track.id}>
                     <span>{track.position}</span>
                     <strong>{track.title}</strong>
@@ -262,7 +266,7 @@ export function ReleaseWizardPage({ step }: { step: ReleaseStepId }) {
                 ))}
               </div>
               <div className="accordion-stack">
-                {draft.tracks.map((track) => (
+                {normalizedTracks.map((track) => (
                   <details key={track.id} open={track.position === 1}>
                     <summary>{track.position}. {track.title}</summary>
                     <TrackInformationForm releaseId={draft.id} track={track} contributorProfiles={contributorProfiles} />
@@ -299,25 +303,25 @@ export function ReleaseWizardPage({ step }: { step: ReleaseStepId }) {
                   <p className="meta-label">Cover art</p>
                   <strong>1400x1400 minimum</strong>
                   <span>Tied to release: {draft.title}. 3000x3000 recommended.</span>
-                  <MediaUploadPanel draft={{ id: draft.id, title: draft.title, tracks: draft.tracks }} mode="artwork" />
+                  <MediaUploadPanel draft={{ id: draft.id, title: draft.title, tracks: normalizedTracks }} mode="artwork" />
                 </article>
                 <article className="media-workflow-card">
                   <p className="meta-label">Hero media</p>
                   <strong>Release page atmosphere</strong>
                   <span>Tied to homepage hero, landing hero, or release page hero.</span>
-                  <MediaUploadPanel draft={{ id: draft.id, title: draft.title, tracks: draft.tracks }} mode="videos" />
+                  <MediaUploadPanel draft={{ id: draft.id, title: draft.title, tracks: normalizedTracks }} mode="videos" />
                 </article>
                 <article className="media-workflow-card">
                   <p className="meta-label">Audio visual</p>
                   <strong>Visualizer and video assets</strong>
                   <span>Tied to the audiovisual section with preview and replacement states.</span>
-                  <MediaUploadPanel draft={{ id: draft.id, title: draft.title, tracks: draft.tracks }} mode="loops" />
+                  <MediaUploadPanel draft={{ id: draft.id, title: draft.title, tracks: normalizedTracks }} mode="loops" />
                 </article>
                 <article className="media-workflow-card">
                   <p className="meta-label">Vault media</p>
                   <strong>Protected extras</strong>
                   <span>Tied to vault panels without changing public frontend styling.</span>
-                  <MediaUploadPanel draft={{ id: draft.id, title: draft.title, tracks: draft.tracks }} mode="all" />
+                  <MediaUploadPanel draft={{ id: draft.id, title: draft.title, tracks: normalizedTracks }} mode="all" />
                 </article>
               </div>
             </FormSection>
@@ -508,7 +512,7 @@ function ReviewPanel({ draft }: { draft: ReleaseManagementDraft }) {
     { Checklist: "Pricing & Stores", Status: readiness.ready && scheduleReady ? "Ready" : "Needs attention", Notes: "Confirm shop, store, and schedule settings before publish." }
   ];
   return (
-    <FormSection title="Review & publish" description="Confirm the release summary, resolve warnings, preview, publish, or schedule for later.">
+    <FormSection title="Distribution" description="Confirm release summary, resolve warnings, preview, and prepare final distribution.">
       <div className="review-publish-grid">
         <article className="review-summary-card">
           <span className="release-card-art" aria-hidden="true">{releaseArtworkLabel(draft)}</span>
@@ -541,9 +545,9 @@ function ReviewPanel({ draft }: { draft: ReleaseManagementDraft }) {
         <button className="control-button" disabled={!readiness.ready || !scheduleReady} type="button">
           Publish Release
         </button>
-        <Link className="control-button secondary" href="/releases/new/scheduler">
+        <button className="control-button secondary" disabled={!readiness.ready} type="button">
           Schedule for Later
-        </Link>
+        </button>
         <Link className="control-button secondary" href={`/releases/${draft.id}`}>
           Preview Release
         </Link>
@@ -568,13 +572,12 @@ export function MediaPage({ mode = "all" }: { mode?: "all" | "artwork" | "audio"
   const draft = primaryDraft();
   const artworkPolicy = getMediaUploadPolicy("single_cover_art");
   const mediaSections = [
-    { label: "Hero", title: "Hero section uploads", detail: "Hero media ties to homepage hero, landing hero, or release hero.", mode: "videos" },
-    { label: "Visuals", title: "Audio visual uploads", detail: "Visualizer, YouTube, video, loop, and release visual media lanes.", mode: "loops" },
-    { label: "Vault", title: "Vault uploads", detail: "Protected extras and member-only assets with assignment state.", mode: "all" },
-    { label: "Images", title: "Image uploads", detail: "Cover art, editorial images, and release page supporting artwork.", mode: "artwork" },
-    { label: "MP4", title: "MP4 uploads", detail: "Motion artwork, videos, background loops, and hero media.", mode: "videos" },
-    { label: "GIF", title: "GIF uploads", detail: "Animated covers, small motion accents, and promotional media.", mode: "artwork" },
-    { label: "Merch", title: "Merch media", detail: "Merch media ties to product visuals and shop presentation contracts.", mode: "all" }
+    { label: "Cover Art", title: "Cover Art", detail: "PNG, JPG/JPEG, WEBP, or MP4 short visual cover. Minimum 1400x1400, recommended 3000x3000.", mode: "artwork" },
+    { label: "Additional Media", title: "Additional Media", detail: "Images, GIFs, MP4/MOV/WEBM loops, and supporting media attached to exact ownership targets.", mode: "all" },
+    { label: "Audio Files", title: "Audio Files", detail: "Track-owned MP3, WAV, FLAC, and AIFF upload lanes.", mode: "audio" },
+    { label: "Music Videos", title: "Music Videos", detail: "YouTube embeds plus optional visual files for media library organization.", mode: "loops" },
+    { label: "Press Photos", title: "Press Photos", detail: "Press-ready images tied to the media library and hero/press ownership.", mode: "press" },
+    { label: "Vault Assets", title: "Vault Assets", detail: "Structured archival file storage with optional metadata and versioned uploads.", mode: "vault" }
   ] as const;
   return (
     <>
@@ -597,6 +600,7 @@ export function MediaPage({ mode = "all" }: { mode?: "all" | "artwork" | "audio"
           { label: "Recommended", value: "3000x3000", tone: "commerce" },
         ]}
       />
+      <HeroConfigPanel />
       <section className="panel">
         <div className="section-heading">
           <div>
@@ -624,6 +628,21 @@ export function MediaPage({ mode = "all" }: { mode?: "all" | "artwork" | "audio"
           <span className="state-badge">Instant frontend sync</span>
         </div>
         <MediaUploadPanel draft={draft ? { id: draft.id, title: draft.title, tracks: draft.tracks } : null} mode={mode} />
+      </section>
+      <section className="media-library-upload-grid" aria-label="Media library upload zones">
+        {mediaSections.map((section) => (
+          <article className="panel media-library-zone" key={section.title}>
+            <div className="section-heading">
+              <div>
+                <p className="meta-label">{section.label}</p>
+                <h2>{section.title}</h2>
+              </div>
+            </div>
+            <p>{section.detail}</p>
+            {section.label === "Music Videos" ? <AudioVisualsPanel /> : null}
+            <MediaUploadPanel draft={draft ? { id: draft.id, title: draft.title, tracks: draft.releaseType === "single" ? draft.tracks.slice(0, 1) : draft.tracks } : null} mode={section.mode} />
+          </article>
+        ))}
       </section>
     </>
   );

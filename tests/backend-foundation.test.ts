@@ -229,7 +229,7 @@ async function testAudioVisualPublishedFiltering() {
 
 function testReleaseTypeValidation() {
   assert.throws(() => createReleaseDraft({ releaseType: "single", title: "Invalid Single", trackCount: 2 }), /exactly 1/);
-  assert.throws(() => createReleaseDraft({ releaseType: "album", title: "Invalid Album", trackCount: 1 }), /at least 2/);
+  assert.throws(() => createReleaseDraft({ releaseType: "album", title: "Invalid Album", trackCount: 1 }), /at least 5/);
   const single = createReleaseDraft({ releaseType: "single", title: "Validated Single", trackCount: 1 });
   assert.equal(single.tracks.length, 1);
   const deluxe = createReleaseDraft({ releaseType: "deluxe", title: "Validated Deluxe" });
@@ -492,7 +492,7 @@ async function testMediaUploadIntentFoundation() {
   assert.match(albumCoverMp4Path, new RegExp(`^albums/${release.id}/cover/`));
 
   const coverPolicy = getMediaUploadPolicy("single_cover_art");
-  assert.deepEqual(coverPolicy.extensions, ["jpg", "jpeg", "png", "gif", "mp4", "mov", "webm"]);
+  assert.deepEqual(coverPolicy.extensions, ["jpg", "jpeg", "png", "gif", "webp", "mp4", "mov", "webm"]);
   assert.deepEqual(masterIntent.audioQualityTarget, {
     bitDepth: 24,
     sampleRateHz: 44100,
@@ -505,8 +505,8 @@ async function testMediaUploadIntentFoundation() {
     fileName: "cover.webp",
     mimeType: "image/webp",
     sizeBytes: 1024
-  }).catch((error) => error as Error);
-  assert.ok(coverIntent instanceof Error);
+  });
+  assert.equal(coverIntent.category, "single_cover_art");
 
   const motionCoverIntent = await createMediaUploadIntent({
     category: "single_cover_art",
@@ -577,31 +577,26 @@ async function testMediaUploadIntentFoundation() {
       sizeBytes: 1024
     })
   );
-  assert.throws(
-    () =>
-      validateMediaUploadIntent({
-        category: "audio_full_song",
-        releaseId: release.id,
-        trackId: track.id,
-        fileName: "song.flac",
-        mimeType: "audio/flac",
-        sizeBytes: 1024
-      }),
-    /Unsupported file extension/
+  assert.doesNotThrow(() =>
+    validateMediaUploadIntent({
+      category: "audio_full_song",
+      releaseId: release.id,
+      trackId: track.id,
+      fileName: "song.flac",
+      mimeType: "audio/flac",
+      sizeBytes: 1024
+    })
   );
-  assert.throws(
-    () =>
-      validateMediaUploadIntent({
-        category: "audio_full_song",
-        releaseId: release.id,
-        trackId: track.id,
-        fileName: "song.aiff",
-        mimeType: "audio/aiff",
-        sizeBytes: 1024
-      }),
-    /Unsupported file extension/
+  assert.doesNotThrow(() =>
+    validateMediaUploadIntent({
+      category: "audio_full_song",
+      releaseId: release.id,
+      trackId: track.id,
+      fileName: "song.aiff",
+      mimeType: "audio/aiff",
+      sizeBytes: 1024
+    })
   );
-
   assert.doesNotThrow(() =>
     validateMediaUploadIntent({
       category: "audio_preview",
@@ -681,7 +676,7 @@ async function testMediaUploadIntentFoundation() {
 }
 
 function makeReadyRelease(title: string, releaseType: "single" | "album" | "ep" = "single") {
-  const release = createRelease({ releaseType, title, trackCount: releaseType === "single" ? 1 : 2 });
+  const release = createRelease({ releaseType, title, trackCount: releaseType === "single" ? 1 : releaseType === "album" ? 5 : 2 });
   updateReleaseMetadata(release.id, {
     copyrightOwner: "2MRRW",
     primaryGenre: { category: "hip-hop-rap", subgenre: "alternative-rap" },
@@ -745,9 +740,11 @@ function testLibraryUsesSharedMediaContract() {
 }
 
 function testPlaybackEventContract() {
+  const { release, track } = makeReadyRelease("Playback Contract Test");
+  assert.ok(publishRelease(release.id)?.ok);
   const event = trackPlaybackEvent("playback_contract_user", {
-    trackId: "trk_signal",
-    releaseId: "rel_afterhours",
+    trackId: track.id,
+    releaseId: release.id,
     eventType: "progress",
     positionSeconds: 64,
     listenedSeconds: 31,
@@ -755,7 +752,7 @@ function testPlaybackEventContract() {
   });
   assert.equal(event.progress?.positionSeconds, 64);
   assert.equal(event.analytics?.properties.validStream, true);
-  assert.equal(getReleaseBySlug("afterhours-control", { userId: "playback_contract_user" })?.tracks[0]?.playback.positionSeconds, 64);
+  assert.equal(getReleaseBySlug(release.slug, { userId: "playback_contract_user" })?.tracks[0]?.playback.positionSeconds, 64);
 }
 
 function testReleaseTypeFiltering() {

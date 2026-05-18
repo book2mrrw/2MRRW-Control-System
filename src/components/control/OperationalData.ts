@@ -21,7 +21,7 @@ export const releaseSteps = [
   { id: "details", label: "Release Details", href: "/releases/new/details" },
   { id: "tracks", label: "Tracks & Credits", href: "/releases/new/tracks" },
   { id: "uploads", label: "Artwork & Media", href: "/releases/new/uploads" },
-  { id: "review", label: "Review & Publish", href: "/releases/new/review" }
+  { id: "review", label: "Distribution", href: "/releases/new/review" }
 ] as const;
 
 export type ReleaseStepId = (typeof releaseSteps)[number]["id"];
@@ -106,16 +106,15 @@ export const modulePages: Record<
   },
   shop: {
     title: "Shop",
-    eyebrow: "Merch and commerce",
-    description: "Manage merch, cinematic product presentation, Shopify structure, Printful support, and premium drop readiness.",
+    eyebrow: "Merch analytics",
+    description: "Track merch performance, product engagement, revenue signals, conversion quality, and release-linked demand.",
     tone: "commerce",
-    actions: [{ label: "Add product", href: "/shop#create" }, { label: "Release drops", href: "/releases" }],
+    actions: [{ label: "Open analytics", href: "/analytics" }, { label: "Release context", href: "/releases" }],
     rows: [
-      { Item: "Merch management", State: "Ready", Snapshot: "Products, variants, bundles" },
-      { Item: "360 viewer", State: "Structured", Snapshot: "Cinematic product spin" },
-      { Item: "Shopify", State: "Integration layer", Snapshot: "Storefront sync path" },
-      { Item: "Printful", State: "Support planned", Snapshot: "Fulfillment provider" },
-      { Item: "Ghost mannequin", State: "Visual system", Snapshot: "Floating apparel view" }
+      { Item: "Merch revenue", State: "Awaiting live data", Snapshot: "Sales and release attribution" },
+      { Item: "Product engagement", State: "Awaiting live data", Snapshot: "Views, saves, and conversion" },
+      { Item: "Demand signals", State: "Awaiting live data", Snapshot: "Audience interest by drop" },
+      { Item: "Inventory analytics", State: "Awaiting live data", Snapshot: "Stock and sell-through" }
     ]
   },
   notify: {

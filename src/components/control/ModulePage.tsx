@@ -23,16 +23,15 @@ export function ModulePage({ module }: { module: keyof typeof modulePages }) {
       { label: "Streams", title: "Stream analytics", detail: "Release streams, track velocity, playlist movement, and performance by time period." },
       { label: "Listeners", title: "Listener analytics", detail: "Audience growth, returning listeners, saves, follows, and engagement quality." },
       { label: "Geo", title: "Geo analytics", detail: "Top cities, countries, regions, and localized fan movement." },
-      { label: "Platforms", title: "Platform analytics", detail: "Spotify, Apple Music, YouTube, storefront, vault, and owned-channel performance." },
+      { label: "Platforms", title: "Platform analytics", detail: "Spotify, Apple Music, YouTube, vault, and owned-channel performance." },
       { label: "Top content", title: "Top content", detail: "Best-performing releases, tracks, videos, vault assets, and shop-linked content." },
       { label: "Revenue", title: "Revenue tracking", detail: "Royalties, product revenue, subscriptions, payouts, and release-level earning signals." }
     ],
     shop: [
-      { label: "Merch", title: "Merch management", detail: "Products, variants, drop status, inventory notes, and release-linked bundles." },
-      { label: "360", title: "Cinematic 360 viewer", detail: "Product spin structure for premium presentation and app-ready product detail pages." },
-      { label: "Shopify", title: "Shopify integration", detail: "Commerce sync layer for products, checkout, orders, and storefront references." },
-      { label: "Printful", title: "Printful support", detail: "Fulfillment provider slots for print-on-demand apparel and physical goods." },
-      { label: "Ghost", title: "Floating ghost mannequin", detail: "Premium apparel visualization system for clean black-canvas product media." }
+      { label: "Revenue", title: "Merch revenue analytics", detail: "Sales, net revenue, release attribution, and drop-level performance." },
+      { label: "Engagement", title: "Product engagement", detail: "Views, saves, checkout starts, conversions, and audience demand signals." },
+      { label: "Inventory", title: "Inventory performance", detail: "Stock, sell-through, size/color movement, and restock risk indicators." },
+      { label: "Audience", title: "Merch audience", detail: "Fan segments, geographic demand, and release-linked purchase behavior." }
     ],
     settings: [
       { label: "Profile", title: "Artist profile", detail: "Public artist identity, visual defaults, bio, links, and presentation settings." },
@@ -64,8 +63,8 @@ export function ModulePage({ module }: { module: keyof typeof modulePages }) {
       <section className="panel">
         <div className="section-heading">
           <div>
-            <p className="meta-label">{module === "analytics" ? "Signal view" : module === "shop" ? "Commerce studio" : module === "settings" ? "Defaults and memory" : "Workspace"}</p>
-            <h2>{module === "analytics" ? "Creator analytics" : module === "shop" ? "Shop operating system" : module === "settings" ? "Control preferences" : "Current items"}</h2>
+              <p className="meta-label">{module === "analytics" ? "Signal view" : module === "shop" ? "Merch performance" : module === "settings" ? "Defaults and memory" : "Workspace"}</p>
+            <h2>{module === "analytics" ? "Creator analytics" : module === "shop" ? "Merch analytics dashboard" : module === "settings" ? "Control preferences" : "Current items"}</h2>
           </div>
         </div>
         {module === "settings" || module === "analytics" || module === "shop" ? (
@@ -140,21 +139,26 @@ export function ModulePage({ module }: { module: keyof typeof modulePages }) {
         <section className="panel shop-blueprint-panel">
           <div className="section-heading">
             <div>
-              <p className="meta-label">Merch workspace</p>
-              <h2>Cinematic product staging</h2>
+              <p className="meta-label">Merch performance</p>
+              <h2>Merch analytics dashboard</h2>
             </div>
-            <span className="state-badge">Shopify / Printful ready</span>
+            <span className="state-badge">Awaiting live merch events</span>
           </div>
           <div className="shop-studio-grid">
-            <article className="ghost-mannequin-card">
-              <span aria-hidden="true">360</span>
-              <strong>Ghost mannequin viewer</strong>
-              <small>Floating apparel, product spin frames, release-linked bundles, and premium black-canvas presentation.</small>
+            <article>
+              <p className="meta-label">Sales</p>
+              <strong>No merch sales yet</strong>
+              <small>Live sales, conversion, and release attribution will appear when backend merch events exist.</small>
             </article>
             <article>
-              <p className="meta-label">Sync structure</p>
-              <strong>Shopify, Printful, variants, and drop readiness stay modeled together.</strong>
-              <span>Use release-linked product media without reducing the shop workspace to a placeholder.</span>
+              <p className="meta-label">Engagement</p>
+              <strong>No product engagement yet</strong>
+              <span>Product views, saves, checkout starts, and conversion rates stay analytics-only here.</span>
+            </article>
+            <article>
+              <p className="meta-label">Inventory</p>
+              <strong>No inventory signals yet</strong>
+              <span>Stock, sell-through, and restock risk will render from real merch performance data.</span>
             </article>
           </div>
         </section>
