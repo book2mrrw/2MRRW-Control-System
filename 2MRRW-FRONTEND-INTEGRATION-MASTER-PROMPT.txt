@@ -209,14 +209,76 @@ The frontend should keep a local state machine that can render backend contracts
 Backend data should map into cinematic surfaces rather than generic cards:
 
 - Home hero: one priority release or visual, motion cover or artwork, short metadata, slow reveal timing, blur-backed depth, and signed preview readiness.
-- Latest singles rail: release media objects adapted into existing single tiles with current hover, scale, focus, and audio preview behavior.
-- Album/EP rail: release type filters feed existing album layouts only when backend records include complete artwork, track counts, and product mapping.
+- Latest singles rail: derive from `releases[]` where `category === "single"` and `status === "live"`, newest first. Release media objects adapt into existing single tiles with current hover, scale, focus, horizontal scroll/mobile swipe, and audio preview behavior.
+- Features rail: derive from `releases[]` where `category === "feature"` and `status === "live"`, newest first. Homepage features populate the existing featured releases row; Music Tab features populate Singles subtab -> Features section. Preserve existing feature card sizing/spacing, animated artwork, and JPG/static artwork behavior.
+- Album rail: derive from `releases[]` where `category === "album"` and `status === "live"`, newest first. Homepage albums populate the albums row and Music Tab albums populate the Albums subtab while preserving existing album card layout, scroll mechanics, animated artwork, and album metadata rendering.
+- Discography: render from live `releases[]` only. Do not maintain local arrays, manually curated card lists, duplicated release objects, or hardcoded cards for singles, features, albums, homepage rows, music tab subtabs, or discography.
 - Release detail: backend title, artist, release date, track list, credits, artwork, media availability, and related visuals hydrate the current modal/page structure.
 - Player modal: uses stable track IDs, preview/full asset IDs, signed URL endpoints, waveform derivatives when ready, and local fallback audio until full backend stream URLs are trustworthy.
 - Lyrics page: renders lyrics contract or gated lyric asset state; does not depend on raw storage paths.
 - Vault: uses backend entitlement and media objects, but keeps the Vault experience immersive: locked states should feel like cinematic permissions, not SaaS upsell boxes.
 - Audio Visuals: YouTube embeds remain visually integrated with frontend pacing; backend only supplies canonical embed metadata and publish order.
 - Hero sections: `homepage_hero` priority can choose lead content, but frontend owns layout, transition, blur, and scroll choreography.
+
+## Global Content Routing System
+
+Frontend sections are reactive render layers powered by categorized backend content. They must never manually decide where content belongs, create cards by hand, or duplicate release/media state. Backend routing determines destinations from content metadata:
+
+```ts
+type FrontendDestination =
+  | "hero"
+  | "latest_singles"
+  | "features"
+  | "albums"
+  | "vault"
+  | "audio_visuals"
+  | "music_singles"
+  | "music_albums"
+  | "music_features"
+
+type MediaDestination =
+  | "hero"
+  | "vault"
+  | "audio_visuals"
+  | "press_photos"
+  | "music_videos"
+  | "release_media"
+```
+
+The backend Media tab is the centralized media control hub. Hero, Vault, Audio Visuals, Press Photos, Music Videos, and Release Media panels are separate destination interfaces powered by one upload engine, one `media_assets` source, and one realtime event system. Uploads assign `{ category, destination, mediaType, relatedReleaseId? }` at upload time, then flow through: Media Tab Section -> Unified Upload Engine -> Media Asset Creation -> Destination Assignment -> Event Emission -> Realtime Frontend Sync -> Automatic Section Population.
+
+- Hero destination: homepage hero supports MP4 loops, animated artwork, image fallback, realtime updates, cinematic transitions, and replacement without breaking state.
+- Vault destination: vault sections support MP4 uploads, image uploads, animated visual assets, ordering, instant replacement, optimistic uploads, and realtime sync.
+- Audio Visuals destination: Audio Visuals supports YouTube embeds, MP4 uploads, visual loops, cinematic media cards, backend-controlled ordering, and realtime sync.
+- Release Media destination: release cover art, MP4 loops, audio uploads, and press photos attach to releases and route through the singles/albums/features filters automatically.
+
+Use `Audio Visuals` as two words everywhere in UI labels, schema labels, routing config, backend sections, and frontend sections. Do not use `Audiovisuals`.
+
+## Universal Publishing Model
+
+There is one publishing engine for all release categories:
+
+```ts
+publishRelease(releaseId)
+```
+
+Do not create `publishSingle()`, `publishAlbum()`, `publishFeature()`, separate publish APIs, or separate publish workflows. Release category only determines frontend routing destinations, rendering behavior, carousel placement, and metadata handling after publish; it does not determine the publishing mechanism.
+
+```txt
+draft
+   ↓
+publishRelease()
+   ↓
+status = "live"
+   ↓
+emit sync event
+   ↓
+frontend propagation
+   ↓
+automatic section population
+```
+
+Publishing changes release lifecycle state, emits `release_published`, and stops. It must not contain hardcoded UI logic, manual card creation, or page-specific mutations. Category-specific updates happen downstream through routing/filtering over live `releases[]`: singles update homepage latest singles, music singles carousel, discography, and hero eligibility; features update homepage features, music features carousel, discography, and hero eligibility; albums update homepage albums, music albums carousel, discography, and hero eligibility.
 
 ## Cross-Platform Continuity Blueprint
 

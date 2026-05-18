@@ -4,11 +4,16 @@ import {
   mediaUploadCategories,
   releaseUploadAssetTypes
 } from "@/server/media/uploadIntentService";
+import { frontendDestinations, mediaDestinations, routedMediaTypes } from "@/services/sync/contentRouting";
 import { z } from "zod";
+
+const destinationSchema = z.union([z.enum(mediaDestinations), z.enum(frontendDestinations)]);
 
 const uploadCompleteSchema = z.object({
   category: z.enum(mediaUploadCategories).optional(),
   assetType: z.enum(releaseUploadAssetTypes).optional(),
+  destination: z.union([destinationSchema, z.array(destinationSchema)]).optional(),
+  mediaType: z.enum(routedMediaTypes).optional(),
   releaseId: z.string().min(1).optional(),
   trackId: z.string().min(1).optional(),
   signalId: z.string().min(1).optional(),

@@ -1,6 +1,12 @@
 import { getServerSupabase } from "@/server/supabase/client";
 import { emitAfterSuccessfulAction } from "@/server/events/eventedWriteService";
 import {
+  resolveContentDestinations,
+  type FrontendDestination,
+  type MediaDestination,
+  type RoutedMediaType
+} from "@/services/sync/contentRouting";
+import {
   getReleaseDraft,
   updateReleaseMetadata,
   updateTrackInformation
@@ -69,6 +75,8 @@ type MediaUploadOwnerInput = {
 export type MediaUploadIntentInput = {
   category?: MediaUploadCategory;
   assetType?: ReleaseUploadAssetType;
+  destination?: MediaDestination | FrontendDestination | Array<MediaDestination | FrontendDestination>;
+  mediaType?: RoutedMediaType;
   fileName: string;
   mimeType: string;
   sizeBytes: number;
@@ -88,6 +96,9 @@ export type MediaUploadIntent = {
   audioQualityTarget?: UploadPolicy["audioQualityTarget"];
   artworkQualityTarget?: UploadPolicy["artworkQualityTarget"];
   storagePlan: ReturnType<typeof buildStructuredStoragePlan>;
+  destination?: MediaUploadIntentInput["destination"];
+  mediaType: RoutedMediaType;
+  frontendDestinations: FrontendDestination[];
   expiresIn: number;
   mocked: boolean;
 };
@@ -101,6 +112,9 @@ export type ManagedMediaAssetRecord = {
   ownerType: "release" | "track" | "signal" | "radio" | "collector" | "vault_content";
   releaseId?: string;
   trackId?: string;
+  destination?: MediaUploadIntentInput["destination"];
+  mediaType: RoutedMediaType;
+  frontendDestinations: FrontendDestination[];
   access: "public" | "entitled" | "admin";
   status: "uploaded" | "processing" | "optimized" | "synced" | "published" | "archived" | "failed" | "retry_available";
   processingJobs: MediaOptimizationJob[];
@@ -128,6 +142,28 @@ const coverArtworkTarget = {
   validation: "metadata_required",
   helperText: "Upload square cover artwork. Minimum size: 1400x1400. Recommended size: 3000x3000."
 } as const;
+
+function defaultDestinationFor(category: MediaUploadCategory): MediaDestination {
+  if (category === "signal_asset") return "hero";
+  if (category === "vault_asset") return "vault";
+  if (category === "radio_asset" || category === "collector_card_asset") return "audio_visuals";
+  return "release_media";
+}
+
+function releaseCategoryForUpload(category: MediaUploadCategory) {
+  if (category === "single_cover_art") return "single" as const;
+  if (category === "album_cover_art") return "album" as const;
+  return undefined;
+}
+
+function mediaTypeForUpload(category: MediaUploadCategory, mimeType?: string): RoutedMediaType {
+  if (category === "audio_full_song" || category === "audio_preview") return "audio";
+  if (category === "lyrics") return "document";
+  if (mimeType?.startsWith("video/")) return "video";
+  if (mimeType?.startsWith("audio/")) return "audio";
+  if (mimeType?.startsWith("image/")) return "image";
+  return "document";
+}
 
 const UPLOAD_POLICIES: Record<MediaUploadCategory, UploadPolicy> = {
   single_cover_art: {
@@ -375,6 +411,13 @@ export async function createMediaUploadIntent(input: MediaUploadIntentInput): Pr
     fileName: input.fileName,
     folder: policy.folder
   });
+  const mediaType = input.mediaType ?? mediaTypeForUpload(category, input.mimeType);
+  const routing = resolveContentDestinations({
+    category: releaseCategoryForUpload(category),
+    destination: input.destination ?? defaultDestinationFor(category),
+    mediaType,
+    relatedReleaseId: input.releaseId
+  });
   const supabase = getServerSupabase();
   const queuedUpload = queueUpload({
     releaseId: input.releaseId,
@@ -395,6 +438,9 @@ export async function createMediaUploadIntent(input: MediaUploadIntentInput): Pr
       audioQualityTarget: policy.audioQualityTarget,
       artworkQualityTarget: policy.artworkQualityTarget,
       storagePlan: { ...storagePlan, canonicalPath: path },
+      destination: routing.destination,
+      mediaType,
+      frontendDestinations: routing.frontendDestinations,
       expiresIn: 300,
       mocked: true
     };
@@ -427,6 +473,9 @@ export async function createMediaUploadIntent(input: MediaUploadIntentInput): Pr
     audioQualityTarget: policy.audioQualityTarget,
     artworkQualityTarget: policy.artworkQualityTarget,
     storagePlan: { ...storagePlan, canonicalPath: path },
+    destination: routing.destination,
+    mediaType,
+    frontendDestinations: routing.frontendDestinations,
     expiresIn: 300,
     mocked: false
   };
@@ -462,6 +511,8 @@ export function confirmMediaUpload(input: {
   radioId?: string;
   collectorId?: string;
   vaultContentId?: string;
+  destination?: MediaUploadIntentInput["destination"];
+  mediaType?: RoutedMediaType;
   path: string;
   retryOfAssetId?: string;
 }) {
@@ -492,6 +543,13 @@ export function confirmMediaUpload(input: {
           ? ["thumbnail", "optimized_preview"]
           : []
   );
+  const mediaType = input.mediaType ?? mediaTypeForUpload(category);
+  const routing = resolveContentDestinations({
+    category: releaseCategoryForUpload(category),
+    destination: input.destination ?? defaultDestinationFor(category),
+    mediaType,
+    relatedReleaseId: input.releaseId
+  });
   const record: ManagedMediaAssetRecord = {
     id: recordId,
     bucket: policy.bucket,
@@ -501,6 +559,9 @@ export function confirmMediaUpload(input: {
     ownerType: ownerTypeFor(category),
     releaseId: input.releaseId,
     trackId: input.trackId,
+    destination: routing.destination,
+    mediaType,
+    frontendDestinations: routing.frontendDestinations,
     access: accessFor(category),
     status: processingJobs.length ? "processing" : "uploaded",
     processingJobs,
@@ -520,7 +581,9 @@ export function confirmMediaUpload(input: {
     ownerType: record.ownerType,
     releaseId: input.releaseId,
     trackId: input.trackId,
-    mediaType: category === "audio_full_song" || category === "audio_preview" ? "audio" : category,
+    mediaType,
+    destination: routing.destination,
+    frontendDestinations: routing.frontendDestinations,
     slot: category === "audio_full_song" || category === "audio_preview" ? "track_audio" : category,
     durable: false
   };

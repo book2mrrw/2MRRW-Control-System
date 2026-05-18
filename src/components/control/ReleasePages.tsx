@@ -312,9 +312,9 @@ export function ReleaseWizardPage({ step }: { step: ReleaseStepId }) {
                   <MediaUploadPanel draft={{ id: draft.id, title: draft.title, tracks: normalizedTracks }} mode="videos" />
                 </article>
                 <article className="media-workflow-card">
-                  <p className="meta-label">Audio visual</p>
+                  <p className="meta-label">Audio Visuals</p>
                   <strong>Visualizer and video assets</strong>
-                  <span>Tied to the audiovisual section with preview and replacement states.</span>
+                  <span>Tied to the Audio Visuals section with preview and replacement states.</span>
                   <MediaUploadPanel draft={{ id: draft.id, title: draft.title, tracks: normalizedTracks }} mode="loops" />
                 </article>
                 <article className="media-workflow-card">

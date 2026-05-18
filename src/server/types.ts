@@ -1,5 +1,8 @@
 export type ISODateString = string;
 
+export type CoreReleaseType = "single" | "album";
+export type ReleaseCategory = "single" | "album" | "feature";
+
 export type Profile = {
   id: string;
   email: string;
@@ -15,6 +18,7 @@ export type Release = {
   artistId: string;
   releaseDate: string;
   releaseType?: "single" | "album" | "ep" | "deluxe" | "remix_pack" | "feature";
+  releaseCategory?: ReleaseCategory;
   published: boolean;
   coverAssetId: string;
 };

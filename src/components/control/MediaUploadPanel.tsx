@@ -115,7 +115,7 @@ function ownershipLabel(ownerField?: string) {
   if (ownerField === "signalId") return "Hero owner";
   if (ownerField === "vaultContentId") return "Vault panel owner";
   if (ownerField === "collectorId") return "Merch / visual owner";
-  if (ownerField === "radioId") return "Audiovisual section owner";
+  if (ownerField === "radioId") return "Audio Visuals section owner";
   return "Media owner";
 }
 
@@ -622,7 +622,7 @@ export function MediaUploadPanel({ draft, mode = "all" }: { draft: Draft | null;
       <button className="control-button" disabled={!canRequestUpload} onClick={requestUploadIntent} type="button">
         {file ? "Replace / Upload Media" : "Prepare Upload"}
       </button>
-      {!relationalAssignmentReady ? <p className="form-status">Choose destination, media type, and ownership before upload. This keeps every asset attached to the right release, track, hero, vault panel, audiovisual section, or merch product.</p> : null}
+      {!relationalAssignmentReady ? <p className="form-status">Choose destination, media type, and ownership before upload. This keeps every asset attached to the right release, track, hero, vault panel, Audio Visuals section, or merch product.</p> : null}
       <div className="inline-action-row" aria-label="Media item actions">
         <button className="control-button secondary" disabled={!file} type="button">Preview</button>
         <button className="control-button secondary" disabled={!file} type="button">Schedule</button>

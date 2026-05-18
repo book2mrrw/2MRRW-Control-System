@@ -1,9 +1,10 @@
-import type { NormalizedPermissions, Release, Track } from "@/server/types";
+import type { NormalizedPermissions, Release, ReleaseCategory, Track } from "@/server/types";
 
 export type MediaAssetContract = {
   id: string;
   assetId: string;
   kind: "artwork" | "preview" | "full_audio" | "loop" | "vault" | "lyrics" | "unknown";
+  sourcePath?: string;
   access: "public" | "entitled" | "admin";
   signedUrlRequired: boolean;
   signedUrlEndpoint: string;
@@ -57,6 +58,7 @@ export type ReleaseMediaObject = {
   } | null;
   releaseDate: string;
   releaseType?: Release["releaseType"];
+  releaseCategory: ReleaseCategory;
   status: "published" | "scheduled";
   scheduledPublishAt?: string;
   artworkAssetId?: string;
@@ -83,6 +85,13 @@ export type ReleaseMediaObject = {
     saved: boolean;
   };
 };
+
+function releaseCategoryFor(release: Release): ReleaseCategory {
+  if (release.releaseCategory) return release.releaseCategory;
+  if (release.releaseType === "feature") return "feature";
+  if (release.releaseType === "single") return "single";
+  return "album";
+}
 
 type MediaAssetSource = {
   id: string;
@@ -139,6 +148,7 @@ export function toMediaAssetContract(asset: MediaAssetSource): MediaAssetContrac
     id: asset.id,
     assetId: asset.id,
     kind: classifyMediaAsset(asset),
+    sourcePath: asset.path,
     access: asset.access === "public" || asset.access === "admin" ? asset.access : "entitled",
     signedUrlRequired: true,
     signedUrlEndpoint: `/api/media/${encodeURIComponent(asset.id)}/signed-url`,
@@ -236,6 +246,7 @@ export function buildReleaseMediaObject(input: MediaObjectInput): ReleaseMediaOb
     artist: input.artist ? { id: input.artist.id, name: input.artist.name, slug: input.artist.slug } : null,
     releaseDate: input.release.releaseDate,
     releaseType: input.release.releaseType,
+    releaseCategory: releaseCategoryFor(input.release),
     status: input.release.status ?? "published",
     scheduledPublishAt: input.release.scheduledPublishAt,
     artworkAssetId: artwork?.id,

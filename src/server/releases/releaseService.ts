@@ -16,7 +16,7 @@ import {
 } from "@/server/release-management/releaseManagementService";
 import { recordReleaseActivity, recordReleaseRevision } from "@/server/release-management/releaseLifecycleService";
 import { getServerSupabase } from "@/server/supabase/client";
-import type { Release, Track } from "@/server/types";
+import type { Release, ReleaseCategory, Track } from "@/server/types";
 
 // Shared sync-layer catalog: admin write services publish into this central state,
 // and public read services render from it through normalized media objects.
@@ -26,6 +26,7 @@ type PublishedCatalogRelease = Release & {
 };
 
 export type PublicReleaseType = NonNullable<Release["releaseType"]>;
+export type PublicReleaseCategory = ReleaseCategory;
 
 type CatalogMediaAsset = {
   id: string;
@@ -142,6 +143,22 @@ function matchesReleaseType(row: CatalogRow, releaseType?: PublicReleaseType) {
   return row.release.releaseType === releaseType;
 }
 
+function releaseCategoryFromType(releaseType?: PublicReleaseType | null): ReleaseCategory {
+  if (releaseType === "feature") return "feature";
+  if (releaseType === "single") return "single";
+  return "album";
+}
+
+function releaseCategoryFor(row: CatalogRow): ReleaseCategory {
+  if (row.release.releaseCategory) return row.release.releaseCategory;
+  return releaseCategoryFromType(row.release.releaseType);
+}
+
+function matchesReleaseCategory(row: CatalogRow, releaseCategory?: PublicReleaseCategory) {
+  if (!releaseCategory) return true;
+  return releaseCategoryFor(row) === releaseCategory;
+}
+
 function toReleaseObject(row: CatalogRow, userId?: string) {
   const account = userId ? getAccountState(userId) : null;
 
@@ -176,6 +193,7 @@ function normalizePersistedRelease(row: {
     artistId: row.artist_id,
     releaseDate: row.release_date ?? row.published_at?.slice(0, 10) ?? nowIso().slice(0, 10),
     releaseType: row.release_type ?? undefined,
+    releaseCategory: releaseCategoryFromType(row.release_type),
     published: row.status === "published",
     coverAssetId: artwork?.id ?? "",
     status: row.status === "scheduled" ? "scheduled" : "published",
@@ -359,6 +377,7 @@ function draftToCatalog(draft: ReleaseManagementDraft, status: "published" | "sc
       artistId: draft.artistId,
       releaseDate,
       releaseType: draft.releaseType,
+      releaseCategory: releaseCategoryFromType(draft.releaseType),
       published: status === "published",
       coverAssetId: `asset_artwork_${draft.id}`,
       status,
@@ -377,31 +396,35 @@ export function createRelease(input: Parameters<typeof createReleaseDraft>[0]) {
 export function listReleases({
   includeUnpublished = false,
   userId,
-  releaseType
-}: { includeUnpublished?: boolean; userId?: string; releaseType?: PublicReleaseType } = {}) {
+  releaseType,
+  releaseCategory
+}: { includeUnpublished?: boolean; userId?: string; releaseType?: PublicReleaseType; releaseCategory?: PublicReleaseCategory } = {}) {
   return getCatalogRows({ includeUnpublished })
     .filter((row) => matchesReleaseType(row, releaseType))
+    .filter((row) => matchesReleaseCategory(row, releaseCategory))
     .map((row) => toReleaseObject(row, userId));
 }
 
 export async function listReleasesDurable({
   includeUnpublished = false,
   userId,
-  releaseType
-}: { includeUnpublished?: boolean; userId?: string; releaseType?: PublicReleaseType } = {}) {
+  releaseType,
+  releaseCategory
+}: { includeUnpublished?: boolean; userId?: string; releaseType?: PublicReleaseType; releaseCategory?: PublicReleaseCategory } = {}) {
   return (await getDurableCatalogRows({ includeUnpublished }))
     .filter((row) => matchesReleaseType(row, releaseType))
+    .filter((row) => matchesReleaseCategory(row, releaseCategory))
     .map((row) => toReleaseObject(row, userId));
 }
 
-export function getLatestReleases({ limit = 12, userId, releaseType }: { limit?: number; userId?: string; releaseType?: PublicReleaseType } = {}) {
-  return listReleases({ userId, releaseType })
+export function getLatestReleases({ limit = 12, userId, releaseType, releaseCategory }: { limit?: number; userId?: string; releaseType?: PublicReleaseType; releaseCategory?: PublicReleaseCategory } = {}) {
+  return listReleases({ userId, releaseType, releaseCategory })
     .sort((a, b) => b.releaseDate.localeCompare(a.releaseDate))
     .slice(0, limit);
 }
 
-export async function getLatestReleasesDurable({ limit = 12, userId, releaseType }: { limit?: number; userId?: string; releaseType?: PublicReleaseType } = {}) {
-  return (await listReleasesDurable({ userId, releaseType }))
+export async function getLatestReleasesDurable({ limit = 12, userId, releaseType, releaseCategory }: { limit?: number; userId?: string; releaseType?: PublicReleaseType; releaseCategory?: PublicReleaseCategory } = {}) {
+  return (await listReleasesDurable({ userId, releaseType, releaseCategory }))
     .sort((a, b) => b.releaseDate.localeCompare(a.releaseDate))
     .slice(0, limit);
 }
@@ -632,7 +655,9 @@ export function publishRelease(id: string): PublishReleaseResult | null {
       data: {
         releaseId: id,
         slug: draft.slug,
-        status,
+        status: status === "published" ? "live" : "scheduled",
+        internalStatus: status,
+        category: releaseCategoryFromType(draft.releaseType),
         durable: false
       }
     });
@@ -653,7 +678,14 @@ export function publishRelease(id: string): PublishReleaseResult | null {
   emitAfterSuccessfulAction({
     type: "release_published",
     entityId: release.id,
-    data: { releaseId: release.id, slug: release.slug, durable: false }
+    data: {
+      releaseId: release.id,
+      slug: release.slug,
+      status: "live",
+      internalStatus: "published",
+      category: releaseCategoryFromType(release.releaseType),
+      durable: false
+    }
   });
   const row = getCatalogRows({ includeUnpublished: true }).find((releaseRow) => releaseRow.release.id === id);
   return row

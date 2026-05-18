@@ -1,6 +1,6 @@
 import { getLatestReleasesDurable } from "@/server/releases/releaseReadService";
 import { getUserId, ok } from "@/server/http";
-import type { PublicReleaseType } from "@/server/releases/releaseService";
+import type { PublicReleaseCategory, PublicReleaseType } from "@/server/releases/releaseService";
 
 const PUBLIC_FRONTEND_ORIGINS = new Set([
   "https://2mrrw-official.vercel.app"
@@ -39,11 +39,21 @@ function parseReleaseType(value: string | null): PublicReleaseType | undefined {
   return undefined;
 }
 
+function parseReleaseCategory(value: string | null): PublicReleaseCategory | undefined {
+  if (value === "single" || value === "album" || value === "feature") {
+    return value;
+  }
+
+  return undefined;
+}
+
 export async function GET(request: Request) {
   const url = new URL(request.url);
   const limit = Number(url.searchParams.get("limit") ?? 12);
-  const releaseType = parseReleaseType(url.searchParams.get("type") ?? url.searchParams.get("releaseType"));
-  return ok(await getLatestReleasesDurable({ limit: Number.isFinite(limit) ? limit : 12, userId: getUserId(request), releaseType }), {
+  const typeParam = url.searchParams.get("type");
+  const releaseCategory = parseReleaseCategory(url.searchParams.get("category") ?? url.searchParams.get("releaseCategory") ?? typeParam);
+  const releaseType = parseReleaseType(url.searchParams.get("releaseType")) ?? (releaseCategory ? undefined : parseReleaseType(typeParam));
+  return ok(await getLatestReleasesDurable({ limit: Number.isFinite(limit) ? limit : 12, userId: getUserId(request), releaseType, releaseCategory }), {
     headers: publicReadCorsHeaders(request)
   });
 }
