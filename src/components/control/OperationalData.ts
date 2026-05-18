@@ -12,7 +12,7 @@ export const primaryNavigation: NavItem[] = [
   { href: "/releases", label: "Releases", detail: "Discography", tone: "vault" },
   { href: "/media", label: "Media", detail: "Uploads / assets", tone: "signal" },
   { href: "/analytics", label: "Analytics", detail: "Audience", tone: "success" },
-  { href: "/shop", label: "Shop", detail: "Merch / drops", tone: "commerce" },
+  { href: "/shop", label: "Shop", detail: "Merch analytics", tone: "commerce" },
   { href: "/settings", label: "Settings", detail: "Defaults", tone: "vault" }
 ];
 
@@ -21,7 +21,7 @@ export const releaseSteps = [
   { id: "details", label: "Release Details", href: "/releases/new/details" },
   { id: "tracks", label: "Tracks & Credits", href: "/releases/new/tracks" },
   { id: "uploads", label: "Artwork & Media", href: "/releases/new/uploads" },
-  { id: "review", label: "Distribution", href: "/releases/new/review" }
+  { id: "review", label: "Review & Publish", href: "/releases/new/review" }
 ] as const;
 
 export type ReleaseStepId = (typeof releaseSteps)[number]["id"];

@@ -6,6 +6,7 @@ import { getReleaseManagementOverview } from "@/server/release-management/releas
 export default function DashboardPage() {
   const overview = getReleaseManagementOverview();
   const mission = overview.missionControl;
+  const realActivity = overview.allReleases.slice(0, 5).map((release) => `${release.title} updated ${release.updatedAt.slice(0, 10)}`);
   const streaming = getStreamingAnalyticsSummary();
   const listeners = new Set(listAnalyticsEvents().map((event) => event.userId)).size;
   const latestRelease = overview.allReleases[0] ?? null;
@@ -18,15 +19,11 @@ export default function DashboardPage() {
     percentComplete: latestRelease.continueCard.percentComplete,
     nextAction: latestRelease.status === "published" ? "Review frontend contract" : "Continue release"
   } : null);
-  const recentActivity = [
-    ...overview.allReleases.slice(0, 3).map((release) => `${release.title} updated ${release.updatedAt.slice(0, 10)}`),
-    ...mission.notifications.slice(0, 2).map((notification) => `${notification.title}: ${notification.detail}`)
-  ].slice(0, 5);
   const quickActions = [
     { label: "New Release", detail: "Start the five-step workflow", href: "/releases/new" },
     { label: "Upload Media", detail: "Attach artwork, audio, hero, vault, or merch", href: "/media" },
     { label: "Review Analytics", detail: "Check streams, platforms, and top tracks", href: "/analytics" },
-    { label: "Shop Workspace", detail: "Prepare product visuals and drop structure", href: "/shop" }
+    { label: "Shop Analytics", detail: "Review merch performance when live data exists", href: "/shop" }
   ];
 
   return (
@@ -47,7 +44,7 @@ export default function DashboardPage() {
           { label: "Drafts", value: String(overview.accountDashboard.drafts), tone: "vault" },
           { label: "Scheduled", value: String(overview.allReleases.filter((release) => release.status === "scheduled").length), tone: "commerce" },
           { label: "Published", value: String(overview.accountDashboard.published), tone: "success" },
-          { label: "Sync", value: mission.systemConfidence.find((item) => item.key === "frontend_updated")?.state ?? "Syncing", tone: "signal" }
+          { label: "Sync", value: mission.systemConfidence.find((item) => item.key === "frontend_updated")?.state ?? "No live sync", tone: "signal" }
         ]}
       />
       <section className="quick-stats-grid" aria-label="Quick stats">
@@ -143,9 +140,7 @@ export default function DashboardPage() {
             </div>
           </div>
           <div className="activity-list">
-            <span>Cover art validation ready</span>
-            <span>Audio visual upload lane ready</span>
-            <span>Vault media assignment ready</span>
+            <span>No uploads yet.</span>
           </div>
         </article>
         <article className="panel">
@@ -156,7 +151,7 @@ export default function DashboardPage() {
             </div>
           </div>
           <div className="activity-list">
-            {recentActivity.length ? recentActivity.map((item) => <span key={item}>{item}</span>) : <span>No recent activity yet.</span>}
+            {realActivity.length ? realActivity.map((item) => <span key={item}>{item}</span>) : <span>No activity yet.</span>}
           </div>
         </article>
         <article className="panel quick-actions-panel">

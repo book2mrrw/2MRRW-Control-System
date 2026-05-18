@@ -5,19 +5,19 @@ import { AudioVisualsPanel } from "@/components/control/AudioVisualsPanel";
 import { CircleActivityPanel } from "@/components/control/CircleActivityPanel";
 import { GlobalSearch } from "@/components/control/GlobalSearch";
 import { getStreamingAnalyticsSummary, listAnalyticsEvents } from "@/server/analytics/analyticsService";
-import { getReleaseManagementOverview } from "@/server/release-management/releaseManagementService";
 
 export function ModulePage({ module }: { module: keyof typeof modulePages }) {
   const config = modulePages[module];
   if (!config) notFound();
   const analytics = getStreamingAnalyticsSummary();
-  const overview = getReleaseManagementOverview();
-  const listenerCount = new Set(listAnalyticsEvents().map((event) => event.userId)).size;
-  const topTracks = overview.allReleases.flatMap((release) => release.tracks.map((track) => ({
-    label: track.title,
-    value: track.position === 1 ? 84 : Math.max(28, 76 - track.position * 9),
-    release: release.title
-  }))).slice(0, 4);
+  const analyticsEvents = listAnalyticsEvents();
+  const listenerCount = new Set(analyticsEvents.map((event) => event.userId)).size;
+  const trackEventCounts = analyticsEvents.reduce<Map<string, number>>((counts, event) => {
+    const trackId = typeof event.properties.trackId === "string" ? event.properties.trackId : null;
+    if (trackId) counts.set(trackId, (counts.get(trackId) ?? 0) + 1);
+    return counts;
+  }, new Map());
+  const topTracks = [...trackEventCounts.entries()].sort((a, b) => b[1] - a[1]).slice(0, 4);
   const specializedSections: Partial<Record<keyof typeof modulePages, Array<{ label: string; title: string; detail: string }>>> = {
     analytics: [
       { label: "Streams", title: "Stream analytics", detail: "Release streams, track velocity, playlist movement, and performance by time period." },
@@ -53,10 +53,10 @@ export function ModulePage({ module }: { module: keyof typeof modulePages }) {
       {module === "analytics" ? (
         <StatusStrip
           items={[
-            { label: "Streams", value: "Tracking", tone: "success" },
-            { label: "Listeners", value: "Learning", tone: "vault" },
-            { label: "Geo", value: "Mapped", tone: "signal" },
-            { label: "Revenue", value: "Modeled", tone: "commerce" }
+            { label: "Streams", value: String(analytics.validStreams), tone: "success" },
+            { label: "Listeners", value: String(listenerCount), tone: "vault" },
+            { label: "Countries", value: String(analytics.countryCount), tone: "signal" },
+            { label: "Revenue", value: "$0", tone: "commerce" }
           ]}
         />
       ) : null}
@@ -111,26 +111,17 @@ export function ModulePage({ module }: { module: keyof typeof modulePages }) {
           <div className="bar-board">
             <div>
               <p className="meta-label">Top tracks</p>
-              {topTracks.length ? topTracks.map((track) => (
-                <div className="bar-row" key={`${track.release}-${track.label}`}>
-                  <span>{track.label}</span>
-                  <strong style={{ width: `${track.value}%` }} />
+              {topTracks.length ? topTracks.map(([trackId, count]) => (
+                <div className="bar-row" key={trackId}>
+                  <span>{trackId}</span>
+                  <strong style={{ width: `${Math.min(100, Math.max(8, count * 12))}%` }} />
+                  <small>{count} events</small>
                 </div>
               )) : <span className="empty-inline">Track analytics appear after playback events.</span>}
             </div>
             <div>
               <p className="meta-label">Platforms</p>
-              {[
-                ["Spotify", 78],
-                ["Apple Music", 64],
-                ["YouTube", 52],
-                ["2MRRW Vault", 44]
-              ].map(([label, value]) => (
-                <div className="bar-row" key={label}>
-                  <span>{label}</span>
-                  <strong style={{ width: `${value}%` }} />
-                </div>
-              ))}
+              <span className="empty-inline">Platform analytics appear after live platform events are connected.</span>
             </div>
           </div>
         </section>

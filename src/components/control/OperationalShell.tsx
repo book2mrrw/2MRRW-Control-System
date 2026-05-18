@@ -8,6 +8,7 @@ import {
   Bell,
   ChevronLeft,
   ChevronRight,
+  Globe2,
   Gauge,
   Images,
   Package,
@@ -44,9 +45,9 @@ function pageSubtitle(pathname: string) {
   if (pathname.startsWith("/releases/new")) return "Five-step release workflow";
   if (pathname.startsWith("/media")) return "Uploads, ownership, and sync";
   if (pathname.startsWith("/analytics")) return "Streams, platforms, and signals";
-  if (pathname.startsWith("/shop")) return "Merch, drops, and commerce";
+  if (pathname.startsWith("/shop")) return "Merch performance analytics";
   if (pathname.startsWith("/settings")) return "Profile, memory, and defaults";
-  return "Creator Studio";
+  return "Control System";
 }
 
 export function OperationalShell({ children }: { children: ReactNode }) {
@@ -66,7 +67,7 @@ export function OperationalShell({ children }: { children: ReactNode }) {
           </span>
           <span>
             <strong>2MRRW</strong>
-            <small>Creator Studio</small>
+            <small>Control System</small>
           </span>
         </Link>
         <div className="sidebar-system-card">
@@ -116,9 +117,14 @@ export function OperationalShell({ children }: { children: ReactNode }) {
             <GlobalSearch />
           </div>
           <div className="top-status-cluster">
+            <span className="topbar-sync-badge">Synced</span>
             <button className="topbar-icon-button" type="button" aria-label="Notifications">
               <Bell size={17} />
             </button>
+            <Link className="topbar-preview-action" href="/api/releases" title="Backend preview contract">
+              <Globe2 size={16} />
+              Preview
+            </Link>
             <Link className="topbar-new-release" href="/releases/new">
               <Plus size={16} />
               New Release

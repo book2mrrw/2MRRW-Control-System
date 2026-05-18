@@ -3424,6 +3424,7 @@ body {
 }
 
 .topbar-icon-button,
+.topbar-preview-action,
 .topbar-new-release {
   display: inline-flex;
   align-items: center;
@@ -3446,6 +3447,28 @@ body {
   font-weight: 800;
   letter-spacing: 0.08em;
   text-transform: uppercase;
+}
+
+.topbar-preview-action,
+.topbar-sync-badge {
+  border-color: rgba(255, 255, 255, 0.1);
+  background: rgba(255, 255, 255, 0.04);
+  color: var(--txt2);
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 0.68rem;
+  font-weight: 800;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+.topbar-sync-badge {
+  display: inline-flex;
+  align-items: center;
+  min-height: 40px;
+  padding: 0 10px;
+  border: 1px solid rgba(34, 197, 94, 0.24);
+  border-radius: 14px;
+  color: var(--ok);
 }
 
 .next-release-card {
