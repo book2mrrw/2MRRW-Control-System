@@ -1,4 +1,5 @@
 import { artists } from "@/server/data/seedData";
+import { emitAfterSuccessfulAction } from "@/server/events/eventedWriteService";
 import { rememberContributorFromCredit, rememberReleaseMetadata } from "@/server/release-management/contributorDirectoryService";
 import {
   buildFrontendPreviewLinks,
@@ -401,6 +402,16 @@ export function createReleaseDraft(input: {
   refreshLifecycleFields(draft);
   upsertCreatorSession({ releaseId: id, currentStep: "setup", focusMode: true });
   drafts.set(id, draft);
+  emitAfterSuccessfulAction({
+    type: "release_created",
+    entityId: id,
+    data: {
+      releaseId: id,
+      releaseType: draft.releaseType,
+      title: draft.title,
+      durable: false
+    }
+  });
   recordReleaseRevision({
     releaseId: id,
     kind: "release_revision",
@@ -504,6 +515,16 @@ export function updateReleaseMetadata(
   draft.readinessState = getReadinessSummary(draft.id).ready ? "ready_for_review" : draft.readinessState;
   draft.saveState = "saved";
   refreshLifecycleFields(draft);
+  emitAfterSuccessfulAction({
+    type: "release_updated",
+    entityId: draft.id,
+    data: {
+      releaseId: draft.id,
+      title: draft.title,
+      durable: false,
+      updates: input
+    }
+  });
   recordReleaseRevision({
     releaseId: draft.id,
     kind: slugChanged ? "slug_change" : input.coverArtState ? "artwork_replacement" : "metadata_edit",
@@ -576,6 +597,16 @@ export function updateTrackInformation(
   draft.updatedAt = nowIso();
   draft.saveState = "saved";
   refreshLifecycleFields(draft);
+  emitAfterSuccessfulAction({
+    type: "release_updated",
+    entityId: releaseId,
+    data: {
+      releaseId,
+      trackId: track.id,
+      durable: false,
+      updates: input
+    }
+  });
   recordReleaseRevision({
     releaseId,
     kind: input.audioState ? "audio_replacement" : "metadata_edit",
@@ -834,6 +865,15 @@ export function archiveReleaseDraft(releaseId: string, reason = "Archived from C
     label: "Release archived with recovery available",
     before,
     after: { status: draft.status, visibilityState: draft.visibilityState, recoveryAvailableUntil: draft.recoveryAvailableUntil }
+  });
+  emitAfterSuccessfulAction({
+    type: "release_deleted",
+    entityId: releaseId,
+    data: {
+      releaseId,
+      archivedAt: draft.archivedAt,
+      durable: false
+    }
   });
   return draft;
 }

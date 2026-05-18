@@ -1,4 +1,4 @@
-import { getLatestReleases } from "@/server/releases/releaseReadService";
+import { getLatestReleasesDurable } from "@/server/releases/releaseReadService";
 import { getUserId, ok } from "@/server/http";
 import type { PublicReleaseType } from "@/server/releases/releaseService";
 
@@ -32,7 +32,7 @@ export function OPTIONS(request: Request) {
 }
 
 function parseReleaseType(value: string | null): PublicReleaseType | undefined {
-  if (value === "single" || value === "album" || value === "ep" || value === "feature") {
+  if (value === "single" || value === "album" || value === "ep" || value === "feature" || value === "deluxe" || value === "remix_pack") {
     return value;
   }
 
@@ -43,7 +43,7 @@ export async function GET(request: Request) {
   const url = new URL(request.url);
   const limit = Number(url.searchParams.get("limit") ?? 12);
   const releaseType = parseReleaseType(url.searchParams.get("type") ?? url.searchParams.get("releaseType"));
-  return ok(getLatestReleases({ limit: Number.isFinite(limit) ? limit : 12, userId: getUserId(request), releaseType }), {
+  return ok(await getLatestReleasesDurable({ limit: Number.isFinite(limit) ? limit : 12, userId: getUserId(request), releaseType }), {
     headers: publicReadCorsHeaders(request)
   });
 }

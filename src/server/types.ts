@@ -33,6 +33,8 @@ export type Product = {
   slug: string;
   name: string;
   stripePriceId: string;
+  priceCents?: number | null;
+  currency?: string | null;
   grants: EntitlementGrant[];
 };
 

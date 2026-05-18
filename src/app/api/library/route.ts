@@ -1,6 +1,6 @@
-import { saveLibraryItem } from "@/server/account/accountStateService";
+import { saveLibraryItemDurable } from "@/server/account/accountStateService";
 import { getUserId, ok, parseJson } from "@/server/http";
-import { getUserLibrary } from "@/server/releases/releaseReadService";
+import { getUserLibraryDurable } from "@/server/releases/releaseReadService";
 import { z } from "zod";
 
 const saveSchema = z.object({
@@ -9,11 +9,11 @@ const saveSchema = z.object({
 });
 
 export async function GET(request: Request) {
-  return ok(getUserLibrary(getUserId(request)));
+  return ok(await getUserLibraryDurable(getUserId(request)));
 }
 
 export async function POST(request: Request) {
   const userId = getUserId(request);
-  saveLibraryItem(userId, await parseJson(request, saveSchema));
-  return ok(getUserLibrary(userId));
+  await saveLibraryItemDurable(userId, await parseJson(request, saveSchema));
+  return ok(await getUserLibraryDurable(userId));
 }

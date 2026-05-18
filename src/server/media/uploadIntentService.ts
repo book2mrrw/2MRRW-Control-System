@@ -1,4 +1,5 @@
 import { getServerSupabase } from "@/server/supabase/client";
+import { emitAfterSuccessfulAction } from "@/server/events/eventedWriteService";
 import {
   getReleaseDraft,
   updateReleaseMetadata,
@@ -98,6 +99,8 @@ export type ManagedMediaAssetRecord = {
   category: MediaUploadCategory;
   ownerId: string;
   ownerType: "release" | "track" | "signal" | "radio" | "collector" | "vault_content";
+  releaseId?: string;
+  trackId?: string;
   access: "public" | "entitled" | "admin";
   status: "uploaded" | "processing" | "optimized" | "synced" | "published" | "archived" | "failed" | "retry_available";
   processingJobs: MediaOptimizationJob[];
@@ -496,6 +499,8 @@ export function confirmMediaUpload(input: {
     category,
     ownerId,
     ownerType: ownerTypeFor(category),
+    releaseId: input.releaseId,
+    trackId: input.trackId,
     access: accessFor(category),
     status: processingJobs.length ? "processing" : "uploaded",
     processingJobs,
@@ -507,6 +512,30 @@ export function confirmMediaUpload(input: {
     updatedAt: nowIso()
   };
   confirmedMediaAssets.set(record.id, record);
+  const mediaEventData = {
+    url: record.path,
+    type: category,
+    assetId: record.id,
+    ownerId,
+    ownerType: record.ownerType,
+    releaseId: input.releaseId,
+    trackId: input.trackId,
+    mediaType: category === "audio_full_song" || category === "audio_preview" ? "audio" : category,
+    slot: category === "audio_full_song" || category === "audio_preview" ? "track_audio" : category,
+    durable: false
+  };
+  emitAfterSuccessfulAction({
+    type: "media_updated",
+    entityId: input.releaseId ?? input.trackId ?? ownerId,
+    data: mediaEventData
+  });
+  if (input.retryOfAssetId || category === "audio_full_song" || category === "audio_preview") {
+    emitAfterSuccessfulAction({
+      type: "media_replaced",
+      entityId: input.releaseId ?? input.trackId ?? ownerId,
+      data: { ...mediaEventData, newAudioUrl: record.path }
+    });
+  }
   createCreatorNotification({
     type: "upload_completed",
     title: "Upload connected",

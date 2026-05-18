@@ -1,6 +1,6 @@
 import { fail, ok } from "@/server/http";
 import { getUserId } from "@/server/http";
-import { getReleaseBySlug } from "@/server/releases/releaseReadService";
+import { getReleaseBySlugDurable } from "@/server/releases/releaseReadService";
 
 const PUBLIC_FRONTEND_ORIGINS = new Set([
   "https://2mrrw-official.vercel.app"
@@ -40,7 +40,7 @@ function withPublicReadCors(response: Response, request: Request) {
 
 export async function GET(request: Request, { params }: { params: Promise<{ slug: string }> }) {
   const { slug } = await params;
-  const release = getReleaseBySlug(slug, { userId: getUserId(request) });
+  const release = await getReleaseBySlugDurable(slug, { userId: getUserId(request) });
   return release
     ? ok(release, { headers: publicReadCorsHeaders(request) })
     : withPublicReadCors(fail("Release not found", 404), request);

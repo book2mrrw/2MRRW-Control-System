@@ -109,6 +109,8 @@ export const products: Product[] = [
     slug: "afterhours-digital",
     name: "Afterhours Control Digital",
     stripePriceId: "price_afterhours_digital",
+    priceCents: 999,
+    currency: "usd",
     grants: [{ type: "release", releaseId: "rel_afterhours" }]
   },
   {
@@ -116,6 +118,8 @@ export const products: Product[] = [
     slug: "founder-membership",
     name: "Founder Membership",
     stripePriceId: "price_founder_membership",
+    priceCents: 1999,
+    currency: "usd",
     grants: [
       { type: "membership", tier: "founder" },
       { type: "vault_collection", collectionId: "vault_founder_room" }

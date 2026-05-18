@@ -1,5 +1,5 @@
 import { ok } from "@/server/http";
-import { listCircleEvents } from "@/server/community/circleEventService";
+import { listCircleEventsDurable } from "@/server/community/circleEventService";
 
 const PUBLIC_FRONTEND_ORIGINS = new Set(["https://2mrrw-official.vercel.app"]);
 
@@ -31,7 +31,7 @@ export function OPTIONS(request: Request) {
 export async function GET(request: Request) {
   const url = new URL(request.url);
   const limit = Number(url.searchParams.get("limit") ?? 20);
-  return ok(listCircleEvents({ limit: Number.isFinite(limit) ? limit : 20 }), {
+  return ok(await listCircleEventsDurable({ limit: Number.isFinite(limit) ? limit : 20, audience: "public" }), {
     headers: publicReadCorsHeaders(request)
   });
 }

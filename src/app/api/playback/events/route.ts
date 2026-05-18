@@ -1,5 +1,5 @@
 import { fail, getSessionId, getUserId, ok } from "@/server/http";
-import { trackPlaybackEvent } from "@/server/releases/releaseReadService";
+import { trackPlaybackEventDurable } from "@/server/releases/releaseReadService";
 import { z } from "zod";
 
 const playbackEventTypes = ["play", "pause", "progress", "complete", "skip"] as const;
@@ -37,7 +37,7 @@ export async function POST(request: Request) {
   }
 
   return ok(
-    trackPlaybackEvent(getUserId(request), {
+    await trackPlaybackEventDurable(getUserId(request), {
       ...parsed.data,
       sessionId: getSessionId(request)
     })

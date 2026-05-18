@@ -29,13 +29,15 @@ values
   ('00000000-0000-0000-0000-000000000403', 'vault_content', '00000000-0000-0000-0000-000000000701', 'protected-media', 'vault/founder-room/session-notes.pdf', 'entitled')
 on conflict do nothing;
 
-insert into public.products (id, slug, name, stripe_price_id, grants)
+insert into public.products (id, slug, name, stripe_price_id, price_cents, currency, grants)
 values
   (
     '00000000-0000-0000-0000-000000000501',
     'afterhours-digital',
     'Afterhours Control Digital',
     'price_afterhours_digital',
+    999,
+    'usd',
     '[{"type":"release","releaseId":"00000000-0000-0000-0000-000000000201"}]'::jsonb
   ),
   (
@@ -43,6 +45,8 @@ values
     'founder-membership',
     'Founder Membership',
     'price_founder_membership',
+    1999,
+    'usd',
     '[{"type":"membership","tier":"founder"},{"type":"vault_collection","collectionId":"00000000-0000-0000-0000-000000000601"}]'::jsonb
   )
 on conflict (slug) do nothing;

@@ -13,6 +13,21 @@ type ArtworkValidation = {
   warnings: string[];
 };
 
+type OptimisticUpload = {
+  tempId: string;
+  fileName: string;
+  fileType: string;
+  category: UploadCategory;
+  ownerType: string;
+  ownerId: string;
+  slot: string;
+  previewUrl: string;
+  progress: number;
+  status: "pending" | "uploading" | "processing" | "confirmed" | "failed";
+  error?: string;
+  remoteAssetPath?: string;
+};
+
 type UploadCategory =
   | "single_cover_art"
   | "album_cover_art"
@@ -115,6 +130,7 @@ export function MediaUploadPanel({ draft, mode = "all" }: { draft: Draft | null;
   const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
   const [dragActive, setDragActive] = useState(false);
   const [uploadProgress, setUploadProgress] = useState(0);
+  const [optimisticUploads, setOptimisticUploads] = useState<OptimisticUpload[]>([]);
   const [previewOpen, setPreviewOpen] = useState(false);
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
   const [status, setStatus] = useState("Drop a file or click to prepare an upload.");
@@ -129,6 +145,12 @@ export function MediaUploadPanel({ draft, mode = "all" }: { draft: Draft | null;
   const needsTrack = selectedOption?.ownerField === "trackId";
   const usesDraftRelease = selectedOption?.ownerField === "releaseId" || needsTrack;
   const previewUrl = useMemo(() => (file ? URL.createObjectURL(file) : ""), [file]);
+
+  useEffect(() => {
+    return () => {
+      optimisticUploads.forEach((upload) => URL.revokeObjectURL(upload.previewUrl));
+    };
+  }, [optimisticUploads]);
 
   useEffect(() => {
     return () => {
@@ -248,6 +270,27 @@ export function MediaUploadPanel({ draft, mode = "all" }: { draft: Draft | null;
   function handleSelectedFiles(fileList: FileList | File[]) {
     const files = Array.from(fileList);
     const nextFiles = allowMultiple ? files : files.slice(0, 1);
+    const ownerType = ownershipLabel(selectedOption?.ownerField);
+    const ownerId = selectedOption?.ownerField === "releaseId"
+      ? draft?.id ?? "pending-release"
+      : selectedOption?.ownerField === "trackId"
+        ? trackId || "pending-track"
+        : externalOwnerId || "pending-owner";
+    setOptimisticUploads((current) => [
+      ...nextFiles.map((nextFile) => ({
+        tempId: `temp_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
+        fileName: nextFile.name,
+        fileType: nextFile.type || extensionFor(nextFile.name),
+        category,
+        ownerType,
+        ownerId,
+        slot: isAudioCategory(category) ? "track_audio" : isCoverCategory(category) ? "cover_art" : category,
+        previewUrl: URL.createObjectURL(nextFile),
+        progress: 0,
+        status: "pending" as const
+      })),
+      ...current
+    ].slice(0, 6));
     setSelectedFiles(nextFiles);
     setFile(nextFiles[0] ?? null);
     setDeleteConfirmOpen(false);
@@ -270,6 +313,10 @@ export function MediaUploadPanel({ draft, mode = "all" }: { draft: Draft | null;
   function clearSelectedFile() {
     setFile(null);
     setSelectedFiles([]);
+    setOptimisticUploads((current) => {
+      current.forEach((upload) => URL.revokeObjectURL(upload.previewUrl));
+      return [];
+    });
     setUploadProgress(0);
     if (fileInputRef.current) {
       fileInputRef.current.value = "";
@@ -285,6 +332,7 @@ export function MediaUploadPanel({ draft, mode = "all" }: { draft: Draft | null;
       return;
     }
     setUploadProgress(10);
+    setOptimisticUploads((current) => current.map((upload, index) => index === 0 ? { ...upload, status: "uploading", progress: 10 } : upload));
     setArtworkValidation((current) => isCoverCategory(category) ? { ...current, state: "uploading", message: "Uploading artwork" } : current);
     setStatus(isCoverCategory(category) ? "Uploading artwork" : "Preparing upload...");
     const ownerPayload = selectedOption?.ownerField && selectedOption.ownerField !== "releaseId" && selectedOption.ownerField !== "trackId"
@@ -307,18 +355,21 @@ export function MediaUploadPanel({ draft, mode = "all" }: { draft: Draft | null;
     const intent = intentPayload?.data;
     if (!intentResponse.ok || !intent?.signedUploadUrl) {
       setUploadProgress(0);
+      setOptimisticUploads((current) => current.map((upload, index) => index === 0 ? { ...upload, status: "failed", progress: 0, error: intentPayload?.error?.message || "Upload intent failed." } : upload));
       setStatus(intentPayload?.error?.message || "This file does not meet the upload requirements.");
       setArtworkValidation((current) => isCoverCategory(category) ? { ...current, state: "needs_replacement", message: intentPayload?.error?.message || "Artwork needs replacement." } : current);
       return;
     }
     if (intent.mocked) {
       setUploadProgress(25);
+      setOptimisticUploads((current) => current.map((upload, index) => index === 0 ? { ...upload, status: "processing", progress: 25, remoteAssetPath: intent.path } : upload));
       setStatus(`Upload prepared for ${intent.path}. Connect live media storage before sending file bytes.`);
       setArtworkValidation((current) => isCoverCategory(category) ? { ...current, state: "approved", message: `${current.message} Final media checks are still modeled as validation metadata until probing is wired.` } : current);
       return;
     }
     setStatus(isCoverCategory(category) ? "Uploading artwork" : "Uploading media...");
     setUploadProgress(45);
+    setOptimisticUploads((current) => current.map((upload, index) => index === 0 ? { ...upload, status: "uploading", progress: 45 } : upload));
     const uploadResponse = await fetch(intent.signedUploadUrl, {
       method: "PUT",
       headers: { "Content-Type": file.type || "application/octet-stream" },
@@ -326,13 +377,15 @@ export function MediaUploadPanel({ draft, mode = "all" }: { draft: Draft | null;
     });
     if (!uploadResponse.ok) {
       setUploadProgress(0);
+      setOptimisticUploads((current) => current.map((upload, index) => index === 0 ? { ...upload, status: "failed", progress: 0, error: "Storage upload failed." } : upload));
       setStatus("Upload failed. No completed media was recorded.");
       setArtworkValidation((current) => isCoverCategory(category) ? { ...current, state: "needs_replacement", message: "Artwork needs replacement: storage upload failed." } : current);
       return;
     }
     setUploadProgress(80);
+    setOptimisticUploads((current) => current.map((upload, index) => index === 0 ? { ...upload, status: "processing", progress: 80 } : upload));
     setArtworkValidation((current) => isCoverCategory(category) ? { ...current, state: "processing", message: "Processing artwork" } : current);
-    await fetch("/api/admin/media/upload-complete", {
+    const completeResponse = await fetch("/api/admin/media/upload-complete", {
       method: "POST",
       headers: { "Content-Type": "application/json", "x-admin": "true" },
       body: JSON.stringify({
@@ -343,7 +396,15 @@ export function MediaUploadPanel({ draft, mode = "all" }: { draft: Draft | null;
         path: intent.path
       })
     });
+    if (!completeResponse.ok) {
+      const completePayload = await completeResponse.json().catch(() => null);
+      setUploadProgress(0);
+      setOptimisticUploads((current) => current.map((upload, index) => index === 0 ? { ...upload, status: "failed", progress: 0, error: completePayload?.error?.message || "Upload completion failed." } : upload));
+      setStatus(completePayload?.error?.message || "Upload completion failed.");
+      return;
+    }
     setUploadProgress(100);
+    setOptimisticUploads((current) => current.map((upload, index) => index === 0 ? { ...upload, status: "confirmed", progress: 100, remoteAssetPath: intent.path } : upload));
     setStatus(`Upload confirmed at ${intent.path}.`);
     setArtworkValidation((current) => isCoverCategory(category) ? { ...current, state: "approved", message: `${current.message} Final server media probing is still modeled as metadata validation until that service is wired.` } : current);
   }
@@ -475,6 +536,34 @@ export function MediaUploadPanel({ draft, mode = "all" }: { draft: Draft | null;
       {uploadProgress > 0 ? (
         <div className="upload-progress" aria-label={`Upload progress ${uploadProgress}%`}>
           <span style={{ width: `${uploadProgress}%` }} />
+        </div>
+      ) : null}
+      {optimisticUploads.length ? (
+        <div className="optimistic-upload-grid" aria-label="Optimistic media upload state">
+          {optimisticUploads.map((upload) => (
+            <article className="optimistic-upload-card" data-status={upload.status} key={upload.tempId}>
+              <div className="optimistic-preview">
+                {upload.fileType.startsWith("video/") || ["mp4", "mov", "webm"].includes(extensionFor(upload.fileName)) ? (
+                  <video src={upload.previewUrl} autoPlay muted loop playsInline />
+                ) : upload.fileType.startsWith("audio/") || ["mp3", "wav", "flac", "aif", "aiff"].includes(extensionFor(upload.fileName)) ? (
+                  <div className="waveform-placeholder" aria-hidden="true">
+                    {Array.from({ length: 14 }, (_, index) => <span key={index} style={{ animationDelay: `${index * 45}ms` }} />)}
+                  </div>
+                ) : (
+                  <img alt="" src={upload.previewUrl} />
+                )}
+              </div>
+              <div>
+                <p className="meta-label">{upload.status}</p>
+                <strong>{upload.fileName}</strong>
+                <span>{upload.ownerType}: {upload.ownerId} / {upload.slot}</span>
+                {upload.error ? <small>{upload.error}</small> : null}
+              </div>
+              <div className="upload-progress">
+                <span style={{ width: `${upload.progress}%` }} />
+              </div>
+            </article>
+          ))}
         </div>
       ) : null}
       {coverSelected ? (

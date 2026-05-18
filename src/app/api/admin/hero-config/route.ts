@@ -4,6 +4,9 @@ import { z } from "zod";
 
 const heroConfigSchema = z.object({
   title: z.string().min(1),
+  subtitle: z.string().optional(),
+  ctaLabel: z.string().optional(),
+  ctaHref: z.string().optional(),
   backgroundMediaUrl: z.string().optional(),
   backgroundMediaType: z.enum(["image", "mp4"]).optional()
 });

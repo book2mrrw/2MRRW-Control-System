@@ -1,5 +1,6 @@
 import { getAccountState, getLibraryDurable } from "@/server/account/accountStateService";
 import { artists, mediaAssets, products, releases, tracks } from "@/server/data/seedData";
+import { emitAfterSuccessfulAction } from "@/server/events/eventedWriteService";
 import { recordStreamAnalytics, recordStreamAnalyticsDurable } from "@/server/analytics/analyticsService";
 import {
   buildReleaseMediaObject,
@@ -585,6 +586,11 @@ export function upsertRelease(input: {
     coverAssetId: `asset_cover_${input.slug.replace(/[^a-z0-9]+/gi, "_").toLowerCase()}`
   };
   releases.push(release);
+  emitAfterSuccessfulAction({
+    type: "release_created",
+    entityId: release.id,
+    data: { releaseId: release.id, slug: release.slug, durable: false }
+  });
   return release;
 }
 
@@ -620,6 +626,16 @@ export function publishRelease(id: string): PublishReleaseResult | null {
 
     const record = draftToCatalog(draft, status);
     publishedDrafts.set(id, record);
+    emitAfterSuccessfulAction({
+      type: "release_published",
+      entityId: id,
+      data: {
+        releaseId: id,
+        slug: draft.slug,
+        status,
+        durable: false
+      }
+    });
     return {
       ok: true,
       release: toReleaseObject(record),
@@ -634,6 +650,11 @@ export function publishRelease(id: string): PublishReleaseResult | null {
   }
 
   release.published = true;
+  emitAfterSuccessfulAction({
+    type: "release_published",
+    entityId: release.id,
+    data: { releaseId: release.id, slug: release.slug, durable: false }
+  });
   const row = getCatalogRows({ includeUnpublished: true }).find((releaseRow) => releaseRow.release.id === id);
   return row
     ? {

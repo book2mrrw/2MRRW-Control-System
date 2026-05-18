@@ -1,5 +1,5 @@
 import { fail, ok, parseJson, requireAdmin } from "@/server/http";
-import { circleEventTypes, createCircleEvent } from "@/server/community/circleEventService";
+import { circleEventTypes, createCircleEventDurable } from "@/server/community/circleEventService";
 import { z } from "zod";
 
 const circleEventSchema = z.object({
@@ -16,7 +16,7 @@ const circleEventSchema = z.object({
 export async function POST(request: Request) {
   try {
     requireAdmin(request);
-    return ok(createCircleEvent(await parseJson(request, circleEventSchema)));
+    return ok(await createCircleEventDurable(await parseJson(request, circleEventSchema)));
   } catch (error) {
     return fail(error instanceof Error ? error.message : "Invalid Circle event request", 400);
   }

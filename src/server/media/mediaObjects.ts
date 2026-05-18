@@ -64,11 +64,17 @@ export type ReleaseMediaObject = {
   products?: Array<{
     id: string;
     slug: string;
+    productSlug: string;
     title: string;
     priceCents?: number | null;
+    priceLabel?: string | null;
     currency?: string | null;
+    stripePriceId?: string | null;
   }>;
   price?: number;
+  priceCents?: number | null;
+  priceLabel?: string | null;
+  productSlug?: string | null;
   tracks: TrackMediaObject[];
   entitlement: EntitlementSummary;
   playback: {
@@ -107,6 +113,15 @@ type MediaObjectInput = {
   savedReleaseIds?: string[];
   playback?: PlaybackSource;
 };
+
+function formatPriceLabel(priceCents?: number | null, currency = "usd") {
+  if (typeof priceCents !== "number" || priceCents < 0) return null;
+
+  return new Intl.NumberFormat("en-US", {
+    style: "currency",
+    currency: currency || "usd"
+  }).format(priceCents / 100);
+}
 
 export function classifyMediaAsset(asset: Pick<MediaAssetSource, "path" | "ownerType">): MediaAssetContract["kind"] {
   if (asset.path.startsWith("artwork/")) return "artwork";
@@ -210,6 +225,9 @@ export function buildReleaseMediaObject(input: MediaObjectInput): ReleaseMediaOb
   const canStream = trackEntitlements.some((entitlement) => entitlement.canStream);
   const canDownload = trackEntitlements.some((entitlement) => entitlement.canDownload);
   const firstPricedProduct = input.products?.find((product) => typeof product.priceCents === "number" && product.priceCents >= 0);
+  const priceCents = firstPricedProduct?.priceCents ?? null;
+  const currency = firstPricedProduct?.currency ?? "usd";
+  const priceLabel = formatPriceLabel(priceCents, currency);
 
   return {
     id: input.release.id,
@@ -223,7 +241,10 @@ export function buildReleaseMediaObject(input: MediaObjectInput): ReleaseMediaOb
     artworkAssetId: artwork?.id,
     artwork: artwork ? toMediaAssetContract(artwork) : undefined,
     products: input.products,
-    price: firstPricedProduct ? (firstPricedProduct.priceCents ?? 0) / 100 : undefined,
+    productSlug: firstPricedProduct?.productSlug ?? firstPricedProduct?.slug ?? null,
+    price: typeof priceCents === "number" ? priceCents / 100 : undefined,
+    priceCents,
+    priceLabel,
     tracks,
     entitlement: {
       canStream,
