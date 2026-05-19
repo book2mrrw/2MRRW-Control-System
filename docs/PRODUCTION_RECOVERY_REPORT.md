@@ -2,7 +2,7 @@
 
 **Date:** 2026-05-19  
 **Production URL:** https://2-mrrw-control-system.vercel.app  
-**Status:** STABILIZED (post-deploy smoke required)
+**Status:** STABILIZED (UI shell recovered; Supabase-backed routes still timing out on prod — investigate separately)
 
 ## Problem
 
@@ -40,16 +40,19 @@ Root layout blocked every request on `buildControlCatalogPayload()` (full catalo
 npx vercel --prod --yes
 ```
 
-## Post-deploy smoke
+## Post-deploy smoke (2026-05-19, deploy `dpl_Cibak7yBMuwzX3Jw9WxbsGCJ6F8W`)
 
-```bash
-BASE=https://2-mrrw-control-system.vercel.app
-curl --max-time 20 -sS -o /dev/null -w "%{http_code} %{time_total}s\n" "$BASE/api/health/basic"
-curl --max-time 20 -sS -o /dev/null -w "%{http_code} %{time_total}s\n" "$BASE/api/health/db"
-curl --max-time 20 -sS -o /dev/null -w "%{http_code} %{time_total}s\n" "$BASE/api/health/storage"
-curl --max-time 20 -sS -o /dev/null -w "%{http_code} %{time_total}s\n" "$BASE/api/public/releases?limit=5"
-curl --max-time 20 -sS -o /dev/null -w "%{http_code} %{time_total}s\n" -I "$BASE/media"
-```
+| Endpoint | HTTP | Total time |
+|----------|------|------------|
+| `/api/health/basic` | 200 | **0.20s** |
+| `/api/health/db` | timeout | >15s |
+| `/api/health/storage` | timeout | >15s |
+| `/api/public/releases?limit=5` | timeout | >25s |
+| `/media` (HEAD) | 200 | **0.34s** |
+| `/api/health` (legacy) | timeout | >25s |
+
+**Deploy URL:** https://2-mrrw-control-system.vercel.app  
+**Commit:** `84d5e6e`
 
 ## Follow-up
 
