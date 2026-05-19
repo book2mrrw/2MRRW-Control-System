@@ -5,6 +5,7 @@ import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } fro
 import { MediaUploadPanel } from "@/components/control/MediaUploadPanel";
 import type { ControlUiRelease, DurableCatalogRelease, DurableCatalogTrack, ReleaseLiveStatus } from "@/services/catalog/controlCatalogClient";
 import { ScheduledCountdown } from "@/components/control/ReleaseScheduleSection";
+import { formatWhen } from "@/lib/formatWhen";
 import { liveStatusBadgeLabel, liveStatusCssClass } from "@/services/catalog/releaseLiveStatusClient";
 import {
   addReleaseTrack,
@@ -54,13 +55,6 @@ function releaseDraft(release: DurableCatalogRelease) {
     title: release.title,
     tracks: release.tracks.map((track) => ({ id: track.id, title: track.title, position: track.position }))
   };
-}
-
-function formatWhen(value?: string | null) {
-  if (!value) return "—";
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return value;
-  return date.toLocaleString(undefined, { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" });
 }
 
 function syncDirtyForRelease(rows: SyncStateRow[], releaseId: string) {
@@ -716,7 +710,7 @@ export function ReleaseManagementSection({
                 <div className="media-sync-rc-info">
                   <strong>{ui.title}</strong>
                   {liveStatus === "scheduled" ? <ScheduledCountdown scheduledPublishAt={release.scheduledPublishAt} /> : null}
-                  <time className="media-sync-rc-updated" dateTime={release.updatedAt ?? undefined}>
+                  <time className="media-sync-rc-updated" dateTime={release.updatedAt ?? undefined} suppressHydrationWarning>
                     {formatWhen(release.updatedAt ?? ui.updatedAt)}
                   </time>
                 </div>

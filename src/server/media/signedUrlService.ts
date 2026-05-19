@@ -1,3 +1,4 @@
+import { artworkPublicFallbackUrl } from "@/server/media/artworkPublicFallback";
 import { getServerSupabase } from "@/server/supabase/client";
 import { assertCanAccessMedia } from "@/server/media/mediaAssetService";
 import { classifyMediaAsset } from "@/server/media/mediaObjects";
@@ -197,6 +198,10 @@ export async function createSignedMediaUrl(
     .createSignedUrl(signableAsset.path, 300);
 
   if (error || !data?.signedUrl) {
+    const fallback = artworkPublicFallbackUrl(signableAsset.path);
+    if (fallback) {
+      return { ok: true as const, url: fallback, expiresIn: 300, mocked: false, fallback: true as const };
+    }
     return { ok: false as const, status: 502, message: error?.message ?? "Unable to create signed URL" };
   }
 

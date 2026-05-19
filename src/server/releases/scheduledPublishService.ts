@@ -84,6 +84,24 @@ export async function persistReleaseSchedule(
   return { persisted: true as const };
 }
 
+export async function persistReleaseUnpublish(releaseId: string) {
+  const supabase = getServerSupabase();
+  if (!supabase) return { persisted: false as const, error: "Supabase unavailable" };
+
+  const { error } = await supabase
+    .from("releases")
+    .update({
+      status: "draft",
+      scheduled_publish_at: null,
+      schedule_last_error: null,
+      schedule_attempts: 0
+    })
+    .eq("id", releaseId);
+
+  if (error) return { persisted: false as const, error: error.message };
+  return { persisted: true as const };
+}
+
 export function buildSchedulePayload(parts: ScheduleParts) {
   if (!scheduleIsInFuture(localScheduleToUtcIso(parts))) {
     throw new Error("Schedule must be in the future");

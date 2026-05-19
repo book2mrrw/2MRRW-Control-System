@@ -1,6 +1,6 @@
 import type { ScheduleParts } from "@/lib/scheduling/releaseScheduleTime";
 import { artists } from "@/server/data/seedData";
-import { buildSchedulePayload, persistReleaseSchedule } from "@/server/releases/scheduledPublishService";
+import { buildSchedulePayload, persistReleaseSchedule, persistReleaseUnpublish } from "@/server/releases/scheduledPublishService";
 import { emitAfterSuccessfulAction } from "@/server/events/eventedWriteService";
 import { persistSyncEvent } from "@/server/events/syncEventPersistenceService";
 import { rememberContributorFromCredit, rememberReleaseMetadata } from "@/server/release-management/contributorDirectoryService";
@@ -1305,7 +1305,7 @@ export async function scheduleReleaseDraft(releaseId: string, parts: SchedulePar
   };
 }
 
-export function unpublishReleaseDraft(releaseId: string) {
+export async function unpublishReleaseDraft(releaseId: string) {
   const draft = getDraftOrThrow(releaseId);
   if (draft.status !== "published" && draft.status !== "scheduled") {
     throw new Error("Only published or scheduled releases can be unpublished");
@@ -1317,6 +1317,10 @@ export function unpublishReleaseDraft(releaseId: string) {
   draft.updatedAt = nowIso();
   draft.saveState = "synced";
   refreshLifecycleFields(draft);
+  const persisted = await persistReleaseUnpublish(releaseId);
+  if (!persisted.persisted) {
+    throw new Error(persisted.error ?? "Could not unpublish release in database");
+  }
   recordReleaseRevision({
     releaseId,
     kind: "status_change",
@@ -1328,7 +1332,7 @@ export function unpublishReleaseDraft(releaseId: string) {
   emitAfterSuccessfulAction({
     type: "release.updated",
     entityId: releaseId,
-    data: { releaseId, status: draft.status, visibilityState: draft.visibilityState, durable: false }
+    data: { releaseId, status: draft.status, visibilityState: draft.visibilityState, durable: true }
   });
   return draft;
 }

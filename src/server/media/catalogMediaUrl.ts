@@ -1,19 +1,17 @@
 import "server-only";
 
+import { artworkPublicFallbackUrl, frontendPublicBaseUrl } from "@/server/media/artworkPublicFallback";
 import { createSignedMediaUrl } from "@/server/media/signedUrlService";
 import type { MediaAssetContract } from "@/server/media/mediaObjects";
 
-const DEFAULT_FRONTEND_PUBLIC_BASE =
-  process.env.ARTIST_PLATFORM_PUBLIC_URL ??
-  process.env.NEXT_PUBLIC_FRONTEND_URL ??
-  "https://2mrrw-official.vercel.app";
+export { artworkPublicFallbackUrl } from "@/server/media/artworkPublicFallback";
 
 export function publicPathToUrl(storagePath: string) {
   if (/^https?:\/\//i.test(storagePath)) return storagePath;
   if (storagePath.startsWith("/")) {
-    return `${DEFAULT_FRONTEND_PUBLIC_BASE.replace(/\/$/, "")}${storagePath}`;
+    return `${frontendPublicBaseUrl()}${storagePath}`;
   }
-  return null;
+  return artworkPublicFallbackUrl(storagePath);
 }
 
 export async function resolveCatalogMediaUrl(
@@ -26,12 +24,13 @@ export async function resolveCatalogMediaUrl(
     if (publicUrl) return publicUrl;
   }
 
-  if (!assetId) return null;
+  if (!assetId) return artworkPublicFallbackUrl(storagePath);
 
   const signed = await createSignedMediaUrl(null, assetId, {
     studioBypass: options.studioBypass ?? true,
     publicKinds: options.publicKinds
   });
 
-  return signed.ok ? signed.url : publicPathToUrl(storagePath ?? "") ?? null;
+  if (signed.ok) return signed.url;
+  return artworkPublicFallbackUrl(storagePath) ?? publicPathToUrl(storagePath ?? "") ?? null;
 }

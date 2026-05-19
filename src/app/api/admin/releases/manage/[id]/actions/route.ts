@@ -52,7 +52,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
     if (input.action === "undo") return ok(undoLastReleaseChange(id));
     if (input.action === "publish_dry_run") return ok(dryRunReleasePublish(id));
     if (input.action === "mark_for_deletion") return ok(markReleaseForDeletion(id));
-    if (input.action === "unpublish") return ok(unpublishReleaseDraft(id));
+    if (input.action === "unpublish") return ok(await unpublishReleaseDraft(id));
     if (input.action === "duplicate") {
       const draft = duplicateReleaseDraft(id);
       return ok({ id: draft.id, slug: draft.slug, title: draft.title });

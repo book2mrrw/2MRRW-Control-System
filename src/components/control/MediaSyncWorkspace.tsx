@@ -20,6 +20,7 @@ import {
 import { useMediaSync } from "@/hooks/sync/useMediaSync";
 import { useUploadQueue } from "@/hooks/sync/useUploadQueue";
 import { coverArtHints, detectMediaKind, pickCardVisual } from "@/lib/media/mediaVisual";
+import { formatWhen } from "@/lib/formatWhen";
 import { ReleaseManagementSection } from "@/components/control/MediaSyncReleaseStudio";
 
 type DraftTrack = { id: string; title: string; position: number };
@@ -63,13 +64,6 @@ function releaseDraft(release: DurableCatalogRelease): StudioDraft {
 
 function globalDraft(label: string): StudioDraft {
   return { id: `global-${label}`, title: label, tracks: [] };
-}
-
-function formatWhen(value?: string | null) {
-  if (!value) return "—";
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return value;
-  return date.toLocaleString(undefined, { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" });
 }
 
 function singlesFilter(release: DurableCatalogRelease) {

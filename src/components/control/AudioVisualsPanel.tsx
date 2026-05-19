@@ -6,6 +6,7 @@ import { useCallback, useEffect, useRef, useState, type DragEvent, type FormEven
 import { MediaUploadPanel } from "@/components/control/MediaUploadPanel";
 import { controlToneStyle } from "@/design/tokens";
 import { detectMediaKind } from "@/lib/media/mediaVisual";
+import { formatWhen } from "@/lib/formatWhen";
 
 type AudioVisual = {
   id: string;
@@ -69,13 +70,6 @@ function embedSourceLabel(visual: AudioVisual) {
   if (typeof meta.embedSource === "string") return meta.embedSource;
   if (typeof meta.source === "string") return meta.source;
   return visual.youtubeVideoId ? "youtube" : "file";
-}
-
-function formatWhen(value?: string | null) {
-  if (!value) return "—";
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return value;
-  return date.toLocaleString(undefined, { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" });
 }
 
 function syncStatusLabel(visual: AudioVisual) {
