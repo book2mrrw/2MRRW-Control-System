@@ -3,7 +3,56 @@
 **Audit date:** 2026-05-19  
 **Production URL:** https://2-mrrw-control-system.vercel.app  
 **Media Control Room:** https://2-mrrw-control-system.vercel.app/media  
-**Latest deploy:** `dpl_EunR5oGxYerdxd6kUp1CagRQF6qZ` (prod alias active)
+**Latest deploy:** `dpl_GvULKn8bU9x8zF3JVQQBEG8oX31j` (prod alias active)  
+**PR:** https://github.com/book2mrrw/2MRRW-Control-System/pull/2 (merged)
+
+---
+
+## Cron precision (Hobby vs Pro)
+
+| Plan | `vercel.json` schedule | Behavior |
+|------|------------------------|----------|
+| **Hobby** (current) | `0 6 * * *` | Auto-publish runs once daily at **06:00 UTC**. Due releases within the last 24h are processed in that run. |
+| **Pro** | Change to `*/5 * * * *` | Auto-publish every 5 minutes (near-exact drop times). Redeploy after editing `vercel.json`. |
+
+**Precise drop on Hobby (recommended):** at the scheduled UTC instant, run:
+
+```bash
+# CRON_SECRET lives in Vercel Production env only — pull locally: vercel env pull
+curl -sS -H "Authorization: Bearer $CRON_SECRET" \
+  "https://2-mrrw-control-system.vercel.app/api/cron/scheduled-releases"
+```
+
+Expect JSON like `{"due":1,"results":[{"ok":true,"status":"published"}]}`. Then confirm the release on `/api/public/releases` and **LIVE** badge in Media Control Room.
+
+---
+
+## Go-live execution (2026-05-19)
+
+| # | Task | Status | Result |
+|---|------|--------|--------|
+| 1 | Migration `0017_release_scheduling` on prod Supabase | **DONE** | Applied via Supabase MCP (`release_scheduling`). Columns: `release_time`, `publish_timezone`, `schedule_attempts`, `schedule_last_error`. |
+| 2 | `CRON_SECRET` in Vercel production | **DONE** | Rotated via `vercel env rm/add` + redeploy `dpl_GvULKn8bU9x8zF3JVQQBEG8oX31j`. Value only in Vercel (not in repo). |
+| 3 | Cron schedule | **DONE** | `vercel.json`: `0 6 * * *` (Hobby daily). **Pro:** use `*/5 * * * *`. **Precise drops:** manual `curl -H "Authorization: Bearer $CRON_SECRET" https://2-mrrw-control-system.vercel.app/api/cron/scheduled-releases` |
+| 4 | Scheduled drop E2E test | **DONE** | `hour-glass` set `scheduled` → hidden from public (8/9). Cron fired (`due:1`, `ok:true`). Fixed `clearScheduleFailure` to set `status=published` in DB; public API restored 9/9. |
+| 5 | artist-platform API URL | **DONE** | `.env.example` already set. Local `.env.local` updated with `NEXT_PUBLIC_CONTROL_SYSTEM_API_URL`. Smoke: releases/hero/audio-visuals OK. |
+| 6 | Production `/media` ops | **DONE** | 9/9 releases `coverUrl` on public API. All have `cover_links=1` in DB. `sync_state`: catalog clean (not dirty). |
+| 7 | Git commit + PR | **DONE** | [PR #2](https://github.com/book2mrrw/2MRRW-Control-System/pull/2) merged to `main` |
+| 8 | Production redeploy | **DONE** | Control: `dpl_GvULKn8bU9x8zF3JVQQBEG8oX31j`. artist-platform: `dpl_F7mLzQPfpkC7DY64p8aYRFepu2hk` |
+| 9 | artist-platform Vercel env | **DONE** | `NEXT_PUBLIC_CONTROL_SYSTEM_API_URL` already on Production (encrypted) |
+
+### CRON_SECRET — Vercel dashboard (if re-setting)
+
+1. [Vercel](https://vercel.com) → **2-mrrw-control-system** → **Settings** → **Environment Variables**
+2. Add `CRON_SECRET` = long random string (32+ chars), environments **Production** (+ Preview optional)
+3. **Redeploy** production (env vars apply on next deploy)
+
+### Manual cron trigger (precise drop)
+
+```bash
+curl -sS -H "Authorization: Bearer $CRON_SECRET" \
+  "https://2-mrrw-control-system.vercel.app/api/cron/scheduled-releases"
+```
 
 ---
 
@@ -17,6 +66,7 @@
 | `media_assets` | 71 |
 | `hero_config` rows | 1 (`homepage`) |
 | `tracks.lyrics_text` column | applied |
+| `0017` scheduling columns | applied |
 
 ---
 
@@ -56,7 +106,7 @@
 |------|--------|-------|
 | Glassmorphism on `media-sync-*` only | **PASS** | Enhanced backdrop blur on workspace, selected cards, inspector, asset panels, overflow menu. No global redesign. |
 | Live release status badges (Singles / Albums / Features carousels) | **PASS** | `/api/admin/catalog` exposes `liveStatus` + `liveStatusReasons` from `releaseLiveStatusEngine` (DB status, `sync_state`, cover/audio, `release_media` routing). Carousel cards show scoped `.media-sync-status-*` badges + last updated. |
-| Global release scheduling + auto-publish cron | **PASS** | Migration `0017_release_scheduling.sql` (`publish_timezone`, `release_time`, retry fields). UI: `ReleaseScheduleSection` on Review + Creator flow. API: `POST .../schedule`. Cron: `vercel.json` → `/api/cron/scheduled-releases` daily 06:00 UTC (`CRON_SECRET`; use `*/5 * * * *` on Vercel Pro for sub-hour precision). Public API hides non-published / future scheduled. |
+| Global release scheduling + auto-publish cron | **PASS** | Migration `0017` + schedule UI + cron endpoint. Hobby cron daily 06:00 UTC; manual trigger for precise drops. |
 
 ---
 
@@ -66,20 +116,15 @@
 |------|--------|
 | `npm run verify` | **PASS** |
 | `npm run build` | **PASS** |
-| `npx vercel --prod --yes` | **PASS** → https://2-mrrw-control-system.vercel.app (`dpl_EunR5oGxYerdxd6kUp1CagRQF6qZ`) |
+| `npx vercel --prod --yes` | **PASS** → https://2-mrrw-control-system.vercel.app (`dpl_GvULKn8bU9x8zF3JVQQBEG8oX31j`) |
 
 ---
 
 ## Production smoke (curl)
 
 ```bash
-# 9 releases with artwork + coverUrl
 curl -s "https://2-mrrw-control-system.vercel.app/api/public/releases?limit=100"
-
-# Hero config (seeded)
 curl -s "https://2-mrrw-control-system.vercel.app/api/public/hero"
-
-# 3 audio visuals
 curl -s "https://2-mrrw-control-system.vercel.app/api/public/audio-visuals"
 ```
 
@@ -87,30 +132,17 @@ curl -s "https://2-mrrw-control-system.vercel.app/api/public/audio-visuals"
 
 ## Still open (post go-live)
 
-1. ~~**Supabase migration gap**~~ — **CLOSED** (prod: 67 `release_media`, 9/9 primary cover_art; migrations through 0016 applied).
-2. ~~**Hero media**~~ — **CLOSED** (`hero_config` seeded; `/api/public/hero` returns JSON).
-3. ~~**Publish readiness**~~ — **CLOSED** for frontend-import releases with cover+audio in DB (readiness auto-pass + publish hydrates from Supabase).
-4. ~~**Lyrics durable storage**~~ — **CLOSED** (`tracks.lyrics_text` migration 0014; session + track PATCH persist; public track contract exposes `lyricsText`).
-5. ~~**artist-platform**~~ — **CLOSED** (`.env.example` has API URL; `/api/releases` CORS includes artist-platform; hooks unchanged).
-6. **Inspector sync log** — stub; full event stream not implemented.
-7. **Audio visual auto-map** — title→release heuristic still manual.
+1. **Inspector sync log** — stub; full event stream not implemented.
+2. **Audio visual auto-map** — title→release heuristic still manual.
+3. ~~**Cron publish DB status**~~ — **CLOSED** (merged + deployed `clearScheduleFailure` fix).
 
 ---
 
 ## Files changed (go-live blockers pass)
 
-- `src/server/release-management/releaseMediaLinkService.ts` — cover_art primary before background_loop
-- `src/lib/catalog/releaseLiveStatus.ts` — shared live/scheduled/draft/sync_error derivation
-- `src/server/catalog/releaseLiveStatusEngine.ts` — catalog sync_state batch + server wrapper
-- `src/server/catalog/controlCatalogPayload.ts` — cover/loop from `release_media` fallback + `lyricsText` + `liveStatus`
-- `src/server/catalog/releaseCatalogService.ts` — `lyrics_text` on tracks
-- `src/services/catalog/controlCatalogClient.ts` — `published` → Live UI; `lyricsText` type
-- `src/server/release-management/releaseManagementService.ts` — imported readiness bypass without pre-published status
-- `src/server/releases/releaseService.ts` — publish hydrates draft; imported media bypass
-- `src/server/release-management/releaseCatalogHydrationService.ts` — export `hydrateDraftFromCatalogRelease`
-- `src/app/api/admin/releases/manage/[id]/session/route.ts` — persist lyrics without `cloudSynced` gate
-- `src/db/migrations/0015_hero_config_seed.sql` — hero upsert
-- `src/db/migrations/0016_release_media_backfill.sql` — idempotent media_assets → release_media backfill
-- `MEGA_GO_LIVE_CHECKLIST.md` — production counts updated
-
-**No git commit** (per request).
+- `src/lib/catalog/releaseLiveStatus.ts` — live/scheduled/draft/sync_error derivation
+- `src/server/releases/scheduledPublishService.ts` — cron auto-publish + DB status fix
+- `src/components/control/MediaSyncWorkspace.tsx` — Media Control Room
+- `src/components/control/ReleaseScheduleSection.tsx` — global drop scheduler UI
+- `vercel.json` — daily cron
+- `src/db/migrations/0017_release_scheduling.sql` — scheduling columns
