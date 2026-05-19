@@ -128,6 +128,7 @@ Checkpoints are **not** deleted when rolling back to foundation. Never force-upd
 
 ## Related
 
+- [`HUMAN_RECOVERY_COMMAND_MANUAL.md`](HUMAN_RECOVERY_COMMAND_MANUAL.md) — Section 3B: all 20 operator scenarios with exact commands
 - [`FOUNDATION_TAG_DISCIPLINE.md`](FOUNDATION_TAG_DISCIPLINE.md)
 - [`OPERATIONAL_PHILOSOPHY.md`](OPERATIONAL_PHILOSOPHY.md)
 - [`CHECKPOINT_WORKFLOW.md`](CHECKPOINT_WORKFLOW.md)

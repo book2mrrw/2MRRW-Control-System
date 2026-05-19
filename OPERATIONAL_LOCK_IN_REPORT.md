@@ -14,6 +14,7 @@
 | Foundation tags | Backend `foundation-stable-v1`; frontend `foundation-stable-v1` on `ce6ae20` + branch `frontend-stable-foundation` |
 | Rollback lineage | Annotated checkpoint tags; fail-if-exists; manifests append-only |
 | Milestone recall | `2MRRW_RECOVERY_SYSTEM/RECOVERY_GUIDES/MILESTONE_RECOVERY_RECALL.md` |
+| Human command manual | `2MRRW_RECOVERY_SYSTEM/RECOVERY_GUIDES/HUMAN_RECOVERY_COMMAND_MANUAL.md` |
 | Recovery bundle | `LOCKFILES/`, `ENVIRONMENT_BACKUPS/` verified present |
 
 ## New npm commands
@@ -44,6 +45,7 @@
 | Platform checkpoint script | `scripts/run-platform-foundation-checkpoint.sh` |
 | Platform manifests | `2MRRW_RECOVERY_SYSTEM/FOUNDATION_SNAPSHOTS/platform-checkpoint-*.md` |
 | Milestone recall | `2MRRW_RECOVERY_SYSTEM/RECOVERY_GUIDES/MILESTONE_RECOVERY_RECALL.md` |
+| Human command manual (Section 3B) | `2MRRW_RECOVERY_SYSTEM/RECOVERY_GUIDES/HUMAN_RECOVERY_COMMAND_MANUAL.md` |
 | Tag discipline | `2MRRW_RECOVERY_SYSTEM/RECOVERY_GUIDES/FOUNDATION_TAG_DISCIPLINE.md` |
 | Philosophy | `2MRRW_RECOVERY_SYSTEM/RECOVERY_GUIDES/OPERATIONAL_PHILOSOPHY.md` |
 | Frontend tag strategy | `artist-platform/docs/foundation/FRONTEND_FOUNDATION_TAG_STRATEGY.md` |
