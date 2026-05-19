@@ -1,5 +1,7 @@
 import type { ScheduleParts } from "@/lib/scheduling/releaseScheduleTime";
+import { fetchDurableReleaseById } from "@/server/catalog/releaseCatalogService";
 import { artists } from "@/server/data/seedData";
+import { hydrateDraftFromCatalogRelease } from "@/server/release-management/releaseCatalogHydrationService";
 import { buildSchedulePayload, persistReleaseSchedule, persistReleaseUnpublish } from "@/server/releases/scheduledPublishService";
 import { emitAfterSuccessfulAction } from "@/server/events/eventedWriteService";
 import { persistSyncEvent } from "@/server/events/syncEventPersistenceService";
@@ -295,6 +297,16 @@ function getDraftOrThrow(id: string) {
   }
 
   return draft;
+}
+
+/** Hydrate in-memory draft from Supabase when studio opens a catalog release (serverless cold start). */
+export async function ensureDraftHydratedFromCatalog(releaseId: string) {
+  if (getReleaseDraft(releaseId)) return;
+  const release = await fetchDurableReleaseById(releaseId);
+  if (!release) {
+    throw new Error("Release draft not found");
+  }
+  hydrateDraftFromCatalogRelease(release);
 }
 
 function summarizeDraftForReadiness(draft: ReleaseManagementDraft) {
@@ -1228,6 +1240,7 @@ export function recoverReleaseDraft(releaseId: string) {
 }
 
 export async function scheduleReleaseDraft(releaseId: string, parts: ScheduleParts) {
+  await ensureDraftHydratedFromCatalog(releaseId);
   const draft = getDraftOrThrow(releaseId);
   const readiness = getReadinessSummary(releaseId);
   const importedWithMedia =

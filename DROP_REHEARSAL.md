@@ -39,3 +39,11 @@ curl -sS https://2-mrrw-control-system.vercel.app/api/health | jq .
 ```
 
 Look for `"status":"ok"`, `catalog.publishedReleases`, and `storage` not stuck on fallback-only if bucket backfill completed.
+
+## Rehearsal log (2026-05-19)
+
+| Step | Result |
+|------|--------|
+| Schedule `artificial` (due in past) | Public API 8/9 |
+| GitHub Action `scheduled-releases.yml` | `artificial` → `published`, public API 9/9 |
+| `/media` | **Live Artificial** badge |

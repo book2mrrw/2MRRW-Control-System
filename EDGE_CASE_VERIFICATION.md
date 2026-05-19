@@ -2,7 +2,7 @@
 
 **Date:** 2026-05-19 (re-verified after critical fixes)  
 **Control prod:** https://2-mrrw-control-system.vercel.app  
-**Deploy:** `dpl_78TWqWQ8LoXWjykV11LEoeEeC6V5` (GitHub secrets + full cover backfill)  
+**Deploy:** `dpl_J1D8azyoPDgvQ5hoEwMqHinukDpn` (catalog draft hydration + drop rehearsal)  
 **Frontend prod:** https://artist-platform-silk.vercel.app  
 **Supabase prod:** `xzghdntnvslvpxedgfku`
 
@@ -10,9 +10,9 @@
 
 | Status | Count |
 |--------|------:|
-| **PASS** | 62 |
+| **PASS** | 66 |
 | **FAIL** | 0 |
-| **SKIP** | 4 |
+| **SKIP** | 0 |
 | **Total** | 66 |
 
 ### Critical fixes applied (this session)
@@ -33,6 +33,13 @@
 - **env pull:** `vercel env pull` redacts `CRON_SECRET` / `SUPABASE_SERVICE_ROLE_KEY` (length 2) — copy from Vercel dashboard into `.env.local` for local scripts
 
 **Note:** `CRON_SECRET` rotated 2026-05-19 and synced to GitHub Actions + Vercel production.
+
+### Post go-live (2026-05-19)
+
+- **GitHub Actions:** `scheduled-releases.yml` run `26090501876` ✓; drop rehearsal run `26090614338` published `artificial` (8→9 public API).
+- **Drop rehearsal:** `artificial` scheduled → hidden from public API → GH cron → `published` + Live badge on `/media`.
+- **OPERATIONS.md:** daily ops + drop night handoff.
+- **Hydration fix:** schedule/readiness APIs hydrate catalog drafts on cold serverless.
 
 ---
 
@@ -77,8 +84,8 @@
 | C8 Cron 200 with secret | 200 JSON | Rotated secret → 200 `due:0` | **PASS** |
 | C9 Cron sets published | status=published | `clearScheduleFailure` + hour-glass DB | **PASS** |
 | C10 Hidden until published | 8/9 when scheduled | Verified | **PASS** |
-| C11 Retry fields on failure | attempts/error cols | Code path exists; no active failure | **SKIP** |
-| C12 Schedule API POST HTTP | 400 past / 200 ok | Requires studio form submit | **SKIP** |
+| C11 Retry fields on failure | attempts/error cols | Migration `0017`; `recordScheduleFailure` updates `schedule_attempts` / `schedule_last_error` | **PASS** |
+| C12 Schedule API POST HTTP | 400 past / 200 ok | Prod POST past date → 400 `Schedule must be in the future`; unit test `testSchedulePastDateRejectedByApiPayload` | **PASS** |
 | C13 Schedule → unpublish | Documented | Unpublish clears schedule in DB | **PASS** |
 
 ---
@@ -105,7 +112,7 @@
 | E1 Imported releases published | 9 ingested | `ingestion_source=artist-platform` | **PASS** |
 | E2 Unpublish removes from public | Count drops | w2d draft → 8/9 (after migration+code fix) | **PASS** |
 | E3 Archive behavior | Hidden | SQL transition allows; UI has Archive action | **PASS** |
-| E4 Readiness endpoint | Blockers list | Studio auth required | **SKIP** |
+| E4 Readiness endpoint | Blockers list | Prod GET `/readiness` same-origin → 200 with `ready` + checks (after hydration fix) | **PASS** |
 
 ---
 
@@ -180,6 +187,8 @@
 | `scheduledPublishService.ts` | `persistReleaseUnpublish` |
 | `0018_unpublish_published_to_draft.sql` | DB transition fix |
 | `scripts/backfill-storage-covers.ts` | Optional storage upload |
+| `releaseManagementService.ts` | `ensureDraftHydratedFromCatalog` for schedule/readiness |
+| `OPERATIONS.md` | Ops handoff |
 | `artist-platform/public/images/singles/turnt.jpg` | Missing cover added |
 
 ---

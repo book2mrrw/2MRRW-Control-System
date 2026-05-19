@@ -23,6 +23,7 @@ import { professionalAudioQualityTarget } from "@/services/media/audioSupport";
 import { resolveContentDestinations } from "@/services/sync/contentRouting";
 import { computeReleaseLiveStatus } from "@/lib/catalog/releaseLiveStatus";
 import { localScheduleToUtcIso, scheduleIsInFuture, utcIsoToScheduleParts } from "@/lib/scheduling/releaseScheduleTime";
+import { buildSchedulePayload } from "@/server/releases/scheduledPublishService";
 import { resolveMediaSyncRoute, sectionForAssetRole } from "@/services/sync/mediaSyncContract";
 import {
   buildMediaUploadPath,
@@ -865,6 +866,22 @@ function testPlaybackEventContract() {
   assert.equal(getReleaseBySlug(release.slug, { userId: "playback_contract_user" })?.tracks[0]?.playback.positionSeconds, 64);
 }
 
+function testSchedulePastDateRejectedByApiPayload() {
+  assert.throws(
+    () =>
+      buildSchedulePayload({
+        year: 2020,
+        month: 1,
+        day: 1,
+        hour12: 12,
+        minute: 0,
+        meridiem: "AM",
+        timezone: "America/Chicago"
+      }),
+    /future/i
+  );
+}
+
 function testReleaseScheduleUtcConversion() {
   const utc = localScheduleToUtcIso({
     year: 2026,
@@ -978,6 +995,7 @@ testPublishPropagatesToExperienceReads();
 testNotReadyReleaseDoesNotPublish();
 testLibraryUsesSharedMediaContract();
 testPlaybackEventContract();
+testSchedulePastDateRejectedByApiPayload();
 testReleaseScheduleUtcConversion();
 testReleaseLiveStatusEngine();
 testReleaseTypeFiltering();
