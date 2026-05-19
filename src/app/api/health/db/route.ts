@@ -1,5 +1,5 @@
 import { ok } from "@/server/http";
-import { getServerSupabase } from "@/server/supabase/client";
+import { assertSupabaseServiceRoleKeyConfigured, getServerSupabase } from "@/server/supabase/client";
 import { SUPABASE_FETCH_TIMEOUT_MS } from "@/server/supabase/fetchWithTimeout";
 
 const HEALTH_DB_TIMEOUT_MS = Math.min(SUPABASE_FETCH_TIMEOUT_MS, 10_000);
@@ -22,6 +22,19 @@ function withTimeout<T>(promise: Promise<T>, timeoutMs: number, label: string): 
 
 export async function GET() {
   const started = Date.now();
+  const keyCheck = assertSupabaseServiceRoleKeyConfigured();
+  if (!keyCheck.ok) {
+    return ok(
+      {
+        ok: false,
+        timestamp: new Date().toISOString(),
+        timingMs: Date.now() - started,
+        message: keyCheck.message
+      },
+      { status: 503 }
+    );
+  }
+
   const supabase = getServerSupabase();
 
   if (!supabase) {

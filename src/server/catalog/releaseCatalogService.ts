@@ -209,11 +209,11 @@ async function fetchScopedMediaAssets(
 }
 
 export async function fetchDurableReleaseCatalog(): Promise<CatalogRelease[]> {
-  // [recovery-timing] remove after stabilization
-  console.time("[recovery-timing] fetchDurableReleaseCatalog");
+  console.log("[stabilize] fetchDurableReleaseCatalog start");
+  const started = Date.now();
   const supabase = getServerSupabase();
   if (!supabase) {
-    console.timeEnd("[recovery-timing] fetchDurableReleaseCatalog");
+    console.log("[stabilize] fetchDurableReleaseCatalog skipped (no supabase)", { ms: Date.now() - started });
     return [];
   }
 
@@ -233,7 +233,7 @@ export async function fetchDurableReleaseCatalog(): Promise<CatalogRelease[]> {
       : primaryResult;
 
   if (releaseResult.error || !releaseResult.data?.length) {
-    console.timeEnd("[recovery-timing] fetchDurableReleaseCatalog");
+    console.log("[stabilize] fetchDurableReleaseCatalog empty", { ms: Date.now() - started });
     return [];
   }
 
@@ -375,8 +375,10 @@ export async function fetchDurableReleaseCatalog(): Promise<CatalogRelease[]> {
       musicVideo
     } satisfies CatalogRelease;
   });
-  // [recovery-timing] remove after stabilization
-  console.timeEnd("[recovery-timing] fetchDurableReleaseCatalog");
+  console.log("[stabilize] fetchDurableReleaseCatalog done", {
+    releases: catalog.length,
+    ms: Date.now() - started
+  });
   return catalog;
 }
 

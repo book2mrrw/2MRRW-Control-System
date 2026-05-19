@@ -186,12 +186,69 @@ function mapLegacyApiReleases(rows: unknown[]): DurableCatalogRelease[] {
   });
 }
 
+type PublicReleaseRow = {
+  id: string;
+  slug: string;
+  title: string;
+  releaseDate?: string;
+  releaseType?: string | null;
+  releaseCategory?: string | null;
+  status?: string;
+  coverUrl?: string | null;
+  loopUrl?: string | null;
+  primaryAsset?: ReleasePrimaryAsset | null;
+  artwork?: { id?: string; sourcePath?: string };
+  motionArtwork?: { id?: string; sourcePath?: string };
+  tracks?: Array<{ id: string; title: string; position: number; durationSeconds?: number }>;
+};
+
+function mapPublicReleasesToCatalog(rows: PublicReleaseRow[]): DurableCatalogRelease[] {
+  return rows.map((release) => {
+    const motionUrl = release.loopUrl ?? (release.primaryAsset?.type === "mp4" ? release.primaryAsset.src : null);
+    const posterUrl =
+      release.coverUrl && release.primaryAsset?.type !== "mp4" ? release.coverUrl : release.primaryAsset?.poster ?? release.coverUrl;
+    return {
+      id: release.id,
+      slug: release.slug,
+      title: release.title,
+      releaseDate: release.releaseDate,
+      releaseType: release.releaseType ?? undefined,
+      releaseCategory: release.releaseCategory ?? undefined,
+      status: release.status ?? "published",
+      coverAssetId: release.artwork?.id,
+      coverUrl: posterUrl ?? release.coverUrl,
+      loopUrl: motionUrl,
+      motionUrl,
+      posterUrl: posterUrl ?? release.coverUrl,
+      primaryAsset: release.primaryAsset,
+      tracks: (release.tracks ?? []).map((track) => ({
+        id: track.id,
+        title: track.title,
+        position: track.position,
+        durationSeconds: track.durationSeconds ?? 0
+      }))
+    };
+  });
+}
+
+async function fetchPublicCatalogReleases() {
+  const response = await fetch("/api/public/releases?limit=100", { cache: "no-store" });
+  if (!response.ok) return [];
+  const payload = (await response.json()) as { data?: { releases?: PublicReleaseRow[] } };
+  return mapPublicReleasesToCatalog(payload.data?.releases ?? []);
+}
+
 export async function fetchControlCatalogReleases() {
   const response = await fetch("/api/admin/catalog", { cache: "no-store" });
   if (response.ok) {
     const payload = (await response.json()) as { data?: DurableCatalogRelease[] };
-    return payload.data ?? [];
+    const rows = payload.data ?? [];
+    if (rows.length) return rows;
   }
+
+  const publicRows = await fetchPublicCatalogReleases();
+  if (publicRows.length) return publicRows;
+
   const fallback = await fetch("/api/releases?limit=100", { cache: "no-store" });
   if (!fallback.ok) return [];
   const payload = (await fallback.json()) as { data?: unknown[] };

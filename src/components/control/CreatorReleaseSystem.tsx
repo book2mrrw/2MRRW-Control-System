@@ -1476,6 +1476,7 @@ export function CreatorReleaseSystem({ initialCatalog = [] }: { initialCatalog?:
   const [page, setPage] = useState<Page>(() => pageFromPathname(pathname));
   const [collapsed, setCollapsed] = useState(false);
   const [catalog, setCatalog] = useState<DurableCatalogRelease[]>(initialCatalog);
+  const [catalogLoading, setCatalogLoading] = useState(initialCatalog.length === 0);
   const releases = useMemo(() => mapCatalogReleasesToUi(catalog), [catalog]);
   const releaseId = releaseIdFromPathname(pathname);
   const activeRelease = useMemo(() => catalog.find((release) => release.id === releaseId) ?? null, [catalog, releaseId]);
@@ -1488,18 +1489,24 @@ export function CreatorReleaseSystem({ initialCatalog = [] }: { initialCatalog?:
   useEffect(() => {
     if (initialCatalog.length || !isStudioRoute(pathname)) return;
     let cancelled = false;
-    void fetchControlCatalogReleases().then((rows) => {
-      if (!cancelled && rows.length) setCatalog(rows);
-    });
+    setCatalogLoading(true);
+    void fetchControlCatalogReleases()
+      .then((rows) => {
+        if (!cancelled) setCatalog(rows);
+      })
+      .finally(() => {
+        if (!cancelled) setCatalogLoading(false);
+      });
     return () => {
       cancelled = true;
     };
   }, [initialCatalog.length, pathname]);
 
   const refreshCatalog = useCallback(() => {
-    void fetchControlCatalogReleases().then((rows) => {
-      if (rows.length) setCatalog(rows);
-    });
+    setCatalogLoading(true);
+    void fetchControlCatalogReleases()
+      .then((rows) => setCatalog(rows))
+      .finally(() => setCatalogLoading(false));
   }, []);
 
   const [toast, setToast] = useState<StudioToast | null>(null);
@@ -1538,6 +1545,11 @@ export function CreatorReleaseSystem({ initialCatalog = [] }: { initialCatalog?:
         <TopBar title={pageTitle} onNewRelease={() => navigate("flow")} />
         <div className={`page active${page === "media" || page === "release-detail" ? " page-scroll" : ""}`} key={page}>
           <StudioToastBanner toast={toast} />
+          {catalogLoading && catalog.length === 0 ? (
+            <p className="catalog-loading-hint" style={{ padding: "12px 20px", fontSize: 13, color: "var(--tx3)" }}>
+              Loading release catalog…
+            </p>
+          ) : null}
           {page === "dashboard" ? <Dashboard onNewRelease={() => navigate("flow")} onNav={navigate} releases={releases} /> : null}
           {page === "releases" ? <Releases onNewRelease={() => navigate("flow")} releases={releases} onOpenRelease={openRelease} actions={releaseActions} /> : null}
           {page === "media" ? <MediaLibrary catalog={catalog} releases={releases} onOpenRelease={openRelease} actions={releaseActions} onUploadComplete={refreshCatalog} /> : null}

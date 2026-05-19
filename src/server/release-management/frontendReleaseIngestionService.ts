@@ -685,11 +685,13 @@ async function doHydrate() {
 }
 
 export async function ensureCatalogHydrated() {
+  console.log("[stabilize] ensureCatalogHydrated");
   if (!hydrationPromise) hydrationPromise = doHydrate();
   return hydrationPromise;
 }
 
 export async function ensureFrontendReleaseEcosystemImported() {
+  console.log("[stabilize] ensureFrontendReleaseEcosystemImported");
   if (!hydrationPromise) hydrationPromise = doHydrate();
   return hydrationPromise;
 }

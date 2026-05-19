@@ -160,37 +160,56 @@ async function canUsePersistedAsset(
   return userHasPersistedEntitlement(userId, context);
 }
 
+// Stabilization: cap concurrent Supabase sign calls to avoid storage API stampedes during catalog recovery.
+const MAX_CONCURRENT_SIGNS = 4;
+let activeSigns = 0;
+const signWaiters: Array<() => void> = [];
+
+async function withSignSlot<T>(work: () => Promise<T>): Promise<T> {
+  while (activeSigns >= MAX_CONCURRENT_SIGNS) {
+    await new Promise<void>((resolve) => signWaiters.push(resolve));
+  }
+  activeSigns += 1;
+  try {
+    return await work();
+  } finally {
+    activeSigns -= 1;
+    signWaiters.shift()?.();
+  }
+}
+
 export async function createSignedMediaUrl(
   userId: string | null | undefined,
   assetId: string,
   options: { publicKinds?: MediaAssetContract["kind"][]; studioBypass?: boolean } = {}
 ) {
-  // [recovery-timing] remove after stabilization
-  console.time(`[recovery-timing] createSignedMediaUrl:${assetId}`);
+  console.log("[stabilize] createSignedMediaUrl", { assetId });
+  const started = Date.now();
+  return withSignSlot(async () => {
   const access = assertCanAccessMedia(userId, assetId, {
     publicKinds: options.publicKinds,
     studioBypass: options.studioBypass
   });
   const persistedAsset = !access.asset ? await getPersistedMediaAsset(assetId) : null;
   if ((!access.allowed || !access.asset) && !persistedAsset) {
-    console.timeEnd(`[recovery-timing] createSignedMediaUrl:${assetId}`);
+    console.log("[stabilize] createSignedMediaUrl denied", { assetId, ms: Date.now() - started });
     return { ok: false as const, status: access.asset ? 403 : 404, message: access.reason };
   }
 
   if (persistedAsset && !(await canUsePersistedAsset(userId, persistedAsset, options))) {
-    console.timeEnd(`[recovery-timing] createSignedMediaUrl:${assetId}`);
+    console.log("[stabilize] createSignedMediaUrl entitlement", { assetId, ms: Date.now() - started });
     return { ok: false as const, status: 403, message: "Entitlement required" };
   }
 
   const supabase = getServerSupabase();
   const signableAsset = access.asset ?? persistedAsset;
   if (!signableAsset) {
-    console.timeEnd(`[recovery-timing] createSignedMediaUrl:${assetId}`);
+    console.log("[stabilize] createSignedMediaUrl missing", { assetId, ms: Date.now() - started });
     return { ok: false as const, status: 404, message: "Media asset not found" };
   }
 
   if (!supabase) {
-    console.timeEnd(`[recovery-timing] createSignedMediaUrl:${assetId}`);
+    console.log("[stabilize] createSignedMediaUrl mocked", { assetId, ms: Date.now() - started });
     return {
       ok: true as const,
       url: `https://signed.local/${signableAsset.bucket}/${signableAsset.path}?asset=${assetId}`,
@@ -206,13 +225,14 @@ export async function createSignedMediaUrl(
   if (error || !data?.signedUrl) {
     const fallback = artworkPublicFallbackUrl(signableAsset.path);
     if (fallback) {
-      console.timeEnd(`[recovery-timing] createSignedMediaUrl:${assetId}`);
+      console.log("[stabilize] createSignedMediaUrl fallback", { assetId, ms: Date.now() - started });
       return { ok: true as const, url: fallback, expiresIn: 300, mocked: false, fallback: true as const };
     }
-    console.timeEnd(`[recovery-timing] createSignedMediaUrl:${assetId}`);
+    console.log("[stabilize] createSignedMediaUrl error", { assetId, ms: Date.now() - started });
     return { ok: false as const, status: 502, message: error?.message ?? "Unable to create signed URL" };
   }
 
-  console.timeEnd(`[recovery-timing] createSignedMediaUrl:${assetId}`);
+  console.log("[stabilize] createSignedMediaUrl ok", { assetId, ms: Date.now() - started });
   return { ok: true as const, url: data.signedUrl, expiresIn: 300, mocked: false };
+  });
 }

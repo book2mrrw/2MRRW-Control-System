@@ -1,4 +1,5 @@
 import { buildReleasePrimaryAsset } from "@/lib/media/releasePrimaryAsset";
+import { buildStudioCatalogFallback } from "@/server/catalog/studioCatalogFallback";
 import { getLatestReleasesDurable } from "@/server/releases/releaseReadService";
 import { resolveCatalogMediaUrl } from "@/server/media/catalogMediaUrl";
 import { ok } from "@/server/http";
@@ -32,6 +33,26 @@ export async function GET(request: Request) {
   const limit = Number(url.searchParams.get("limit") ?? 100);
   const apiBase = process.env.NEXT_PUBLIC_APP_URL?.replace(/\/$/, "") ?? "https://2-mrrw-control-system.vercel.app";
   const releases = await getLatestReleasesDurable({ limit: Number.isFinite(limit) ? limit : 100 });
+  if (!releases.length) {
+    const fallback = buildStudioCatalogFallback().slice(0, Number.isFinite(limit) ? limit : 100);
+    const enriched = fallback.map((row) => ({
+      id: row.id,
+      slug: row.slug,
+      title: row.title,
+      artist: { id: "artist_2mrrw", name: row.artistName ?? "2MRRW", slug: "2mrrw" },
+      releaseDate: row.releaseDate ?? "2026-01-01",
+      releaseType: row.releaseType,
+      releaseCategory: row.releaseCategory ?? "album",
+      status: "published" as const,
+      coverUrl: row.posterUrl ?? row.coverUrl,
+      loopUrl: row.motionUrl ?? row.loopUrl,
+      primaryAsset: row.primaryAsset,
+      tracks: [],
+      entitlement: { canStream: true, canDownload: false, canAccessLyrics: false, requiredGrant: "none" as const },
+      playback: { totalDurationSeconds: 0, trackCount: 0, saved: false }
+    }));
+    return ok({ releases: enriched, count: enriched.length }, { headers: publicReadCorsHeaders(request) });
+  }
   const enriched = await Promise.all(
     releases.map(async (release) => {
       const resolvedCover = release.artwork
