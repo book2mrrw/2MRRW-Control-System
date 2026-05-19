@@ -11,7 +11,7 @@ const createDraftSchema = z.object({
   releaseType: z.enum(releaseTypes),
   title: z.string().optional(),
   artistName: z.string().optional(),
-  trackCount: z.number().int().positive().optional()
+  trackCount: z.number().int().nonnegative().optional()
 });
 
 export async function GET(request: Request) {

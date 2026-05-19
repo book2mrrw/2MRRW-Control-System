@@ -1,4 +1,25 @@
 import { getServerSupabase } from "@/server/supabase/client";
+import { emitAfterSuccessfulAction } from "@/server/events/eventedWriteService";
+import {
+  resolveContentDestinations,
+  type FrontendDestination,
+  type MediaDestination,
+  type RoutedMediaType
+} from "@/services/sync/contentRouting";
+import {
+  canonicalAudioFormatForExtension,
+  isPermissiveAudioMimeType,
+  isSupportedAudioExtension,
+  isSupportedAudioMimeType,
+  permissiveAudioMimeTypes,
+  professionalAudioExtensions,
+  professionalAudioMimeTypes,
+  professionalAudioQualityTarget,
+  validateAudioUploadMetadata,
+  type AudioAssetRole,
+  type AudioPreviewGenerationState,
+  type AudioUploadMetadata
+} from "@/services/media/audioSupport";
 import {
   getReleaseDraft,
   updateReleaseMetadata,
@@ -18,6 +39,18 @@ import {
 } from "@/server/release-management/releaseLifecycleService";
 
 export const mediaUploadCategories = [
+  "release_cover",
+  "track_audio",
+  "hero_media",
+  "vault_media",
+  "audio_visual",
+  "collectible_media",
+  "merch_media",
+  "latest_singles",
+  "albums",
+  "features",
+  "preview_snippets",
+  "full_song_files",
   "single_cover_art",
   "album_cover_art",
   "audio_preview",
@@ -35,18 +68,14 @@ export type ReleaseUploadAssetType = (typeof releaseUploadAssetTypes)[number];
 
 type UploadPolicy = {
   bucket: "protected-media";
-  folder: "singles" | "albums" | "masters" | "previews" | "lyrics" | "signal" | "radio" | "collectors" | "vault";
+  folder: "singles" | "albums" | "masters" | "previews" | "lyrics" | "signal" | "radio" | "collectors" | "vault" | "features" | "merch";
   maxSizeMb: number;
   mimeTypes: readonly string[];
   extensions: readonly string[];
   ownerField: "releaseId" | "trackId" | "signalId" | "radioId" | "collectorId" | "vaultContentId";
   requiresRelease?: boolean;
   requiresTrack?: boolean;
-  audioQualityTarget?: {
-    bitDepth: 24;
-    sampleRateHz: 44100;
-    validation: "metadata_required";
-  };
+  audioQualityTarget?: typeof professionalAudioQualityTarget;
   artworkQualityTarget?: {
     minimumDimensions: { width: 1400; height: 1400 };
     recommendedDimensions: { width: 3000; height: 3000 };
@@ -68,9 +97,12 @@ type MediaUploadOwnerInput = {
 export type MediaUploadIntentInput = {
   category?: MediaUploadCategory;
   assetType?: ReleaseUploadAssetType;
+  destination?: MediaDestination | FrontendDestination | Array<MediaDestination | FrontendDestination>;
+  mediaType?: RoutedMediaType;
   fileName: string;
   mimeType: string;
   sizeBytes: number;
+  audioMetadata?: AudioUploadMetadata;
 } & MediaUploadOwnerInput;
 
 export type MediaUploadIntent = {
@@ -87,6 +119,9 @@ export type MediaUploadIntent = {
   audioQualityTarget?: UploadPolicy["audioQualityTarget"];
   artworkQualityTarget?: UploadPolicy["artworkQualityTarget"];
   storagePlan: ReturnType<typeof buildStructuredStoragePlan>;
+  destination?: MediaUploadIntentInput["destination"];
+  mediaType: RoutedMediaType;
+  frontendDestinations: FrontendDestination[];
   expiresIn: number;
   mocked: boolean;
 };
@@ -98,9 +133,42 @@ export type ManagedMediaAssetRecord = {
   category: MediaUploadCategory;
   ownerId: string;
   ownerType: "release" | "track" | "signal" | "radio" | "collector" | "vault_content";
+  releaseId?: string;
+  trackId?: string;
+  destination?: MediaUploadIntentInput["destination"];
+  mediaType: RoutedMediaType;
+  frontendDestinations: FrontendDestination[];
   access: "public" | "entitled" | "admin";
   status: "uploaded" | "processing" | "optimized" | "synced" | "published" | "archived" | "failed" | "retry_available";
   processingJobs: MediaOptimizationJob[];
+  audioAssetRole?: AudioAssetRole;
+  audioMetadata?: AudioUploadMetadata;
+  previewGeneration?: {
+    state: AudioPreviewGenerationState;
+    sourcePath: string;
+    optimizedPreviewPath?: string;
+    waveformPath?: string;
+    worker: "pending_transcoder_worker" | "uploaded_preview_asset" | "not_audio";
+  };
+  transcodingCompatibility?: {
+    originalMasterPreserved: boolean;
+    destructiveCompression: false;
+    supportedPreviewFormats: readonly ["aac", "mp3"];
+    supportedBitDepths: typeof professionalAudioQualityTarget.supportedBitDepths;
+    supportedSampleRatesHz: typeof professionalAudioQualityTarget.supportedSampleRatesHz;
+  };
+  playbackHandling?: {
+    masterDelivery: "signed_url_lazy_load";
+    previewDelivery: "streaming_preview_preferred";
+    frontendPerformance: "do_not_inline_master";
+  };
+  audioRelationships?: {
+    previewAudio: boolean;
+    fullAudio: boolean;
+    subscriberOnlyAudio: boolean;
+    collectorCardAudio: boolean;
+    purchasedTrackAudio: boolean;
+  };
   storagePlan: ReturnType<typeof buildStructuredStoragePlan>;
   mediaIntelligence: ReturnType<typeof buildMediaIntelligenceProfile>;
   retryOfAssetId?: string;
@@ -108,14 +176,15 @@ export type ManagedMediaAssetRecord = {
 };
 
 const MB = 1024 * 1024;
-const imageMimeTypes = ["image/jpeg", "image/png", "image/gif"] as const;
-const imageExtensions = ["jpg", "jpeg", "png", "gif"] as const;
+const imageMimeTypes = ["image/jpeg", "image/png", "image/gif", "image/webp"] as const;
+const imageExtensions = ["jpg", "jpeg", "png", "gif", "webp"] as const;
 const mp4MimeTypes = ["video/mp4"] as const;
 const motionCoverMimeTypes = [...mp4MimeTypes, "video/quicktime", "video/webm"] as const;
 const coverMimeTypes = [...imageMimeTypes, ...motionCoverMimeTypes] as const;
 const coverExtensions = [...imageExtensions, "mp4", "mov", "webm"] as const;
-const audioMimeTypes = ["audio/wav", "audio/x-wav", "audio/mpeg", "audio/mp3"] as const;
-const audioExtensions = ["wav", "mp3"] as const;
+const videoMimeTypes = ["video/mp4", "video/quicktime", "video/webm"] as const;
+const audioMimeTypes = [...professionalAudioMimeTypes, ...permissiveAudioMimeTypes] as const;
+const audioExtensions = professionalAudioExtensions;
 const docMimeTypes = ["text/plain", "application/pdf", "application/vnd.openxmlformats-officedocument.wordprocessingml.document"] as const;
 const docExtensions = ["txt", "pdf", "docx"] as const;
 const coverArtworkTarget = {
@@ -126,7 +195,229 @@ const coverArtworkTarget = {
   helperText: "Upload square cover artwork. Minimum size: 1400x1400. Recommended size: 3000x3000."
 } as const;
 
+function defaultDestinationFor(category: MediaUploadCategory): MediaDestination {
+  if (category === "hero_media" || category === "signal_asset") return "hero";
+  if (category === "vault_media" || category === "vault_asset") return "vault";
+  if (category === "audio_visual" || category === "radio_asset" || category === "collector_card_asset") return "audio_visuals";
+  if (category === "audio_preview" || category === "preview_snippets") return "preview_snippets";
+  if (category === "audio_full_song" || category === "full_song_files") return "full_song_files";
+  if (category === "track_audio") return "audio_files";
+  return "release_media";
+}
+
+function releaseCategoryForUpload(category: MediaUploadCategory) {
+  if (category === "single_cover_art" || category === "latest_singles") return "single" as const;
+  if (category === "album_cover_art" || category === "albums") return "album" as const;
+  if (category === "features") return "feature" as const;
+  return undefined;
+}
+
+function releaseCategoryForDraft(draft: ReturnType<typeof getReleaseDraft>) {
+  if (!draft) return undefined;
+  if (draft.releaseType === "single") return "single" as const;
+  if (draft.releaseType === "album" || draft.releaseType === "ep" || draft.releaseType === "deluxe" || draft.releaseType === "remix_pack") return "album" as const;
+  return undefined;
+}
+
+function mediaTypeForUpload(category: MediaUploadCategory, mimeType?: string): RoutedMediaType {
+  if (category === "audio_full_song" || category === "audio_preview" || category === "track_audio" || category === "preview_snippets" || category === "full_song_files") return "audio";
+  if (category === "lyrics") return "document";
+  if (mimeType?.startsWith("video/")) return "video";
+  if (mimeType?.startsWith("audio/")) return "audio";
+  if (mimeType?.startsWith("image/")) return "image";
+  return "document";
+}
+
+function isAudioUploadCategory(category: MediaUploadCategory) {
+  return category === "audio_full_song" || category === "audio_preview" || category === "track_audio" || category === "preview_snippets" || category === "full_song_files";
+}
+
+function audioAssetRoleFor(category: MediaUploadCategory): AudioAssetRole | undefined {
+  if (category === "audio_full_song" || category === "track_audio" || category === "full_song_files") return "master_audio";
+  if (category === "audio_preview" || category === "preview_snippets") return "preview_audio";
+  return undefined;
+}
+
+function buildAudioMetadata(extension: string, metadata?: AudioUploadMetadata): AudioUploadMetadata | undefined {
+  const format = metadata?.format ?? canonicalAudioFormatForExtension(extension);
+  if (!format && !metadata) return undefined;
+  return {
+    ...metadata,
+    format
+  };
+}
+
+function buildPreviewGeneration(input: { role?: AudioAssetRole; sourcePath: string; storagePlan: ReturnType<typeof buildStructuredStoragePlan> }) {
+  if (!input.role) return undefined;
+  const previewVariant = input.storagePlan.variants.find((variant) => variant.label === "preview")?.path;
+  const waveformVariant = input.storagePlan.variants.find((variant) => variant.label === "waveform")?.path;
+  if (input.role === "preview_audio") {
+    return {
+      state: "ready" as const,
+      sourcePath: input.sourcePath,
+      optimizedPreviewPath: input.sourcePath,
+      waveformPath: waveformVariant,
+      worker: "uploaded_preview_asset" as const
+    };
+  }
+  return {
+    state: "pending" as const,
+    sourcePath: input.sourcePath,
+    optimizedPreviewPath: previewVariant,
+    waveformPath: waveformVariant,
+    worker: "pending_transcoder_worker" as const
+  };
+}
+
+function buildAudioTranscodingCompatibility(role?: AudioAssetRole) {
+  if (!role) return undefined;
+  return {
+    originalMasterPreserved: role === "master_audio",
+    destructiveCompression: false as const,
+    supportedPreviewFormats: ["aac", "mp3"] as const,
+    supportedBitDepths: professionalAudioQualityTarget.supportedBitDepths,
+    supportedSampleRatesHz: professionalAudioQualityTarget.supportedSampleRatesHz
+  };
+}
+
+function buildAudioPlaybackHandling(role?: AudioAssetRole) {
+  if (!role) return undefined;
+  return {
+    masterDelivery: "signed_url_lazy_load" as const,
+    previewDelivery: "streaming_preview_preferred" as const,
+    frontendPerformance: "do_not_inline_master" as const
+  };
+}
+
+function buildAudioRelationships(role?: AudioAssetRole) {
+  if (!role) return undefined;
+  return {
+    previewAudio: role === "preview_audio",
+    fullAudio: role === "master_audio",
+    subscriberOnlyAudio: role === "master_audio",
+    collectorCardAudio: role === "master_audio",
+    purchasedTrackAudio: role === "master_audio"
+  };
+}
+
+function isMotionArtworkPath(path: string) {
+  return ["mp4", "mov", "webm"].includes(extensionFor(path));
+}
+
+function isReleaseArtworkCategory(category: MediaUploadCategory) {
+  return category === "single_cover_art" || category === "album_cover_art" || category === "release_cover" || category === "latest_singles" || category === "albums" || category === "features";
+}
+
 const UPLOAD_POLICIES: Record<MediaUploadCategory, UploadPolicy> = {
+  release_cover: {
+    bucket: "protected-media",
+    folder: "singles",
+    maxSizeMb: 70,
+    mimeTypes: coverMimeTypes,
+    extensions: coverExtensions,
+    ownerField: "releaseId",
+    requiresRelease: true,
+    artworkQualityTarget: coverArtworkTarget
+  },
+  track_audio: {
+    bucket: "protected-media",
+    folder: "masters",
+    maxSizeMb: 250,
+    mimeTypes: audioMimeTypes,
+    extensions: audioExtensions,
+    ownerField: "trackId",
+    requiresRelease: true,
+    requiresTrack: true,
+    audioQualityTarget: professionalAudioQualityTarget
+  },
+  hero_media: {
+    bucket: "protected-media",
+    folder: "signal",
+    maxSizeMb: 500,
+    mimeTypes: [...imageMimeTypes, ...videoMimeTypes, ...audioMimeTypes],
+    extensions: [...imageExtensions, "mp4", "mov", "webm", ...audioExtensions],
+    ownerField: "signalId"
+  },
+  vault_media: {
+    bucket: "protected-media",
+    folder: "vault",
+    maxSizeMb: 500,
+    mimeTypes: [...imageMimeTypes, ...videoMimeTypes, ...audioMimeTypes],
+    extensions: [...imageExtensions, "mp4", "mov", "webm", ...audioExtensions],
+    ownerField: "vaultContentId"
+  },
+  audio_visual: {
+    bucket: "protected-media",
+    folder: "radio",
+    maxSizeMb: 500,
+    mimeTypes: [...imageMimeTypes, ...videoMimeTypes, ...audioMimeTypes],
+    extensions: [...imageExtensions, "mp4", "mov", "webm", ...audioExtensions],
+    ownerField: "radioId"
+  },
+  collectible_media: {
+    bucket: "protected-media",
+    folder: "collectors",
+    maxSizeMb: 500,
+    mimeTypes: [...imageMimeTypes, ...videoMimeTypes, ...audioMimeTypes],
+    extensions: [...imageExtensions, "mp4", "mov", "webm", ...audioExtensions],
+    ownerField: "collectorId"
+  },
+  merch_media: {
+    bucket: "protected-media",
+    folder: "merch",
+    maxSizeMb: 500,
+    mimeTypes: [...imageMimeTypes, ...videoMimeTypes],
+    extensions: [...imageExtensions, "mp4", "mov", "webm"],
+    ownerField: "collectorId"
+  },
+  latest_singles: {
+    bucket: "protected-media",
+    folder: "singles",
+    maxSizeMb: 500,
+    mimeTypes: [...coverMimeTypes, ...audioMimeTypes],
+    extensions: [...coverExtensions, ...audioExtensions],
+    ownerField: "releaseId",
+    requiresRelease: true
+  },
+  albums: {
+    bucket: "protected-media",
+    folder: "albums",
+    maxSizeMb: 500,
+    mimeTypes: [...coverMimeTypes, ...audioMimeTypes],
+    extensions: [...coverExtensions, ...audioExtensions],
+    ownerField: "releaseId",
+    requiresRelease: true
+  },
+  features: {
+    bucket: "protected-media",
+    folder: "features",
+    maxSizeMb: 500,
+    mimeTypes: [...coverMimeTypes, ...audioMimeTypes],
+    extensions: [...coverExtensions, ...audioExtensions],
+    ownerField: "releaseId",
+    requiresRelease: true
+  },
+  preview_snippets: {
+    bucket: "protected-media",
+    folder: "previews",
+    maxSizeMb: 70,
+    mimeTypes: audioMimeTypes,
+    extensions: audioExtensions,
+    ownerField: "trackId",
+    requiresRelease: true,
+    requiresTrack: true
+  },
+  full_song_files: {
+    bucket: "protected-media",
+    folder: "masters",
+    maxSizeMb: 250,
+    mimeTypes: audioMimeTypes,
+    extensions: audioExtensions,
+    ownerField: "trackId",
+    requiresRelease: true,
+    requiresTrack: true,
+    audioQualityTarget: professionalAudioQualityTarget
+  },
   single_cover_art: {
     bucket: "protected-media",
     folder: "singles",
@@ -166,11 +457,7 @@ const UPLOAD_POLICIES: Record<MediaUploadCategory, UploadPolicy> = {
     ownerField: "trackId",
     requiresRelease: true,
     requiresTrack: true,
-    audioQualityTarget: {
-      bitDepth: 24,
-      sampleRateHz: 44100,
-      validation: "metadata_required"
-    }
+    audioQualityTarget: professionalAudioQualityTarget
   },
   lyrics: {
     bucket: "protected-media",
@@ -297,9 +584,9 @@ function assertCompletionPath(input: MediaUploadOwnerInput & { path: string }, c
   const releaseId = sanitizePathPart(input.releaseId ?? "release");
   const sanitizedOwnerId = sanitizePathPart(ownerId);
   const expectedPrefix =
-    category === "audio_preview" || category === "audio_full_song" || category === "lyrics"
+    category === "audio_preview" || category === "audio_full_song" || category === "track_audio" || category === "preview_snippets" || category === "full_song_files" || category === "lyrics"
       ? `${policy.folder}/${releaseId}/${sanitizedOwnerId}/`
-      : category === "single_cover_art" || category === "album_cover_art"
+      : category === "single_cover_art" || category === "album_cover_art" || category === "release_cover"
         ? `${policy.folder}/${sanitizedOwnerId}/cover/`
         : `${policy.folder}/${sanitizedOwnerId}/`;
 
@@ -319,8 +606,16 @@ export function validateMediaUploadIntent(input: MediaUploadIntentInput) {
     throw new Error(`Unsupported file extension for ${category}`);
   }
 
-  if (!policy.mimeTypes.includes(input.mimeType)) {
+  const normalizedMimeType = input.mimeType.toLowerCase();
+  const isSupportedPolicyMime = policy.mimeTypes.includes(normalizedMimeType as (typeof policy.mimeTypes)[number]);
+  const isPermissiveAudioFallback = isSupportedAudioExtension(extension) && isPermissiveAudioMimeType(normalizedMimeType) && policy.extensions.includes(extension);
+  const isSupportedAudioMime = isSupportedAudioExtension(extension) && isSupportedAudioMimeType(normalizedMimeType) && policy.extensions.includes(extension);
+  if (!isSupportedPolicyMime && !isPermissiveAudioFallback && !isSupportedAudioMime) {
     throw new Error(`Unsupported MIME type for ${category}`);
+  }
+
+  if (isAudioUploadCategory(category) || isSupportedAudioExtension(extension)) {
+    validateAudioUploadMetadata(input.audioMetadata);
   }
 
   const maxSizeBytes = policy.maxSizeMb * MB;
@@ -346,11 +641,11 @@ export function buildMediaUploadPath(input: MediaUploadIntentInput) {
   });
   const stampedName = `${Date.now()}-${storagePlan.canonicalFileName.replace(/\.[a-z0-9]+$/i, "")}.${extension}`;
 
-  if (category === "audio_preview" || category === "audio_full_song" || category === "lyrics") {
+  if (category === "audio_preview" || category === "audio_full_song" || category === "track_audio" || category === "preview_snippets" || category === "full_song_files" || category === "lyrics") {
     return `${policy.folder}/${sanitizePathPart(input.releaseId ?? "release")}/${sanitizePathPart(ownerId)}/${stampedName}`;
   }
 
-  if (category === "single_cover_art" || category === "album_cover_art") {
+  if (category === "single_cover_art" || category === "album_cover_art" || category === "release_cover") {
     return `${policy.folder}/${sanitizePathPart(ownerId)}/cover/${stampedName}`;
   }
 
@@ -362,7 +657,7 @@ export function buildReleaseUploadPath(input: MediaUploadIntentInput) {
 }
 
 export async function createMediaUploadIntent(input: MediaUploadIntentInput): Promise<MediaUploadIntent> {
-  const { category, policy, maxSizeBytes } = validateMediaUploadIntent(input);
+  const { category, policy, maxSizeBytes, draft } = validateMediaUploadIntent(input);
   const path = buildMediaUploadPath(input);
   const ownerId = ownerIdFor(input, policy);
   const storagePlan = buildStructuredStoragePlan({
@@ -371,6 +666,14 @@ export async function createMediaUploadIntent(input: MediaUploadIntentInput): Pr
     releaseId: input.releaseId,
     fileName: input.fileName,
     folder: policy.folder
+  });
+  const mediaType = input.mediaType ?? mediaTypeForUpload(category, input.mimeType);
+  const routing = resolveContentDestinations({
+    category: releaseCategoryForUpload(category) ?? releaseCategoryForDraft(draft),
+    releaseType: draft?.releaseType,
+    destination: input.destination ?? defaultDestinationFor(category),
+    mediaType,
+    relatedReleaseId: input.releaseId
   });
   const supabase = getServerSupabase();
   const queuedUpload = queueUpload({
@@ -392,6 +695,9 @@ export async function createMediaUploadIntent(input: MediaUploadIntentInput): Pr
       audioQualityTarget: policy.audioQualityTarget,
       artworkQualityTarget: policy.artworkQualityTarget,
       storagePlan: { ...storagePlan, canonicalPath: path },
+      destination: routing.destination,
+      mediaType,
+      frontendDestinations: routing.frontendDestinations,
       expiresIn: 300,
       mocked: true
     };
@@ -424,6 +730,9 @@ export async function createMediaUploadIntent(input: MediaUploadIntentInput): Pr
     audioQualityTarget: policy.audioQualityTarget,
     artworkQualityTarget: policy.artworkQualityTarget,
     storagePlan: { ...storagePlan, canonicalPath: path },
+    destination: routing.destination,
+    mediaType,
+    frontendDestinations: routing.frontendDestinations,
     expiresIn: 300,
     mocked: false
   };
@@ -434,19 +743,18 @@ export function createReleaseMediaUploadIntent(input: MediaUploadIntentInput) {
 }
 
 function ownerTypeFor(category: MediaUploadCategory): ManagedMediaAssetRecord["ownerType"] {
-  if (category === "single_cover_art" || category === "album_cover_art") return "release";
-  if (category === "audio_preview" || category === "audio_full_song" || category === "lyrics") return "track";
-  if (category === "signal_asset") return "signal";
-  if (category === "radio_asset") return "radio";
-  if (category === "collector_card_asset") return "collector";
+  if (category === "single_cover_art" || category === "album_cover_art" || category === "release_cover" || category === "latest_singles" || category === "albums" || category === "features") return "release";
+  if (category === "audio_preview" || category === "audio_full_song" || category === "track_audio" || category === "preview_snippets" || category === "full_song_files" || category === "lyrics") return "track";
+  if (category === "signal_asset" || category === "hero_media") return "signal";
+  if (category === "radio_asset" || category === "audio_visual") return "radio";
+  if (category === "collector_card_asset" || category === "collectible_media" || category === "merch_media") return "collector";
   return "vault_content";
 }
 
 function accessFor(category: MediaUploadCategory): ManagedMediaAssetRecord["access"] {
-  if (category === "single_cover_art" || category === "album_cover_art" || category === "audio_preview" || category === "signal_asset" || category === "radio_asset") {
+  if (category === "single_cover_art" || category === "album_cover_art" || category === "release_cover" || category === "audio_preview" || category === "preview_snippets" || category === "signal_asset" || category === "hero_media" || category === "radio_asset" || category === "audio_visual" || category === "latest_singles" || category === "albums" || category === "features") {
     return "public";
   }
-  if (category === "collector_card_asset" || category === "vault_asset") return "entitled";
   return "admin";
 }
 
@@ -459,12 +767,15 @@ export function confirmMediaUpload(input: {
   radioId?: string;
   collectorId?: string;
   vaultContentId?: string;
+  destination?: MediaUploadIntentInput["destination"];
+  mediaType?: RoutedMediaType;
   path: string;
+  audioMetadata?: AudioUploadMetadata;
   retryOfAssetId?: string;
 }) {
   const category = normalizeUploadCategory(input);
   const policy = UPLOAD_POLICIES[category];
-  validateReleaseContext(input, policy);
+  const releaseContext = validateReleaseContext(input, policy);
   const ownerId = ownerIdFor(input, policy);
   assertCompletionPath(input, category, policy, ownerId);
   const recordId = `asset_${sanitizePathPart(category)}_${sanitizePathPart(ownerId)}`;
@@ -481,14 +792,27 @@ export function confirmMediaUpload(input: {
   });
   const processingJobs = enqueueMediaOptimizationJobs(
     recordId,
-    category === "audio_full_song" || category === "audio_preview"
+    category === "audio_full_song" || category === "audio_preview" || category === "track_audio" || category === "preview_snippets" || category === "full_song_files"
       ? ["waveform_preview", "optimized_preview", "compressed_delivery"]
-      : category === "single_cover_art" || category === "album_cover_art" || category === "collector_card_asset"
+      : category === "single_cover_art" || category === "album_cover_art" || category === "release_cover" || category === "latest_singles" || category === "albums" || category === "features" || category === "collector_card_asset" || category === "collectible_media" || category === "merch_media"
         ? ["thumbnail", "responsive_image", "image_optimization"]
-        : category === "signal_asset" || category === "radio_asset" || category === "vault_asset"
+        : category === "signal_asset" || category === "hero_media" || category === "radio_asset" || category === "audio_visual" || category === "vault_asset" || category === "vault_media"
           ? ["thumbnail", "optimized_preview"]
           : []
   );
+  const mediaType = input.mediaType ?? mediaTypeForUpload(category);
+  const extension = extensionFor(input.path);
+  const audioAssetRole = audioAssetRoleFor(category);
+  const audioMetadata = buildAudioMetadata(extension, input.audioMetadata);
+  validateAudioUploadMetadata(audioMetadata);
+  const routing = resolveContentDestinations({
+    category: releaseCategoryForUpload(category) ?? releaseCategoryForDraft(releaseContext.draft),
+    releaseType: releaseContext.draft?.releaseType,
+    destination: input.destination ?? defaultDestinationFor(category),
+    mediaType,
+    relatedReleaseId: input.releaseId
+  });
+  const previewGeneration = buildPreviewGeneration({ role: audioAssetRole, sourcePath: input.path, storagePlan: { ...storagePlan, canonicalPath: input.path } });
   const record: ManagedMediaAssetRecord = {
     id: recordId,
     bucket: policy.bucket,
@@ -496,17 +820,82 @@ export function confirmMediaUpload(input: {
     category,
     ownerId,
     ownerType: ownerTypeFor(category),
+    releaseId: input.releaseId,
+    trackId: input.trackId,
+    destination: routing.destination,
+    mediaType,
+    frontendDestinations: routing.frontendDestinations,
     access: accessFor(category),
     status: processingJobs.length ? "processing" : "uploaded",
     processingJobs,
+    audioAssetRole,
+    audioMetadata,
+    previewGeneration,
+    transcodingCompatibility: buildAudioTranscodingCompatibility(audioAssetRole),
+    playbackHandling: buildAudioPlaybackHandling(audioAssetRole),
+    audioRelationships: buildAudioRelationships(audioAssetRole),
     storagePlan: { ...storagePlan, canonicalPath: input.path },
     mediaIntelligence: buildMediaIntelligenceProfile({
-      assetId: recordId
+      assetId: recordId,
+      durationSeconds: audioMetadata?.durationSeconds
     }),
     retryOfAssetId: input.retryOfAssetId,
     updatedAt: nowIso()
   };
   confirmedMediaAssets.set(record.id, record);
+  const mediaEventData = {
+    url: record.path,
+    type: category,
+    assetId: record.id,
+    ownerId,
+    ownerType: record.ownerType,
+    releaseId: input.releaseId,
+    trackId: input.trackId,
+    mediaType,
+    destination: routing.destination,
+    frontendDestinations: routing.frontendDestinations,
+    audioAssetRole,
+    audioMetadata,
+    previewGeneration,
+    transcodingCompatibility: buildAudioTranscodingCompatibility(audioAssetRole),
+    playbackHandling: buildAudioPlaybackHandling(audioAssetRole),
+    audioRelationships: buildAudioRelationships(audioAssetRole),
+    slot: category === "audio_full_song" || category === "audio_preview" || category === "track_audio" || category === "preview_snippets" || category === "full_song_files" ? "track_audio" : category,
+    durable: false
+  };
+  emitAfterSuccessfulAction({
+    type: "media.uploaded",
+    entityId: input.releaseId ?? input.trackId ?? ownerId,
+    data: mediaEventData
+  });
+  if (input.retryOfAssetId || category === "audio_full_song" || category === "audio_preview") {
+    emitAfterSuccessfulAction({
+      type: "media.replaced",
+      entityId: input.releaseId ?? input.trackId ?? ownerId,
+      data: { ...mediaEventData, newAudioUrl: record.path }
+    });
+  }
+  if (routing.frontendDestinations.includes("hero")) {
+    emitAfterSuccessfulAction({
+      type: "hero.updated",
+      entityId: "homepage_hero",
+      data: mediaEventData
+    });
+  }
+  if (routing.frontendDestinations.includes("vault")) {
+    emitAfterSuccessfulAction({
+      type: "vault.updated",
+      entityId: ownerId,
+      data: mediaEventData
+    });
+  }
+  if (routing.frontendDestinations.includes("audio_visuals")) {
+    emitAfterSuccessfulAction({
+      type: "audio_visuals.updated",
+      entityId: ownerId,
+      data: mediaEventData
+    });
+  }
   createCreatorNotification({
     type: "upload_completed",
     title: "Upload connected",
@@ -534,14 +923,22 @@ export function confirmMediaUpload(input: {
     visibility: record.access === "public" ? "public" : record.access === "entitled" ? "vault_exclusive" : "private"
   });
 
-  if ((category === "single_cover_art" || category === "album_cover_art") && input.releaseId) {
-    updateReleaseMetadata(input.releaseId, { coverArtState: "uploaded" });
+  if (isReleaseArtworkCategory(category) && input.releaseId) {
+    updateReleaseMetadata(input.releaseId, {
+      coverArtState: "uploaded",
+      ...(isMotionArtworkPath(record.path) ? { motionArtworkPath: record.path } : { coverArtPath: record.path }),
+      frontendSyncTargets: record.frontendDestinations
+    });
     recordReleaseActivity({ releaseId: input.releaseId, kind: "processing", message: "Artwork optimization queued" });
   }
 
-  if ((category === "audio_full_song" || category === "audio_preview") && input.releaseId && input.trackId) {
-    updateTrackInformation(input.releaseId, input.trackId, { audioState: "uploaded" });
-    recordReleaseActivity({ releaseId: input.releaseId, kind: "processing", message: "Audio waveform and preview jobs queued" });
+  if ((category === "audio_full_song" || category === "audio_preview" || category === "track_audio" || category === "preview_snippets" || category === "full_song_files") && input.releaseId && input.trackId) {
+    updateTrackInformation(input.releaseId, input.trackId, {
+      audioState: "uploaded",
+      audioFile: record.path,
+      ...(audioAssetRole === "preview_audio" ? { previewAudioFile: record.path } : { fullAudioFile: record.path })
+    });
+    recordReleaseActivity({ releaseId: input.releaseId, kind: "processing", message: previewGeneration?.state === "pending" ? "Audio waveform and preview generation queued" : "Audio preview and waveform metadata recorded" });
   }
 
   if (category === "lyrics" && input.releaseId && input.trackId) {
@@ -554,6 +951,113 @@ export function confirmMediaUpload(input: {
 
 export function confirmReleaseMediaUpload(input: Parameters<typeof confirmMediaUpload>[0]) {
   return confirmMediaUpload(input);
+}
+
+export function upsertImportedMediaAsset(input: {
+  id: string;
+  category: MediaUploadCategory;
+  path: string;
+  releaseId?: string;
+  trackId?: string;
+  mediaType?: RoutedMediaType;
+  destination?: MediaUploadIntentInput["destination"];
+  sourcePath?: string;
+}) {
+  const policy = UPLOAD_POLICIES[input.category];
+  const ownerType = ownerTypeFor(input.category);
+  const ownerId =
+    ownerType === "track"
+      ? input.trackId
+      : ownerType === "release"
+        ? input.releaseId
+        : input.releaseId ?? input.trackId ?? input.id;
+  if (!ownerId) {
+    throw new Error("Imported media asset requires an owner");
+  }
+
+  const mediaType = input.mediaType ?? mediaTypeForUpload(input.category);
+  const draft = input.releaseId ? getReleaseDraft(input.releaseId) : null;
+  const routing = resolveContentDestinations({
+    category: releaseCategoryForUpload(input.category),
+    releaseType: draft?.releaseType,
+    destination: input.destination ?? defaultDestinationFor(input.category),
+    mediaType,
+    relatedReleaseId: input.releaseId
+  });
+  const storagePlan = buildStructuredStoragePlan({
+    category: input.category,
+    ownerId,
+    releaseId: input.releaseId,
+    fileName: input.path.split("/").pop() ?? "media",
+    folder: policy.folder
+  });
+  const audioAssetRole = audioAssetRoleFor(input.category);
+  const audioMetadata = buildAudioMetadata(extensionFor(input.path));
+  const previewGeneration = buildPreviewGeneration({
+    role: audioAssetRole,
+    sourcePath: input.path,
+    storagePlan: { ...storagePlan, canonicalPath: input.path }
+  });
+  const record: ManagedMediaAssetRecord = {
+    id: input.id,
+    bucket: policy.bucket,
+    path: input.path,
+    category: input.category,
+    ownerId,
+    ownerType,
+    releaseId: input.releaseId,
+    trackId: input.trackId,
+    destination: routing.destination,
+    mediaType,
+    frontendDestinations: routing.frontendDestinations,
+    access: accessFor(input.category),
+    status: "synced",
+    processingJobs: [],
+    audioAssetRole,
+    audioMetadata,
+    previewGeneration,
+    transcodingCompatibility: buildAudioTranscodingCompatibility(audioAssetRole),
+    playbackHandling: buildAudioPlaybackHandling(audioAssetRole),
+    storagePlan: {
+      ...storagePlan,
+      canonicalPath: input.path,
+      originalFileName: input.sourcePath ?? storagePlan.originalFileName
+    },
+    mediaIntelligence: buildMediaIntelligenceProfile({ assetId: input.id }),
+    updatedAt: nowIso()
+  };
+
+  confirmedMediaAssets.set(record.id, record);
+  if (isReleaseArtworkCategory(input.category) && input.releaseId) {
+    updateReleaseMetadata(input.releaseId, {
+      coverArtState: "uploaded",
+      ...(isMotionArtworkPath(record.path) ? { motionArtworkPath: record.path } : { coverArtPath: record.path }),
+      frontendSyncTargets: record.frontendDestinations
+    });
+  }
+  if ((input.category === "audio_full_song" || input.category === "audio_preview" || input.category === "track_audio" || input.category === "preview_snippets" || input.category === "full_song_files") && input.releaseId && input.trackId) {
+    updateTrackInformation(input.releaseId, input.trackId, {
+      audioState: "uploaded",
+      audioFile: record.path,
+      ...(audioAssetRole === "preview_audio" ? { previewAudioFile: record.path } : { fullAudioFile: record.path })
+    });
+  }
+  emitAfterSuccessfulAction({
+    type: "media.uploaded",
+    entityId: input.releaseId ?? input.trackId ?? ownerId,
+    data: {
+      assetId: record.id,
+      url: record.path,
+      type: input.category,
+      ownerId,
+      ownerType,
+      releaseId: input.releaseId,
+      trackId: input.trackId,
+      source: "frontend_import",
+      durable: false
+    }
+  });
+  return record;
 }
 
 export function listConfirmedMediaAssets() {

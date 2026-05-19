@@ -1,6 +1,10 @@
 import { getUserId, ok } from "@/server/http";
-import { getPlayerState } from "@/server/playback/playbackService";
+import { getPlayerState, getPlaybackSummaryDurable } from "@/server/playback/playbackService";
 
 export async function GET(request: Request) {
-  return ok(getPlayerState(getUserId(request)));
+  const userId = getUserId(request);
+  return ok({
+    ...getPlayerState(userId),
+    ...(await getPlaybackSummaryDurable(userId))
+  });
 }

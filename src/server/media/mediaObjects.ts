@@ -1,11 +1,10 @@
-import type { NormalizedPermissions, Release, Track } from "@/server/types";
+import type { NormalizedPermissions, Release, ReleaseCategory, Track } from "@/server/types";
 
 export type MediaAssetContract = {
   id: string;
   assetId: string;
-  bucket: string;
-  path: string;
   kind: "artwork" | "preview" | "full_audio" | "loop" | "vault" | "lyrics" | "unknown";
+  sourcePath?: string;
   access: "public" | "entitled" | "admin";
   signedUrlRequired: boolean;
   signedUrlEndpoint: string;
@@ -37,6 +36,7 @@ export type TrackMediaObject = {
   previewAssetId?: string;
   fullAssetId?: string;
   lyricsAssetId?: string;
+  lyricsText?: string | null;
   loopAssetId?: string;
   assets: {
     preview?: MediaAssetContract;
@@ -59,10 +59,27 @@ export type ReleaseMediaObject = {
   } | null;
   releaseDate: string;
   releaseType?: Release["releaseType"];
+  releaseCategory: ReleaseCategory;
   status: "published" | "scheduled";
   scheduledPublishAt?: string;
   artworkAssetId?: string;
+  motionArtworkAssetId?: string;
   artwork?: MediaAssetContract;
+  motionArtwork?: MediaAssetContract;
+  products?: Array<{
+    id: string;
+    slug: string;
+    productSlug: string;
+    title: string;
+    priceCents?: number | null;
+    priceLabel?: string | null;
+    currency?: string | null;
+    stripePriceId?: string | null;
+  }>;
+  price?: number;
+  priceCents?: number | null;
+  priceLabel?: string | null;
+  productSlug?: string | null;
   tracks: TrackMediaObject[];
   entitlement: EntitlementSummary;
   playback: {
@@ -71,6 +88,13 @@ export type ReleaseMediaObject = {
     saved: boolean;
   };
 };
+
+function releaseCategoryFor(release: Release): ReleaseCategory {
+  if (release.releaseCategory) return release.releaseCategory;
+  if (release.releaseType === "feature") return "feature";
+  if (release.releaseType === "single") return "single";
+  return "album";
+}
 
 type MediaAssetSource = {
   id: string;
@@ -96,10 +120,20 @@ type MediaObjectInput = {
   artist?: ArtistSource | null;
   tracks: Track[];
   mediaAssets: readonly MediaAssetSource[];
+  products?: ReleaseMediaObject["products"];
   permissions?: NormalizedPermissions;
   savedReleaseIds?: string[];
   playback?: PlaybackSource;
 };
+
+function formatPriceLabel(priceCents?: number | null, currency = "usd") {
+  if (typeof priceCents !== "number" || priceCents < 0) return null;
+
+  return new Intl.NumberFormat("en-US", {
+    style: "currency",
+    currency: currency || "usd"
+  }).format(priceCents / 100);
+}
 
 export function classifyMediaAsset(asset: Pick<MediaAssetSource, "path" | "ownerType">): MediaAssetContract["kind"] {
   if (asset.path.startsWith("artwork/")) return "artwork";
@@ -116,9 +150,8 @@ export function toMediaAssetContract(asset: MediaAssetSource): MediaAssetContrac
   return {
     id: asset.id,
     assetId: asset.id,
-    bucket: asset.bucket,
-    path: asset.path,
     kind: classifyMediaAsset(asset),
+    sourcePath: asset.path,
     access: asset.access === "public" || asset.access === "admin" ? asset.access : "entitled",
     signedUrlRequired: true,
     signedUrlEndpoint: `/api/media/${encodeURIComponent(asset.id)}/signed-url`,
@@ -142,8 +175,11 @@ function getEntitlement(input: {
   permissions?: NormalizedPermissions;
 }): EntitlementSummary {
   const permissions = input.permissions;
-  const canStream = input.trackId ? Boolean(permissions?.canStreamTrackIds.includes(input.trackId)) : false;
-  const canDownload = input.assetIds.some((assetId) => permissions?.canDownloadAssetIds.includes(assetId));
+  const hasMembership = (permissions?.membershipTiers.length ?? 0) > 0;
+  const canStream = input.trackId
+    ? Boolean(permissions?.canStreamTrackIds.includes(input.trackId) || hasMembership)
+    : hasMembership;
+  const canDownload = hasMembership || input.assetIds.some((assetId) => permissions?.canDownloadAssetIds.includes(assetId));
 
   return {
     canStream,
@@ -174,6 +210,7 @@ export function buildTrackMediaObject(
     previewAssetId: preview?.assetId,
     fullAssetId: full?.assetId,
     lyricsAssetId: lyrics?.assetId,
+    lyricsText: track.lyricsText ?? null,
     loopAssetId: loop?.assetId,
     assets: {
       preview,
@@ -201,9 +238,14 @@ export function buildReleaseMediaObject(input: MediaObjectInput): ReleaseMediaOb
     .sort((a, b) => a.position - b.position)
     .map((track) => buildTrackMediaObject(track, input));
   const artwork = input.mediaAssets.find((asset) => asset.id === input.release.coverAssetId);
+  const motionArtwork = input.mediaAssets.find((asset) => asset.path.startsWith("loops/") && asset.ownerId === input.release.id);
   const trackEntitlements = tracks.map((track) => track.entitlement);
   const canStream = trackEntitlements.some((entitlement) => entitlement.canStream);
   const canDownload = trackEntitlements.some((entitlement) => entitlement.canDownload);
+  const firstPricedProduct = input.products?.find((product) => typeof product.priceCents === "number" && product.priceCents >= 0);
+  const priceCents = firstPricedProduct?.priceCents ?? null;
+  const currency = firstPricedProduct?.currency ?? "usd";
+  const priceLabel = formatPriceLabel(priceCents, currency);
 
   return {
     id: input.release.id,
@@ -212,10 +254,18 @@ export function buildReleaseMediaObject(input: MediaObjectInput): ReleaseMediaOb
     artist: input.artist ? { id: input.artist.id, name: input.artist.name, slug: input.artist.slug } : null,
     releaseDate: input.release.releaseDate,
     releaseType: input.release.releaseType,
+    releaseCategory: releaseCategoryFor(input.release),
     status: input.release.status ?? "published",
     scheduledPublishAt: input.release.scheduledPublishAt,
     artworkAssetId: artwork?.id,
+    motionArtworkAssetId: motionArtwork?.id,
     artwork: artwork ? toMediaAssetContract(artwork) : undefined,
+    motionArtwork: motionArtwork ? toMediaAssetContract(motionArtwork) : undefined,
+    products: input.products,
+    productSlug: firstPricedProduct?.productSlug ?? firstPricedProduct?.slug ?? null,
+    price: typeof priceCents === "number" ? priceCents / 100 : undefined,
+    priceCents,
+    priceLabel,
     tracks,
     entitlement: {
       canStream,

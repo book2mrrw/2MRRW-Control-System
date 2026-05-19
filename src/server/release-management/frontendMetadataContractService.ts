@@ -4,6 +4,8 @@ export type FrontendTrackCreditContract = {
   trackId: string;
   title: string;
   artistName: string;
+  previewAudio?: string;
+  fullAudio?: string;
   lyrics: string | null;
   producers: string[];
   songwriters: string[];
@@ -39,6 +41,11 @@ export type FrontendReleaseMetadataContract = {
     creative: string[];
   };
   previewLinks: ReleaseManagementDraft["previewLinks"];
+  assets: {
+    coverArt?: string;
+    motionArtwork?: string;
+  };
+  frontendSyncTargets: string[];
   tracks: FrontendTrackCreditContract[];
 };
 
@@ -60,6 +67,8 @@ export function buildFrontendReleaseMetadataContract(draft: ReleaseManagementDra
       title: track.title,
       artistName: draft.artistName,
       lyrics: null,
+      previewAudio: track.previewAudioFile,
+      fullAudio: track.fullAudioFile ?? track.audioFile,
       producers: unique([...track.producerNames, ...contributions.filter((row) => productionRoles.has(row.contributionType)).map((row) => row.contributorName)]),
       songwriters: unique(contributions.filter((row) => writingRoles.has(row.contributionType)).map((row) => row.contributorName)),
       contributors: contributions.map((row) => ({ name: row.contributorName, role: row.contributionType })),
@@ -96,6 +105,11 @@ export function buildFrontendReleaseMetadataContract(draft: ReleaseManagementDra
       creative: unique(allContributions.filter((credit) => creativeRoles.has(credit.role)).map((credit) => credit.name))
     },
     previewLinks: draft.previewLinks,
+    assets: {
+      coverArt: draft.coverArtPath,
+      motionArtwork: draft.motionArtworkPath
+    },
+    frontendSyncTargets: draft.frontendSyncTargets,
     tracks: trackContracts
   };
 }

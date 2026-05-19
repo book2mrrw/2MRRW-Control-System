@@ -1,6 +1,6 @@
 import { getUserId, ok } from "@/server/http";
-import { listActiveSignals } from "@/server/signal/signalDeliveryService";
+import { listActiveSignalsDurable } from "@/server/signal/signalDeliveryService";
 
 export async function GET(request: Request) {
-  return ok(listActiveSignals(getUserId(request)));
+  return ok(await listActiveSignalsDurable(getUserId(request)));
 }

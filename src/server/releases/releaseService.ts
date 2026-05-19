@@ -1,19 +1,22 @@
-import { getAccountState } from "@/server/account/accountStateService";
-import { artists, mediaAssets, releases, tracks } from "@/server/data/seedData";
-import { recordStreamAnalytics } from "@/server/analytics/analyticsService";
+import { getAccountState, getLibraryDurable } from "@/server/account/accountStateService";
+import { artists, mediaAssets, products, releases, tracks } from "@/server/data/seedData";
+import { recordStreamAnalytics, recordStreamAnalyticsDurable } from "@/server/analytics/analyticsService";
 import {
   buildReleaseMediaObject,
   type MediaAssetContract,
   type ReleaseMediaObject
 } from "@/server/media/mediaObjects";
-import { markRecentlyPlayed, updatePlaybackProgress } from "@/server/playback/playbackService";
+import { markRecentlyPlayed, updatePlaybackProgress, updatePlaybackProgressDurable } from "@/server/playback/playbackService";
 import {
   createReleaseDraft,
   getReadinessSummary,
   getReleaseDraft,
   type ReleaseManagementDraft
 } from "@/server/release-management/releaseManagementService";
+import { emitAfterSuccessfulAction } from "@/server/events/eventedWriteService";
 import { recordReleaseActivity, recordReleaseRevision } from "@/server/release-management/releaseLifecycleService";
+import { getServerSupabase } from "@/server/supabase/client";
+import { listConfirmedMediaAssets } from "@/server/media/uploadIntentService";
 import type { Release, Track } from "@/server/types";
 
 // Shared sync-layer catalog: admin write services publish into this central state,
@@ -24,6 +27,7 @@ type PublishedCatalogRelease = Release & {
 };
 
 export type PublicReleaseType = NonNullable<Release["releaseType"]>;
+export type PublicReleaseCategory = "single" | "album" | "feature";
 
 type CatalogMediaAsset = {
   id: string;
@@ -32,6 +36,29 @@ type CatalogMediaAsset = {
   ownerType: string;
   ownerId: string;
   access: string;
+};
+
+type CatalogProduct = {
+  id: string;
+  slug: string;
+  productSlug: string;
+  title: string;
+  priceCents?: number | null;
+  priceLabel?: string | null;
+  currency?: string | null;
+  stripePriceId?: string | null;
+};
+
+type CatalogRow = {
+  release: PublishedCatalogRelease;
+  tracks: Track[];
+  mediaAssets: CatalogMediaAsset[];
+  artist?: {
+    id: string;
+    name: string;
+    slug?: string;
+  } | null;
+  products?: CatalogProduct[];
 };
 
 type PublishedDraftRecord = {
@@ -67,17 +94,20 @@ export type PlaybackEventInput = {
 };
 
 const publishedDrafts = new Map<string, PublishedDraftRecord>();
+const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
 function nowIso() {
   return new Date().toISOString();
 }
 
 function isVisibleRelease(release: PublishedCatalogRelease) {
-  if (release.status === "published") {
-    return true;
+  if (release.status !== "published") {
+    return false;
   }
-
-  return Boolean(release.scheduledPublishAt && release.scheduledPublishAt <= nowIso());
+  if (release.scheduledPublishAt && release.scheduledPublishAt > nowIso()) {
+    return false;
+  }
+  return true;
 }
 
 function getSeedCatalogRows() {
@@ -87,7 +117,9 @@ function getSeedCatalogRows() {
       status: "published" as const
     },
     tracks: tracks.filter((track) => track.releaseId === release.id),
-    mediaAssets: [...mediaAssets].filter((asset) => asset.ownerId === release.id || tracks.some((track) => track.releaseId === release.id && asset.ownerId === track.id))
+    mediaAssets: [...mediaAssets].filter((asset) => asset.ownerId === release.id || tracks.some((track) => track.releaseId === release.id && asset.ownerId === track.id)),
+    artist: artists.find((artist) => artist.id === release.artistId) ?? null,
+    products: products.filter((product) => productGrantsRelease(product.grants, release.id)).map(normalizeProduct)
   }));
 }
 
@@ -105,75 +137,252 @@ function getCatalogRows({ includeUnpublished = false } = {}) {
   });
 }
 
-function matchesReleaseType(row: ReturnType<typeof getCatalogRows>[number], releaseType?: PublicReleaseType) {
+function matchesReleaseType(row: CatalogRow, releaseType?: PublicReleaseType) {
   if (!releaseType) return true;
   return row.release.releaseType === releaseType;
 }
 
-function toReleaseObject(row: ReturnType<typeof getCatalogRows>[number], userId?: string) {
+function releaseCategoryForRow(row: CatalogRow): PublicReleaseCategory {
+  const explicitCategory = (row.release as Release & { releaseCategory?: PublicReleaseCategory }).releaseCategory;
+  if (explicitCategory === "single" || explicitCategory === "album" || explicitCategory === "feature") return explicitCategory;
+  if (row.release.releaseType === "feature") return "feature";
+  if (row.release.releaseType === "single") return "single";
+  return "album";
+}
+
+function matchesReleaseCategory(row: CatalogRow, releaseCategory?: PublicReleaseCategory) {
+  if (!releaseCategory) return true;
+  return releaseCategoryForRow(row) === releaseCategory;
+}
+
+function toReleaseObject(row: CatalogRow, userId?: string) {
   const account = userId ? getAccountState(userId) : null;
 
   return buildReleaseMediaObject({
     release: row.release,
-    artist: artists.find((artist) => artist.id === row.release.artistId) ?? null,
+    artist: row.artist ?? artists.find((artist) => artist.id === row.release.artistId) ?? null,
     tracks: row.tracks,
     mediaAssets: row.mediaAssets,
+    products: row.products,
     permissions: account?.permissions,
     savedReleaseIds: account?.library.savedReleaseIds,
     playback: account?.playback
   });
 }
 
+function normalizePersistedRelease(row: {
+  id: string;
+  artist_id: string;
+  slug: string;
+  title: string;
+  release_date: string | null;
+  release_type?: PublicReleaseType | null;
+  release_category?: PublicReleaseCategory | null;
+  status: string;
+  scheduled_publish_at?: string | null;
+  published_at?: string | null;
+}, mediaRows: CatalogMediaAsset[]): PublishedCatalogRelease {
+  const releaseOwned = mediaRows.filter((asset) => asset.ownerType === "release" && asset.ownerId === row.id);
+  const artwork =
+    releaseOwned.find((asset) => asset.path.startsWith("artwork/") && !/\.(mp4|mov|webm)(\?|#|$)/i.test(asset.path)) ??
+    releaseOwned.find((asset) => /cover|artwork/i.test(asset.path) && !/\.(mp4|mov|webm)(\?|#|$)/i.test(asset.path));
+  return {
+    id: row.id,
+    slug: row.slug,
+    title: row.title,
+    artistId: row.artist_id,
+    releaseDate: row.release_date ?? row.published_at?.slice(0, 10) ?? nowIso().slice(0, 10),
+    releaseType: row.release_type ?? undefined,
+    releaseCategory: row.release_category ?? undefined,
+    published: row.status === "published",
+    coverAssetId: artwork?.id ?? "",
+    status: row.status === "scheduled" ? "scheduled" : "published",
+    scheduledPublishAt: row.scheduled_publish_at ?? undefined
+  };
+}
+
+function normalizeProduct(row: {
+  id: string;
+  slug: string;
+  name?: string | null;
+  title?: string | null;
+  price_cents?: number | null;
+  priceCents?: number | null;
+  currency?: string | null;
+  stripe_price_id?: string | null;
+  stripePriceId?: string | null;
+}): CatalogProduct {
+  const priceCents = row.price_cents ?? row.priceCents ?? null;
+  const currency = row.currency ?? "usd";
+  const priceLabel =
+    typeof priceCents === "number" && priceCents >= 0
+      ? new Intl.NumberFormat("en-US", { style: "currency", currency }).format(priceCents / 100)
+      : null;
+
+  return {
+    id: row.id,
+    slug: row.slug,
+    productSlug: row.slug,
+    title: row.name ?? row.title ?? row.slug,
+    priceCents,
+    priceLabel,
+    currency,
+    stripePriceId: row.stripe_price_id ?? row.stripePriceId ?? null
+  };
+}
+
+function productGrantsRelease(grants: unknown, releaseId: string) {
+  return Array.isArray(grants) && grants.some((grant) => {
+    if (!grant || typeof grant !== "object") return false;
+    const candidate = "releaseId" in grant ? grant.releaseId : "release_id" in grant ? grant.release_id : null;
+    return "type" in grant && grant.type === "release" && candidate === releaseId;
+  });
+}
+
+async function getActiveProductRows(supabase: NonNullable<ReturnType<typeof getServerSupabase>>) {
+  const baseColumns = "id, slug, name, stripe_price_id, grants";
+  const enhancedColumns = `${baseColumns}, price_cents, currency`;
+  const enhanced = await supabase.from("products").select(enhancedColumns).eq("active", true);
+
+  if (!enhanced.error) {
+    return { data: enhanced.data ?? [], error: null };
+  }
+
+  const missingPriceColumn = /price_cents|currency/i.test(enhanced.error.message ?? "");
+  if (!missingPriceColumn) {
+    return { data: null, error: enhanced.error };
+  }
+
+  // Deploys remain compatible until the 0008 product price migration is applied.
+  return supabase.from("products").select(baseColumns).eq("active", true);
+}
+
+async function getPersistedCatalogRows({ includeUnpublished = false } = {}): Promise<CatalogRow[] | null> {
+  const supabase = getServerSupabase();
+  if (!supabase) return null;
+
+  const releaseColumns = "id, artist_id, slug, title, release_date, release_type, release_category, status, scheduled_publish_at, published_at";
+  const legacyReleaseColumns = "id, artist_id, slug, title, release_date, release_type, status, scheduled_publish_at, published_at";
+  let releaseQuery = supabase
+    .from("releases")
+    .select(releaseColumns)
+    .order("release_date", { ascending: false, nullsFirst: false });
+
+  if (!includeUnpublished) {
+    releaseQuery = releaseQuery.in("status", ["published", "scheduled"]);
+  }
+
+  let releaseResult: {
+    data: Array<{
+      id: string;
+      artist_id: string;
+      slug: string;
+      title: string;
+      release_date: string | null;
+      release_type?: PublicReleaseType | null;
+      release_category?: PublicReleaseCategory | null;
+      status: string;
+      scheduled_publish_at?: string | null;
+      published_at?: string | null;
+    }> | null;
+    error: { message?: string } | null;
+  } = await releaseQuery;
+  if (releaseResult.error && /release_category/i.test(releaseResult.error.message ?? "")) {
+    let legacyReleaseQuery = supabase
+      .from("releases")
+      .select(legacyReleaseColumns)
+      .order("release_date", { ascending: false, nullsFirst: false });
+    if (!includeUnpublished) {
+      legacyReleaseQuery = legacyReleaseQuery.in("status", ["published", "scheduled"]);
+    }
+    releaseResult = await legacyReleaseQuery;
+  }
+
+  const { data: releaseRows, error: releaseError } = releaseResult;
+  if (releaseError || !releaseRows?.length) return releaseError ? null : [];
+
+  const releaseIds = releaseRows.map((row) => row.id);
+  const [{ data: trackRows, error: trackError }, { data: mediaRows, error: mediaError }, { data: artistRows, error: artistError }, { data: productRows, error: productError }, { data: releaseMediaRows, error: releaseMediaError }] =
+    await Promise.all([
+      supabase.from("tracks").select("id, release_id, title, duration_seconds, position, lyrics_text"),
+      supabase.from("media_assets").select("id, owner_type, owner_id, bucket, storage_path, access_level"),
+      supabase.from("artists").select("id, name, slug"),
+      getActiveProductRows(supabase),
+      supabase
+        .from("release_media")
+        .select("release_id, media_asset_id, asset_role, is_primary, is_active")
+        .in("release_id", releaseIds)
+        .eq("is_active", true)
+    ]);
+
+  if (trackError || mediaError || artistError || productError || releaseMediaError) return null;
+
+  const media = (mediaRows ?? []).map((row) => ({
+    id: row.id,
+    bucket: row.bucket,
+    path: row.storage_path,
+    ownerType: row.owner_type,
+    ownerId: row.owner_id,
+    access: row.access_level
+  }));
+
+  return releaseRows
+    .map((row) => {
+      const releaseLinks = (releaseMediaRows ?? []).filter((link) => link.release_id === row.id);
+      const primaryCoverLink =
+        releaseLinks.find((link) => link.is_primary && (link.asset_role === "cover_art" || link.asset_role === "background_loop")) ??
+        releaseLinks.find((link) => link.asset_role === "cover_art" || link.asset_role === "background_loop");
+      const releaseMedia = media.filter((asset) => asset.ownerId === row.id || (asset.ownerType === "track" && (trackRows ?? []).some((track) => track.release_id === row.id && track.id === asset.ownerId)));
+      const release = normalizePersistedRelease(row, releaseMedia);
+      if (primaryCoverLink?.media_asset_id) {
+        release.coverAssetId = primaryCoverLink.media_asset_id;
+      }
+      return {
+        release,
+        tracks: (trackRows ?? [])
+          .filter((track) => track.release_id === row.id)
+          .map((track) => ({
+            id: track.id,
+            releaseId: track.release_id,
+            title: track.title,
+            durationSeconds: track.duration_seconds,
+            mediaAssetId: releaseMedia.find((asset) => asset.ownerType === "track" && asset.ownerId === track.id && asset.path.startsWith("masters/"))?.id ?? "",
+            position: track.position,
+            lyricsText: (track as { lyrics_text?: string | null }).lyrics_text ?? null
+          })),
+        mediaAssets: releaseMedia,
+        artist: (artistRows ?? []).find((artist) => artist.id === row.artist_id) ?? null,
+        products: (productRows ?? []).filter((product) => productGrantsRelease(product.grants, row.id)).map(normalizeProduct)
+      } satisfies CatalogRow;
+    })
+    .filter((row) => includeUnpublished || isVisibleRelease(row.release));
+}
+
+async function getDurableCatalogRows(options: { includeUnpublished?: boolean } = {}) {
+  return (await getPersistedCatalogRows(options)) ?? getCatalogRows(options);
+}
+
 function draftToCatalog(draft: ReleaseManagementDraft, status: "published" | "scheduled"): PublishedDraftRecord {
   const releaseDate = draft.scheduledPublishAt?.slice(0, 10) ?? nowIso().slice(0, 10);
+  const uploadedAssets = listConfirmedMediaAssets().filter((asset) => asset.releaseId === draft.id || draft.tracks.some((track) => track.id === asset.trackId || track.id === asset.ownerId));
+  const coverAsset = uploadedAssets.find((asset) => asset.ownerType === "release" && (asset.category.includes("cover") || asset.frontendDestinations.includes("cover_art")));
+  const releaseCategory = draft.releaseType === "feature" ? "feature" : draft.releaseType === "single" ? "single" : "album";
   const catalogTracks: Track[] = draft.tracks.map((track) => ({
     id: track.id,
     releaseId: draft.id,
     title: track.title,
     durationSeconds: 0,
-    mediaAssetId: `asset_full_${track.id}`,
+    mediaAssetId: uploadedAssets.find((asset) => asset.trackId === track.id && (asset.category === "full_song_files" || asset.category === "audio_full_song" || asset.category === "track_audio"))?.id ?? "",
     position: track.position
   }));
-  const catalogMediaAssets: CatalogMediaAsset[] = [
-    {
-      id: `asset_artwork_${draft.id}`,
-      bucket: "protected-media",
-      path: `artwork/${draft.slug}/cover.jpg`,
-      ownerType: "release",
-      ownerId: draft.id,
-      access: "public"
-    },
-    ...catalogTracks.flatMap((track) => [
-      {
-        id: `asset_preview_${track.id}`,
-        bucket: "protected-media",
-        path: `previews/${draft.slug}/${track.position}.mp3`,
-        ownerType: "track",
-        ownerId: track.id,
-        access: "public"
-      },
-      {
-        id: track.mediaAssetId,
-        bucket: "protected-media",
-        path: `masters/${draft.slug}/${track.position}.wav`,
-        ownerType: "track",
-        ownerId: track.id,
-        access: "entitled"
-      },
-      ...(draft.lyricsState === "not_required"
-        ? []
-        : [
-            {
-              id: `asset_lyrics_${track.id}`,
-              bucket: "protected-media",
-              path: `lyrics/${draft.slug}/${track.position}.txt`,
-              ownerType: "track",
-              ownerId: track.id,
-              access: "entitled"
-            }
-          ])
-    ])
-  ];
+  const catalogMediaAssets: CatalogMediaAsset[] = uploadedAssets.map((asset) => ({
+    id: asset.id,
+    bucket: asset.bucket,
+    path: asset.path,
+    ownerType: asset.ownerType,
+    ownerId: asset.ownerId,
+    access: asset.access
+  }));
 
   return {
     release: {
@@ -183,8 +392,9 @@ function draftToCatalog(draft: ReleaseManagementDraft, status: "published" | "sc
       artistId: draft.artistId,
       releaseDate,
       releaseType: draft.releaseType,
+      releaseCategory,
       published: status === "published",
-      coverAssetId: `asset_artwork_${draft.id}`,
+      coverAssetId: coverAsset?.id ?? "",
       status,
       scheduledPublishAt: draft.scheduledPublishAt
     },
@@ -201,21 +411,46 @@ export function createRelease(input: Parameters<typeof createReleaseDraft>[0]) {
 export function listReleases({
   includeUnpublished = false,
   userId,
-  releaseType
-}: { includeUnpublished?: boolean; userId?: string; releaseType?: PublicReleaseType } = {}) {
+  releaseType,
+  releaseCategory
+}: { includeUnpublished?: boolean; userId?: string; releaseType?: PublicReleaseType; releaseCategory?: PublicReleaseCategory } = {}) {
   return getCatalogRows({ includeUnpublished })
     .filter((row) => matchesReleaseType(row, releaseType))
+    .filter((row) => matchesReleaseCategory(row, releaseCategory))
     .map((row) => toReleaseObject(row, userId));
 }
 
-export function getLatestReleases({ limit = 12, userId, releaseType }: { limit?: number; userId?: string; releaseType?: PublicReleaseType } = {}) {
-  return listReleases({ userId, releaseType })
+export async function listReleasesDurable({
+  includeUnpublished = false,
+  userId,
+  releaseType,
+  releaseCategory
+}: { includeUnpublished?: boolean; userId?: string; releaseType?: PublicReleaseType; releaseCategory?: PublicReleaseCategory } = {}) {
+  return (await getDurableCatalogRows({ includeUnpublished }))
+    .filter((row) => matchesReleaseType(row, releaseType))
+    .filter((row) => matchesReleaseCategory(row, releaseCategory))
+    .map((row) => toReleaseObject(row, userId));
+}
+
+export function getLatestReleases({ limit = 12, userId, releaseType, releaseCategory }: { limit?: number; userId?: string; releaseType?: PublicReleaseType; releaseCategory?: PublicReleaseCategory } = {}) {
+  return listReleases({ userId, releaseType, releaseCategory })
+    .sort((a, b) => b.releaseDate.localeCompare(a.releaseDate))
+    .slice(0, limit);
+}
+
+export async function getLatestReleasesDurable({ limit = 12, userId, releaseType, releaseCategory }: { limit?: number; userId?: string; releaseType?: PublicReleaseType; releaseCategory?: PublicReleaseCategory } = {}) {
+  return (await listReleasesDurable({ userId, releaseType, releaseCategory }))
     .sort((a, b) => b.releaseDate.localeCompare(a.releaseDate))
     .slice(0, limit);
 }
 
 export function getReleaseBySlug(slug: string, { userId }: { userId?: string } = {}) {
   const row = getCatalogRows().find((releaseRow) => releaseRow.release.slug === slug);
+  return row ? toReleaseObject(row, userId) : null;
+}
+
+export async function getReleaseBySlugDurable(slug: string, { userId }: { userId?: string } = {}) {
+  const row = (await getDurableCatalogRows()).find((releaseRow) => releaseRow.release.slug === slug);
   return row ? toReleaseObject(row, userId) : null;
 }
 
@@ -237,12 +472,46 @@ export function getUserLibrary(userId: string) {
   };
 }
 
+export async function getUserLibraryDurable(userId: string) {
+  const library = await getLibraryDurable(userId);
+  const visibleRows = await getDurableCatalogRows();
+  const savedTrackIds = new Set(library.savedTrackIds);
+
+  return {
+    savedTrackIds: library.savedTrackIds,
+    savedReleaseIds: library.savedReleaseIds,
+    purchasedProductIds: library.purchasedProductIds,
+    releases: visibleRows
+      .filter((row) => library.savedReleaseIds.includes(row.release.id))
+      .map((row) => toReleaseObject(row, userId)),
+    tracks: visibleRows
+      .flatMap((row) => toReleaseObject(row, userId).tracks)
+      .filter((track) => savedTrackIds.has(track.id))
+  };
+}
+
 export function getMediaObjectsForRelease(slug: string, userId?: string) {
   return getReleaseBySlug(slug, { userId });
 }
 
+export async function getMediaObjectsForReleaseDurable(slug: string, userId?: string) {
+  return getReleaseBySlugDurable(slug, { userId });
+}
+
 export function getMediaAssetListForRelease(slug: string): MediaAssetContract[] {
   const release = getReleaseBySlug(slug);
+  if (!release) {
+    return [];
+  }
+
+  return [
+    ...(release.artwork ? [release.artwork] : []),
+    ...release.tracks.flatMap((track) => Object.values(track.assets).filter((asset): asset is MediaAssetContract => Boolean(asset)))
+  ];
+}
+
+export async function getMediaAssetListForReleaseDurable(slug: string): Promise<MediaAssetContract[]> {
+  const release = await getReleaseBySlugDurable(slug);
   if (!release) {
     return [];
   }
@@ -288,6 +557,41 @@ export function trackPlaybackEvent(userId: string, input: PlaybackEventInput) {
   };
 }
 
+export async function trackPlaybackEventDurable(userId: string, input: PlaybackEventInput) {
+  const progress =
+    typeof input.positionSeconds === "number"
+      ? await updatePlaybackProgressDurable(userId, {
+          trackId: input.trackId,
+          positionSeconds: input.positionSeconds,
+          sessionId: input.sessionId
+        })
+      : null;
+
+  if (input.eventType === "play" || input.eventType === "complete") {
+    markRecentlyPlayed(userId, input.trackId);
+  }
+
+  const analytics =
+    typeof input.listenedSeconds === "number"
+      ? await recordStreamAnalyticsDurable(userId, {
+          trackId: input.trackId,
+          releaseId: input.releaseId,
+          listenedSeconds: input.listenedSeconds,
+          countryCode: input.countryCode
+        })
+      : null;
+
+  return {
+    userId,
+    trackId: input.trackId,
+    releaseId: input.releaseId,
+    eventType: input.eventType,
+    progress,
+    analytics,
+    recordedAt: nowIso()
+  };
+}
+
 export function upsertRelease(input: {
   id?: string;
   slug: string;
@@ -296,6 +600,7 @@ export function upsertRelease(input: {
   releaseDate?: string;
   releaseType?: PublicReleaseType;
   published?: boolean;
+  coverAssetId?: string;
 }) {
   const existing = input.id ? releases.find((release) => release.id === input.id) : null;
 
@@ -306,6 +611,12 @@ export function upsertRelease(input: {
     existing.releaseDate = input.releaseDate ?? existing.releaseDate;
     existing.releaseType = input.releaseType ?? existing.releaseType;
     existing.published = input.published ?? existing.published;
+    existing.coverAssetId = input.coverAssetId ?? existing.coverAssetId;
+    emitAfterSuccessfulAction({
+      type: "release.updated",
+      entityId: existing.id,
+      data: { releaseId: existing.id, slug: existing.slug, durable: false }
+    });
     return existing;
   }
 
@@ -317,9 +628,14 @@ export function upsertRelease(input: {
     releaseDate: input.releaseDate ?? nowIso().slice(0, 10),
     releaseType: input.releaseType,
     published: input.published ?? false,
-    coverAssetId: "asset_cover_afterhours"
+    coverAssetId: input.coverAssetId ?? ""
   };
   releases.push(release);
+  emitAfterSuccessfulAction({
+    type: "release.created",
+    entityId: release.id,
+    data: { releaseId: release.id, slug: release.slug, durable: false }
+  });
   return release;
 }
 
@@ -327,7 +643,11 @@ export function publishRelease(id: string): PublishReleaseResult | null {
   const draft = getReleaseDraft(id);
   if (draft) {
     const readiness = getReadinessSummary(id);
-    if (!readiness.ready) {
+    const importedWithMedia =
+      draft.tags.some((tag) => tag === "frontend-import" || tag === "supabase-catalog") &&
+      Boolean(draft.coverArtPath || draft.coverArtState === "uploaded" || draft.coverArtState === "approved") &&
+      draft.tracks.some((track) => track.audioState === "uploaded" || track.audioState === "approved");
+    if (!readiness.ready && !importedWithMedia) {
       return {
         ok: false,
         releaseId: id,
@@ -355,6 +675,16 @@ export function publishRelease(id: string): PublishReleaseResult | null {
 
     const record = draftToCatalog(draft, status);
     publishedDrafts.set(id, record);
+    emitAfterSuccessfulAction({
+      type: "release.published",
+      entityId: id,
+      data: {
+        releaseId: id,
+        slug: draft.slug,
+        status,
+        durable: false
+      }
+    });
     return {
       ok: true,
       release: toReleaseObject(record),
@@ -369,6 +699,16 @@ export function publishRelease(id: string): PublishReleaseResult | null {
   }
 
   release.published = true;
+  emitAfterSuccessfulAction({
+    type: "release.published",
+    entityId: release.id,
+    data: {
+      releaseId: release.id,
+      slug: release.slug,
+      status: "published",
+      durable: false
+    }
+  });
   const row = getCatalogRows({ includeUnpublished: true }).find((releaseRow) => releaseRow.release.id === id);
   return row
     ? {
@@ -378,4 +718,105 @@ export function publishRelease(id: string): PublishReleaseResult | null {
         publishedAt: nowIso()
       }
     : null;
+}
+
+export function publishImportedReleaseToCatalog(id: string) {
+  const draft = getReleaseDraft(id);
+  if (!draft) return null;
+  const status = draft.status === "scheduled" ? "scheduled" : "published";
+  const record = draftToCatalog(draft, status);
+  publishedDrafts.set(id, record);
+  emitAfterSuccessfulAction({
+    type: "release.published",
+    entityId: id,
+    data: {
+      releaseId: id,
+      slug: draft.slug,
+      status,
+      source: "frontend_import",
+      durable: false
+    }
+  });
+  return toReleaseObject(record);
+}
+
+async function persistPublishedDraft(record: PublishedDraftRecord) {
+  const supabase = getServerSupabase();
+  if (!supabase) return false;
+  if (![record.release.id, record.release.artistId, ...record.tracks.map((track) => track.id), ...record.mediaAssets.map((asset) => asset.id)].every((id) => uuidPattern.test(id))) {
+    return false;
+  }
+
+  const releasePayload = {
+    id: record.release.id,
+    artist_id: record.release.artistId,
+    slug: record.release.slug,
+    title: record.release.title,
+    release_date: record.release.releaseDate,
+    release_type: record.release.releaseType ?? "album",
+    release_category: record.release.releaseCategory ?? (record.release.releaseType === "feature" ? "feature" : record.release.releaseType === "single" ? "single" : "album"),
+    status: record.release.status,
+    scheduled_publish_at: record.release.scheduledPublishAt ?? null,
+    published_at: record.release.status === "published" ? record.publishedAt : null
+  };
+  let releaseWrite = await supabase.from("releases").upsert(releasePayload);
+  if (releaseWrite.error && /release_category/i.test(releaseWrite.error.message ?? "")) {
+    const legacyPayload: Omit<typeof releasePayload, "release_category"> = {
+      id: releasePayload.id,
+      artist_id: releasePayload.artist_id,
+      slug: releasePayload.slug,
+      title: releasePayload.title,
+      release_date: releasePayload.release_date,
+      release_type: releasePayload.release_type,
+      status: releasePayload.status,
+      scheduled_publish_at: releasePayload.scheduled_publish_at,
+      published_at: releasePayload.published_at
+    };
+    releaseWrite = await supabase.from("releases").upsert(legacyPayload);
+  }
+  const releaseError = releaseWrite.error;
+  if (releaseError) return false;
+
+  const { error: tracksError } = await supabase.from("tracks").upsert(
+    record.tracks.map((track) => ({
+      id: track.id,
+      release_id: track.releaseId,
+      title: track.title,
+      duration_seconds: track.durationSeconds,
+      position: track.position
+    }))
+  );
+  if (tracksError) return false;
+
+  const { error: mediaError } = await supabase.from("media_assets").upsert(
+    record.mediaAssets.map((asset) => ({
+      id: asset.id,
+      owner_type: asset.ownerType,
+      owner_id: asset.ownerId,
+      bucket: asset.bucket,
+      storage_path: asset.path,
+      access_level: asset.access
+    }))
+  );
+
+  return !mediaError;
+}
+
+export async function publishReleaseDurable(id: string): Promise<PublishReleaseResult | null> {
+  if (!getReleaseDraft(id)) {
+    const { fetchDurableReleaseById } = await import("@/server/catalog/releaseCatalogService");
+    const { hydrateDraftFromCatalogRelease } = await import("@/server/release-management/releaseCatalogHydrationService");
+    const release = await fetchDurableReleaseById(id);
+    if (release) hydrateDraftFromCatalogRelease(release);
+  }
+
+  const result = publishRelease(id);
+  if (!result?.ok) return result;
+
+  const record = publishedDrafts.get(id);
+  if (record) {
+    await persistPublishedDraft(record);
+  }
+
+  return result;
 }

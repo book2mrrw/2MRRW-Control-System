@@ -1,0 +1,76 @@
+{
+  "ingestionRef": "ingest_2026-05-19T07-36-51-780Z",
+  "ok": false,
+  "phases": {
+    "scanner": {
+      "status": "completed",
+      "counts": {
+        "singles": 4,
+        "albums": 3,
+        "features": 2,
+        "audioVisuals": 3
+      }
+    },
+    "normalizer": {
+      "status": "completed",
+      "counts": {
+        "releases": 9,
+        "tracks": 30
+      }
+    },
+    "uploader": {
+      "status": "completed",
+      "counts": {
+        "mediaAssets": 0
+      }
+    },
+    "constructor": {
+      "status": "completed",
+      "counts": {
+        "releases": 0,
+        "tracks": 0
+      }
+    },
+    "linker": {
+      "status": "failed",
+      "detail": "release_media link failed: Invalid API key"
+    },
+    "validator": {
+      "status": "completed"
+    },
+    "activator": {
+      "status": "completed",
+      "counts": {
+        "syncEvents": 0
+      }
+    }
+  },
+  "counts": {
+    "releases": 9,
+    "tracks": 30,
+    "mediaAssets": 71,
+    "releaseMedia": 0,
+    "audioVisuals": 3,
+    "syncEvents": 0
+  },
+  "validation": {
+    "errors": [],
+    "warnings": [
+      "Release hour-glass missing cover relationship",
+      "Release w2d missing cover relationship",
+      "Release artificial missing cover relationship",
+      "Release turnt-me-2-dis missing cover relationship",
+      "Release tbh missing cover relationship",
+      "Release ad missing cover relationship",
+      "Release love-hz missing cover relationship",
+      "Release i-dont-believe-you missing cover relationship",
+      "Release 2-heavy missing cover relationship"
+    ],
+    "ok": true
+  },
+  "messages": [
+    "Frontend release ecosystem ingestion completed.",
+    "Supabase release persistence did not complete; apply migrations through 0010_frontend_ecosystem_reconstruction.sql and rerun the import.",
+    "Catalog hydrated from Supabase after activation."
+  ]
+}

@@ -1,11 +1,11 @@
-import { fail, ok, requireAdmin } from "@/server/http";
-import { publishRelease } from "@/server/releases/releaseWriteService";
+import { fail, ok, requireStudioAccess } from "@/server/http";
+import { publishRelease } from "@/services/releases/publishRelease";
 
 export async function POST(request: Request, { params }: { params: Promise<{ id: string }> }) {
   try {
-    requireAdmin(request);
+    requireStudioAccess(request);
     const { id } = await params;
-    const release = publishRelease(id);
+    const release = await publishRelease(id);
     if (!release) {
       return fail("Release not found", 404);
     }

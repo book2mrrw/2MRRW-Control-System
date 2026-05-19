@@ -3,35 +3,35 @@ import type { CSSProperties } from "react";
 export const controlTokens = {
   color: {
     foundation: {
-      black: "#03050a",
-      obsidian: "#070a12",
-      deck: "#0b1020",
-      panel: "#0f1729",
-      panelRaised: "#141d33",
+      black: "#050505",
+      obsidian: "#0A0A0F",
+      deck: "#101014",
+      panel: "#101014",
+      panelRaised: "#15111d",
     },
     text: {
-      primary: "#f4f8ff",
-      secondary: "#aebbd4",
-      muted: "#68758f",
-      inverse: "#03050a",
+      primary: "#ffffff",
+      secondary: "#a1a1aa",
+      muted: "#71717a",
+      inverse: "#050505",
     },
     accent: {
-      signal: "#3ee7ff",
-      vault: "#9a6cff",
+      signal: "#8B5CF6",
+      vault: "#7C3AED",
       commerce: "#ff9f3e",
       danger: "#ff4f64",
       success: "#6affb7",
     },
     border: {
-      subtle: "rgba(174, 187, 212, 0.14)",
-      strong: "rgba(62, 231, 255, 0.34)",
+      subtle: "rgba(255, 255, 255, 0.08)",
+      strong: "rgba(139, 92, 246, 0.34)",
       warm: "rgba(255, 159, 62, 0.34)",
       danger: "rgba(255, 79, 100, 0.36)",
     },
   },
   rgb: {
-    signal: "62 231 255",
-    vault: "154 108 255",
+    signal: "139 92 246",
+    vault: "124 58 237",
     commerce: "255 159 62",
     danger: "255 79 100",
     success: "106 255 183",
@@ -42,6 +42,23 @@ export const controlTokens = {
     md: "16px",
     lg: "24px",
     pill: "999px",
+  },
+  space: {
+    xs: "6px",
+    sm: "10px",
+    md: "14px",
+    lg: "20px",
+    xl: "28px",
+  },
+  typography: {
+    ui: "Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, Segoe UI, sans-serif",
+    mono: "ui-monospace, SFMono-Regular, Menlo, Consolas, monospace",
+    scale: {
+      caption: "0.72rem",
+      body: "0.92rem",
+      title: "1.25rem",
+      hero: "clamp(2.5rem, 7vw, 6rem)",
+    },
   },
   shadow: {
     ambient: "0 30px 90px rgba(0, 0, 0, 0.48)",
@@ -55,6 +72,11 @@ export const controlTokens = {
     standard: "220ms",
     deliberate: "420ms",
     easing: "cubic-bezier(0.22, 1, 0.36, 1)",
+    shimmer: "1400ms",
+  },
+  blur: {
+    panel: "18px",
+    modal: "28px",
   },
 } as const;
 

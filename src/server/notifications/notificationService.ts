@@ -1,9 +1,5 @@
-const preferences = new Map<string, Record<string, boolean>>([
-  ["user_demo", { email: true, push: false, signal: true, radio: true }]
-]);
-const inbox = new Map<string, Array<{ id: string; title: string; read: boolean }>>([
-  ["user_demo", [{ id: "notif_welcome", title: "Welcome to Control", read: false }]]
-]);
+const preferences = new Map<string, Record<string, boolean>>();
+const inbox = new Map<string, Array<{ id: string; title: string; read: boolean }>>();
 
 export function getNotificationSummary(userId: string) {
   const messages = inbox.get(userId) ?? [];

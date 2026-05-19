@@ -1,5 +1,7 @@
 import { ReleaseWizardPage } from "@/components/control/ReleasePages";
+import { ensureFrontendReleaseEcosystemImported } from "@/server/release-management/frontendReleaseIngestionService";
 
-export default function NewReleasePage() {
-  return <ReleaseWizardPage step="basic" />;
+export default async function NewReleasePage() {
+  await ensureFrontendReleaseEcosystemImported();
+  return <ReleaseWizardPage step="setup" />;
 }

@@ -1,5 +1,7 @@
 import { MediaPage } from "@/components/control/ReleasePages";
+import { ensureFrontendReleaseEcosystemImported } from "@/server/release-management/frontendReleaseIngestionService";
 
-export default function VideosMediaRoute() {
+export default async function VideosMediaRoute() {
+  await ensureFrontendReleaseEcosystemImported();
   return <MediaPage mode="videos" />;
 }

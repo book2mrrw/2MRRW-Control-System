@@ -1,5 +1,7 @@
 import { MediaPage } from "@/components/control/ReleasePages";
+import { ensureFrontendReleaseEcosystemImported } from "@/server/release-management/frontendReleaseIngestionService";
 
-export default function AudioMediaRoute() {
+export default async function AudioMediaRoute() {
+  await ensureFrontendReleaseEcosystemImported();
   return <MediaPage mode="audio" />;
 }

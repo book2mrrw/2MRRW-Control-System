@@ -1,4 +1,4 @@
-export const releaseTypes = ["single", "album", "ep", "deluxe", "remix_pack"] as const;
+export const releaseTypes = ["single", "album", "ep", "feature", "deluxe", "remix_pack"] as const;
 export type ReleaseType = (typeof releaseTypes)[number];
 
 export const releaseStatuses = [

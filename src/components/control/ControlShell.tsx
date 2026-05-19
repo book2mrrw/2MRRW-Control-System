@@ -8,12 +8,12 @@ export function ControlShell() {
   return (
     <>
       <PageHeader
-        eyebrow="Operational dashboard"
-        title="2MRRW backend control center"
-        description="Route-backed entry points for release, media, identity, commerce, analytics, and operational management."
+        eyebrow="Command overview"
+        title="2MRRW Artist Control"
+        description="Release-first entry points for releases, media, analytics, revenue, Circle, and settings."
         actions={[
           { label: "Dashboard", href: "/dashboard" },
-          { label: "New Release", href: "/releases/new" }
+          { label: "+ Create Release", href: "/releases/new" }
         ]}
       />
       <StatusStrip
@@ -28,7 +28,7 @@ export function ControlShell() {
         {primaryNavigation.map((item) => (
           <OperationalCard
             detail={item.detail}
-            eyebrow="Route entry"
+            eyebrow="Open"
             href={item.href}
             key={item.href}
             title={item.label}
