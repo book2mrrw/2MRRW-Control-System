@@ -163,3 +163,35 @@ export function requireAdmin(request: Request) {
 
   throw new Error("Admin privileges required");
 }
+
+function isSameOriginStudioRequest(request: Request) {
+  const secFetchSite = request.headers.get("sec-fetch-site");
+  if (secFetchSite === "same-origin" || secFetchSite === "same-site") {
+    return true;
+  }
+
+  const host = request.headers.get("x-forwarded-host") ?? request.headers.get("host");
+  const origin = request.headers.get("origin");
+  if (!host || !origin) {
+    return false;
+  }
+
+  try {
+    return new URL(origin).host === host;
+  } catch {
+    return false;
+  }
+}
+
+/** Allows Control System browser sessions (same-origin) without client admin tokens. */
+export function requireStudioAccess(request: Request) {
+  try {
+    requireAdmin(request);
+    return;
+  } catch {
+    if (isSameOriginStudioRequest(request)) {
+      return;
+    }
+    throw new Error("Studio access required");
+  }
+}

@@ -1,24 +1,22 @@
 import type { Metadata } from "next";
 import type { ReactNode } from "react";
 import { OperationalShell } from "@/components/control/OperationalShell";
-import { PublicSitePreview, ToastStack } from "@/components/control/ReleaseControlViews";
-import { ReleaseControlProvider } from "@/components/control/ReleaseControlStore";
+import { buildControlCatalogPayload } from "@/server/catalog/controlCatalogPayload";
 import "./globals.css";
 
+export const dynamic = "force-dynamic";
+
 export const metadata: Metadata = {
-  title: "2MRRW — Release Control System",
-  description: "Creator release control system for 2MRRW backend operations.",
+  title: "2MRRW Control System",
+  description: "Backend operations command surface for the 2MRRW Control System.",
 };
 
-export default function RootLayout({ children }: Readonly<{ children: ReactNode }>) {
+export default async function RootLayout({ children }: Readonly<{ children: ReactNode }>) {
+  const initialCatalog = await buildControlCatalogPayload();
   return (
     <html lang="en">
       <body>
-        <ReleaseControlProvider>
-          <OperationalShell>{children}</OperationalShell>
-          <PublicSitePreview />
-          <ToastStack />
-        </ReleaseControlProvider>
+        <OperationalShell initialCatalog={initialCatalog}>{children}</OperationalShell>
       </body>
     </html>
   );

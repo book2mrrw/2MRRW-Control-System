@@ -3,11 +3,15 @@ import { getUserId, ok } from "@/server/http";
 import type { PublicReleaseCategory, PublicReleaseType } from "@/server/releases/releaseService";
 
 const PUBLIC_FRONTEND_ORIGINS = new Set([
+  "https://2mrrw.com",
+  "https://www.2mrrw.com",
+  "https://artist-platform-silk.vercel.app",
   "https://2mrrw-official.vercel.app"
 ]);
 
 function isAllowedPublicFrontendOrigin(origin: string) {
   if (PUBLIC_FRONTEND_ORIGINS.has(origin)) return true;
+  if (/^https:\/\/artist-platform-silk-[a-z0-9-]+\.vercel\.app$/i.test(origin)) return true;
   if (/^https:\/\/2mrrw-official-[a-z0-9-]+\.vercel\.app$/i.test(origin)) return true;
   return /^http:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/i.test(origin);
 }

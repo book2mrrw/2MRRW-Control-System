@@ -20,7 +20,7 @@ function getRequiredTier(collectionId: string) {
 
 function getAccessLabel(unlocked: boolean, requiredTier: string) {
   if (unlocked) return "Access Granted";
-  if (requiredTier === "founder") return "Founder Room";
+  if (requiredTier === "founder") return "Vault Room";
   return "Vault Pass";
 }
 

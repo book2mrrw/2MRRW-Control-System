@@ -16,11 +16,15 @@ export function getMediaAsset(assetId: string) {
 export function assertCanAccessMedia(
   userId: string | null | undefined,
   assetId: string,
-  options: { publicKinds?: MediaAssetContract["kind"][] } = {}
+  options: { publicKinds?: MediaAssetContract["kind"][]; studioBypass?: boolean } = {}
 ) {
   const asset = getMediaAsset(assetId);
   if (!asset) {
     return { allowed: false, reason: "Media asset not found" };
+  }
+
+  if (options.studioBypass) {
+    return { allowed: true, reason: "Studio catalog bypass", asset };
   }
 
   const assetKind = classifyMediaAsset(asset);
@@ -39,8 +43,11 @@ export function assertCanAccessMedia(
 
   const state = getAccountState(userId);
   const owningTrack = tracks.find((track) => track.mediaAssetId === assetId);
-  const canStreamTrack = owningTrack ? state.permissions.canStreamTrackIds.includes(owningTrack.id) : false;
-  const canDownloadAsset = state.permissions.canDownloadAssetIds.includes(assetId);
+  const hasMembership = state.permissions.membershipTiers.length > 0;
+  const canStreamTrack = owningTrack
+    ? state.permissions.canStreamTrackIds.includes(owningTrack.id) || hasMembership
+    : hasMembership;
+  const canDownloadAsset = state.permissions.canDownloadAssetIds.includes(assetId) || hasMembership;
 
   return {
     allowed: canStreamTrack || canDownloadAsset,

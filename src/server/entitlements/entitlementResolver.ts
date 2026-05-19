@@ -1,10 +1,7 @@
 import { mediaAssets, products, tracks } from "@/server/data/seedData";
 import type { EntitlementGrant, NormalizedPermissions, Profile } from "@/server/types";
 
-const userPurchases = new Map<string, Set<string>>([
-  ["user_demo", new Set(["prod_afterhours_digital"])],
-  ["admin_demo", new Set(["prod_afterhours_digital", "prod_founder_membership"])]
-]);
+const userPurchases = new Map<string, Set<string>>();
 
 export function grantProductToUser(userId: string, productId: string) {
   const purchases = userPurchases.get(userId) ?? new Set<string>();

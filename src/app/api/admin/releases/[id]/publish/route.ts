@@ -1,9 +1,9 @@
-import { fail, ok, requireAdmin } from "@/server/http";
+import { fail, ok, requireStudioAccess } from "@/server/http";
 import { publishRelease } from "@/services/releases/publishRelease";
 
 export async function POST(request: Request, { params }: { params: Promise<{ id: string }> }) {
   try {
-    requireAdmin(request);
+    requireStudioAccess(request);
     const { id } = await params;
     const release = await publishRelease(id);
     if (!release) {

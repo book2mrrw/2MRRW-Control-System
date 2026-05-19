@@ -11,9 +11,8 @@ export const primaryNavigation: NavItem[] = [
   { href: "/dashboard", label: "Dashboard", detail: "Today / focus", tone: "vault" },
   { href: "/releases", label: "Releases", detail: "Discography", tone: "vault" },
   { href: "/media", label: "Media", detail: "Uploads / assets", tone: "signal" },
-  { href: "/hero-editor", label: "Hero Editor", detail: "Public hero", tone: "signal" },
   { href: "/analytics", label: "Analytics", detail: "Audience", tone: "success" },
-  { href: "/shop", label: "Shop", detail: "Merch analytics", tone: "commerce" },
+  { href: "/shop", label: "Shop", detail: "Merch / drops", tone: "commerce" },
   { href: "/settings", label: "Settings", detail: "Defaults", tone: "vault" }
 ];
 
@@ -52,13 +51,10 @@ export const modulePages: Record<
   vault: {
     title: "Vault Media",
     eyebrow: "Protected content",
-    description: "Prepare private media for members, collectors, and gated experiences.",
+    description: "Upload and replace vault visuals, previews, and cinematic assets. Frontend access checks stay outside the backend UI.",
     tone: "vault",
-    actions: [{ label: "Upload vault asset", href: "/media/loops" }, { label: "Review identity", href: "/identity" }],
-    rows: [
-      { Item: "Founder Room", State: "Ready", Sync: "Protected audience only" },
-      { Item: "Session notes", State: "Private", Sync: "Available after publish" }
-    ]
+    actions: [{ label: "Upload vault asset", href: "/media/loops" }, { label: "Media Library", href: "/media" }],
+    rows: []
   },
   analytics: {
     title: "Analytics",
@@ -75,47 +71,45 @@ export const modulePages: Record<
   identity: {
     title: "Account Access",
     eyebrow: "Audience access",
-    description: "Review membership, library, and content access states.",
+    description: "Frontend authentication and user state are handled by the public app. Backend stays focused on content sync.",
     tone: "vault",
-    actions: [{ label: "Review vault grants", href: "/vault" }, { label: "Commerce grants", href: "/commerce" }],
-    rows: [
-      { Item: "Membership", State: "Active", Scope: "Vault and collector access" },
-      { Item: "Library", State: "Ready", Scope: "Saved releases" }
-    ]
+    actions: [{ label: "Open media", href: "/media" }, { label: "Open releases", href: "/releases" }],
+    rows: []
   },
   commerce: {
     title: "Revenue",
-    eyebrow: "Royalties and access",
-    description: "Review payout readiness, checkout creation, webhook fulfillment, and post-payment access grants.",
+    eyebrow: "Royalties",
+    description: "Review revenue operations and storefront sync health without managing frontend access rules.",
     tone: "commerce",
     actions: [{ label: "Open revenue", href: "/revenue" }, { label: "Open settings", href: "/settings" }],
     rows: [
-      { Item: "Products", State: "Connected", Scope: "Purchases and grants" },
-      { Item: "Membership", State: "Connected", Scope: "Access after payment" }
+      { Item: "Products", State: "No products yet", Scope: "Merch and revenue" },
+      { Item: "Revenue events", State: "No data yet", Scope: "Purchases and payouts" }
     ]
   },
   revenue: {
     title: "Revenue",
     eyebrow: "Royalties and payouts",
-    description: "Review streaming revenue, vault revenue, subscriptions, royalties, and pending payouts.",
+    description: "Review streaming revenue, merch revenue, royalties, and pending payouts.",
     tone: "commerce",
     actions: [{ label: "Open media", href: "/media" }, { label: "Review settings", href: "/settings" }],
     rows: [
-      { Item: "Royalty summary", State: "Ready for payout wiring", Snapshot: "Revenue by release" },
-      { Item: "Product access", State: "Connected", Snapshot: "Purchases and memberships" }
+      { Item: "Royalty summary", State: "No data yet", Snapshot: "Revenue by release" },
+      { Item: "Revenue events", State: "No data yet", Snapshot: "Purchases and payouts" }
     ]
   },
   shop: {
     title: "Shop",
-    eyebrow: "Merch analytics",
-    description: "Track merch performance, product engagement, revenue signals, conversion quality, and release-linked demand.",
+    eyebrow: "Merch and commerce",
+    description: "Manage merch, cinematic product presentation, Shopify structure, Printful support, and premium drop readiness.",
     tone: "commerce",
-    actions: [{ label: "Open analytics", href: "/analytics" }, { label: "Release context", href: "/releases" }],
+    actions: [{ label: "Add product", href: "/shop#create" }, { label: "Release drops", href: "/releases" }],
     rows: [
-      { Item: "Merch revenue", State: "Awaiting live data", Snapshot: "Sales and release attribution" },
-      { Item: "Product engagement", State: "Awaiting live data", Snapshot: "Views, saves, and conversion" },
-      { Item: "Demand signals", State: "Awaiting live data", Snapshot: "Audience interest by drop" },
-      { Item: "Inventory analytics", State: "Awaiting live data", Snapshot: "Stock and sell-through" }
+      { Item: "Merch management", State: "Ready", Snapshot: "Products, variants, bundles" },
+      { Item: "360 viewer", State: "Structured", Snapshot: "Cinematic product spin" },
+      { Item: "Shopify", State: "Integration layer", Snapshot: "Storefront sync path" },
+      { Item: "Printful", State: "Support planned", Snapshot: "Fulfillment provider" },
+      { Item: "Ghost mannequin", State: "Visual system", Snapshot: "Floating apparel view" }
     ]
   },
   notify: {

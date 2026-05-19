@@ -6,6 +6,9 @@
   "scripts": {
     "build": "next build",
     "typecheck": "tsc --noEmit",
+    "ingest:frontend": "node --conditions react-server --import tsx scripts/ingest-frontend.ts",
+    "import:frontend-releases": "node --conditions react-server --import tsx src/scripts/ingestFrontend.ts --activate",
+    "export:frontend-releases-sql": "node --conditions react-server --import tsx src/scripts/exportFrontendReleasesSql.ts",
     "test": "node --conditions react-server --import tsx tests/backend-foundation.test.ts",
     "verify": "npm run typecheck && npm run test"
   },
@@ -13,6 +16,7 @@
     "@supabase/ssr": "^0.10.3",
     "@supabase/supabase-js": "latest",
     "lucide-react": "^1.16.0",
+    "luxon": "^3.7.2",
     "next": "latest",
     "react": "latest",
     "react-dom": "latest",
@@ -21,6 +25,7 @@
     "zod": "latest"
   },
   "devDependencies": {
+    "@types/luxon": "^3.7.1",
     "@types/node": "latest",
     "@types/react": "latest",
     "tsx": "latest",

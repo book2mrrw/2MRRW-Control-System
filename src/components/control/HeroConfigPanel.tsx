@@ -4,9 +4,6 @@ import { useEffect, useState, type FormEvent } from "react";
 
 export function HeroConfigPanel() {
   const [title, setTitle] = useState("");
-  const [subtitle, setSubtitle] = useState("");
-  const [ctaLabel, setCtaLabel] = useState("");
-  const [ctaHref, setCtaHref] = useState("");
   const [backgroundMediaUrl, setBackgroundMediaUrl] = useState("");
   const [backgroundMediaType, setBackgroundMediaType] = useState<"image" | "mp4">("image");
   const [status, setStatus] = useState("Hero config saves only when a Supabase hero_config table is available.");
@@ -18,9 +15,6 @@ export function HeroConfigPanel() {
         const data = payload?.data?.data;
         if (data) {
           setTitle(data.title ?? "");
-          setSubtitle(data.subtitle ?? "");
-          setCtaLabel(data.cta_label ?? "");
-          setCtaHref(data.cta_href ?? "");
           setBackgroundMediaUrl(data.background_media_url ?? "");
           setBackgroundMediaType(data.background_media_type === "mp4" ? "mp4" : "image");
         }
@@ -35,7 +29,7 @@ export function HeroConfigPanel() {
     const response = await fetch("/api/admin/hero-config", {
       method: "POST",
       headers: { "Content-Type": "application/json", "x-admin": "true" },
-      body: JSON.stringify({ title, subtitle, ctaLabel, ctaHref, backgroundMediaUrl, backgroundMediaType })
+      body: JSON.stringify({ title, backgroundMediaUrl, backgroundMediaType })
     });
     const payload = await response.json().catch(() => null);
     setStatus(response.ok ? "Hero config saved to Supabase." : payload?.error?.message ?? "Hero config could not be saved.");
@@ -54,18 +48,6 @@ export function HeroConfigPanel() {
         <label>
           Hero title
           <input value={title} onChange={(event) => setTitle(event.target.value)} placeholder="2MRRW release moment" required />
-        </label>
-        <label>
-          Hero subtitle
-          <input value={subtitle} onChange={(event) => setSubtitle(event.target.value)} placeholder="Optional supporting line" />
-        </label>
-        <label>
-          CTA label
-          <input value={ctaLabel} onChange={(event) => setCtaLabel(event.target.value)} placeholder="Optional action label" />
-        </label>
-        <label>
-          CTA href
-          <input value={ctaHref} onChange={(event) => setCtaHref(event.target.value)} placeholder="/releases or backend preview URL" />
         </label>
         <label>
           Background media URL

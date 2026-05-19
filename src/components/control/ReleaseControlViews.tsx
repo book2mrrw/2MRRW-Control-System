@@ -93,7 +93,7 @@ export function DashboardView() {
       <header className="rc-hero panel">
         <p>2MRRW — Release Control System</p>
         <h1>{releases.length ? "Release control is live." : "Start from a clean release system."}</h1>
-        <span>{releases.length ? `${live.length} live / ${releases.length} total releases` : "No NEBULA cards. No hardcoded releases. Create the first backend draft."}</span>
+        <span>{releases.length ? `${live.length} live / ${releases.length} total releases` : "No releases yet. Create the first backend draft."}</span>
       </header>
       <section className="rc-stats">
         <article><span>Total releases</span><strong>{releases.length}</strong></article>
@@ -152,17 +152,16 @@ export function ReleaseEditorView() {
   const steps = ["Type", "Details", "Tracks", "Artwork", "Publish"];
 
   function enforceTrackCount(nextType: ReleaseType) {
-    const [min, max] = releaseTypeLimits[nextType];
+    const [, max] = releaseTypeLimits[nextType];
     setTrackTitles((current) => {
-      const resized = current.slice(0, max);
-      while (resized.length < min) resized.push("");
-      return resized;
+      if (nextType === "single") return [current[0] ?? ""];
+      return current.slice(0, max);
     });
   }
 
   function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    const tracks = trackTitles.slice(0, maxTracks).map((trackTitle, index) => ({ id: `track_${index + 1}`, title: trackTitle || `Track ${index + 1}`, credits: "", audioFile: "" }));
+    const tracks = trackTitles.slice(0, maxTracks).map((trackTitle, index) => ({ id: `track_${index + 1}`, title: trackTitle.trim(), credits: "", audioFile: "" }));
     const release = createRelease({ type, title, artist, releaseDate, coverUrl, youtubeUrl, tracks });
     setLastReleaseId(release.id);
   }

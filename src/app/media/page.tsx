@@ -1,5 +1,7 @@
-import { MediaLibraryView } from "@/components/control/ReleaseControlViews";
+import { MediaPage } from "@/components/control/ReleasePages";
+import { ensureFrontendReleaseEcosystemImported } from "@/server/release-management/frontendReleaseIngestionService";
 
-export default function MediaRoute() {
-  return <MediaLibraryView />;
+export default async function MediaRoute() {
+  await ensureFrontendReleaseEcosystemImported();
+  return <MediaPage />;
 }

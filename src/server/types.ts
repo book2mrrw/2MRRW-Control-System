@@ -30,6 +30,7 @@ export type Track = {
   durationSeconds: number;
   mediaAssetId: string;
   position: number;
+  lyricsText?: string | null;
 };
 
 export type Product = {

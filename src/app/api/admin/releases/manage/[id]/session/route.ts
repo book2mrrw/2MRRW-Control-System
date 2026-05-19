@@ -5,6 +5,7 @@ import {
   saveDraftSessionSnapshot,
   upsertCreatorSession
 } from "@/server/release-management/releaseLifecycleService";
+import { loadTrackLyricsMap, persistTrackLyricsMap } from "@/server/release-management/trackLyricsService";
 import { z } from "zod";
 
 const snapshotSchema = z.object({
@@ -45,8 +46,13 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
     requireAdmin(request);
     const { id } = await params;
     const sessionId = new URL(request.url).searchParams.get("sessionId") ?? undefined;
+    const restored = restoreDraftSession({ releaseId: id, sessionId });
+    const durableLyrics = await loadTrackLyricsMap(id);
     return ok({
-      restore: restoreDraftSession({ releaseId: id, sessionId }),
+      restore: {
+        ...restored,
+        lyrics: { ...(restored.snapshot?.lyrics ?? {}), ...durableLyrics }
+      },
       snapshots: listDraftSessionSnapshots(id)
     });
   } catch (error) {
@@ -63,6 +69,9 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
       ...input,
       releaseId: id
     });
+    if (input.lyrics) {
+      await persistTrackLyricsMap(id, input.lyrics);
+    }
     const session = upsertCreatorSession({
       id: input.sessionId,
       releaseId: id,

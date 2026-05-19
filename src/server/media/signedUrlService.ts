@@ -144,9 +144,10 @@ async function userHasPersistedEntitlement(userId: string, context: PersistedEnt
 async function canUsePersistedAsset(
   userId: string | null | undefined,
   asset: SignableAsset,
-  options: { publicKinds?: MediaAssetContract["kind"][] }
+  options: { publicKinds?: MediaAssetContract["kind"][]; studioBypass?: boolean }
 ): Promise<boolean> {
   const kind = classifyMediaAsset({ path: asset.path, ownerType: asset.ownerType });
+  if (options.studioBypass) return true;
   if (asset.access === "public" && (!options.publicKinds || options.publicKinds.includes(kind))) {
     return true;
   }
@@ -161,9 +162,12 @@ async function canUsePersistedAsset(
 export async function createSignedMediaUrl(
   userId: string | null | undefined,
   assetId: string,
-  options: { publicKinds?: MediaAssetContract["kind"][] } = {}
+  options: { publicKinds?: MediaAssetContract["kind"][]; studioBypass?: boolean } = {}
 ) {
-  const access = assertCanAccessMedia(userId, assetId, options);
+  const access = assertCanAccessMedia(userId, assetId, {
+    publicKinds: options.publicKinds,
+    studioBypass: options.studioBypass
+  });
   const persistedAsset = !access.asset ? await getPersistedMediaAsset(assetId) : null;
   if ((!access.allowed || !access.asset) && !persistedAsset) {
     return { ok: false as const, status: access.asset ? 403 : 404, message: access.reason };

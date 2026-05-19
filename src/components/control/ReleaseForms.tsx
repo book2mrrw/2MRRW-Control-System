@@ -21,22 +21,22 @@ const releaseTypeOptions = [
     value: "ep",
     label: "EP",
     icon: "Layers",
-    detail: "2-4 tracks",
-    defaultTrackCount: 4
+    detail: "2-6 tracks",
+    defaultTrackCount: 0
   },
   {
     value: "album",
     label: "Album",
     icon: "Album",
-    detail: "5+ tracks",
-    defaultTrackCount: 10
+    detail: "7+ tracks",
+    defaultTrackCount: 0
   },
   {
     value: "deluxe",
     label: "Deluxe Album",
     icon: "Sparkles",
     detail: "Album with bonus tracks",
-    defaultTrackCount: 15
+    defaultTrackCount: 0
   }
 ] as const;
 
@@ -115,7 +115,7 @@ export function CreateReleaseDraftForm() {
       </div>
       <div className="span-2 workflow-note-card">
         <p className="meta-label">Release type rules</p>
-        <strong>Single = 1 track. EP = 2-4 tracks. Album = 5+ tracks. Deluxe = optional bonus-track version.</strong>
+        <strong>Single = 1 track. EP = 2-6 tracks. Album = 7+ tracks. Add EP and album tracks manually.</strong>
         <span>Progress persists as a draft after creation; continue on any screen size.</span>
       </div>
       <button className="control-button" disabled={state.busy} type="submit">
@@ -123,6 +123,31 @@ export function CreateReleaseDraftForm() {
       </button>
       <p className="form-status">{state.message}</p>
     </form>
+  );
+}
+
+export function AddTrackButton({ releaseId, disabled = false }: { releaseId: string; disabled?: boolean }) {
+  const router = useRouter();
+  const [state, setState] = useState<ApiState>({ busy: false, message: "" });
+
+  async function addTrack() {
+    setState({ busy: true, message: "Adding track..." });
+    const response = await fetch(`/api/admin/releases/manage/${releaseId}/tracks`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "x-admin": "true" }
+    });
+    const payload = await readPayload(response);
+    setState({ busy: false, message: response.ok ? "" : payload?.error?.message || "Track could not be added." });
+    router.refresh();
+  }
+
+  return (
+    <>
+      <button className="control-button secondary" disabled={disabled || state.busy} onClick={addTrack} type="button">
+        Add Track
+      </button>
+      {state.message ? <p className="form-status">{state.message}</p> : null}
+    </>
   );
 }
 
@@ -148,15 +173,7 @@ export function ReleaseMetadataForm({
     }, [])
   );
   const languageOptions = taxonomyOptions(lyricLanguages);
-  const scheduledDate = draft.scheduledPublishAt?.slice(0, 10) ?? "";
-  const scheduledTime = draft.scheduledPublishAt?.includes("T") ? draft.scheduledPublishAt.slice(11, 16) : "";
-
-  function scheduledPublishValue(form: FormData) {
-    const releaseDate = String(form.get("scheduledPublishAt") || "");
-    const releaseTime = String(form.get("releaseTime") || "");
-    if (!releaseDate) return undefined;
-    return releaseTime ? `${releaseDate}T${releaseTime}:00` : releaseDate;
-  }
+  const catalogDate = draft.originalReleaseDate ?? draft.scheduledPublishAt?.slice(0, 10) ?? "";
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -171,10 +188,9 @@ export function ReleaseMetadataForm({
         recordLabel: form.get("recordLabelAdvanced") || form.get("recordLabel"),
         copyrightOwner: form.get("copyrightOwnerAdvanced") || form.get("copyrightOwner"),
         upc: form.get("upc"),
-        scheduledPublishAt: scheduledPublishValue(form),
+        originalReleaseDate: String(form.get("originalReleaseDate") || "") || undefined,
         publisherName: form.get("publisherNameAdvanced") || form.get("publisherName"),
         recordingLocation: form.get("recordingLocation"),
-        originalReleaseDate: form.get("originalReleaseDate"),
         catalogNumber: form.get("catalogNumber"),
         metadataNotes: form.get("metadataNotes"),
         primaryGenre: {
@@ -206,13 +222,13 @@ export function ReleaseMetadataForm({
         </label>
         <TypeaheadField label="Main Artist Search/Add" defaultValue={draft.artistName} options={savedContributors} readOnly />
         <label>
-          Release Date
-          <input name="scheduledPublishAt" type="date" defaultValue={scheduledDate} />
+          Catalog release date
+          <input name="originalReleaseDate" type="date" defaultValue={catalogDate} />
         </label>
-        <label>
-          Release Time
-          <input name="releaseTime" type="time" defaultValue={scheduledTime} />
-        </label>
+        <p className="input-hint span-2">
+          Global drop scheduling (month/day/year, AM/PM, timezone) lives on the Review step and{" "}
+          <a href="/releases/new/scheduler">scheduler page</a>.
+        </p>
         <TypeaheadField name="language" label="Language" defaultValue={draft.language} options={languageOptions} emptyLabel="No language found. Create a language note." createLabel="+ Create Language" />
         <TypeaheadField name="genreCategory" label="Primary Genre" defaultValue={draft.primaryGenre?.category ?? primaryGenre?.category} options={genreOptions} emptyLabel="No genre found. Choose or create a genre tag." createLabel="+ Create New Genre" />
         <TypeaheadField name="subgenre" label="Primary Subgenre" defaultValue={draft.primaryGenre?.subgenre ?? primarySubgenre?.value} options={subgenreOptions} emptyLabel="No subgenre found. Create a metadata tag." createLabel="+ Create New Subgenre" />
@@ -288,7 +304,7 @@ export function ReleaseMetadataForm({
             </label>
             <label className="span-2">
               Release Description
-              <textarea placeholder="Short release description for 2MRRW announcements, distribution pages, and vault context." rows={4} />
+              <textarea placeholder="Short release description for 2MRRW announcements, storefront pages, and vault context." rows={4} />
             </label>
           </div>
         </details>
@@ -323,8 +339,6 @@ export function TrackInformationForm({
       headers: { "Content-Type": "application/json", "x-admin": "true" },
       body: JSON.stringify({
         title: form.get("title"),
-        audioFile: form.get("audioFile"),
-        credits: form.get("credits"),
         explicit: form.get("explicit") === "on",
         lyricsLanguage: form.get("lyricsLanguage"),
         isLiveVersion: form.get("isLiveVersion") === "on",
@@ -362,10 +376,6 @@ export function TrackInformationForm({
       <label>
         Preview start
         <input placeholder="0:30" />
-      </label>
-      <label>
-        Audio file reference
-        <input name="audioFile" defaultValue={track.audioFile} placeholder="Selected upload path or audio file reference" />
       </label>
       <label>
         BPM
@@ -412,10 +422,6 @@ export function TrackInformationForm({
         <input placeholder="Cinematic, high-energy, reflective" />
       </label>
       <TypeaheadField name="producerNames" label="Producers / engineers / collaborators" defaultValue={track.producerNames.join(", ")} options={savedContributors} placeholder="Producer, engineer, designer, collaborator" />
-      <label className="span-2">
-        Track credits
-        <textarea name="credits" defaultValue={track.credits} placeholder="Credits attached to this track" rows={3} />
-      </label>
       <label>
         Track sequence number
         <input min="1" type="number" defaultValue={track.position} />

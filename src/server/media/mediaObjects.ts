@@ -36,6 +36,7 @@ export type TrackMediaObject = {
   previewAssetId?: string;
   fullAssetId?: string;
   lyricsAssetId?: string;
+  lyricsText?: string | null;
   loopAssetId?: string;
   assets: {
     preview?: MediaAssetContract;
@@ -62,7 +63,9 @@ export type ReleaseMediaObject = {
   status: "published" | "scheduled";
   scheduledPublishAt?: string;
   artworkAssetId?: string;
+  motionArtworkAssetId?: string;
   artwork?: MediaAssetContract;
+  motionArtwork?: MediaAssetContract;
   products?: Array<{
     id: string;
     slug: string;
@@ -172,8 +175,11 @@ function getEntitlement(input: {
   permissions?: NormalizedPermissions;
 }): EntitlementSummary {
   const permissions = input.permissions;
-  const canStream = input.trackId ? Boolean(permissions?.canStreamTrackIds.includes(input.trackId)) : false;
-  const canDownload = input.assetIds.some((assetId) => permissions?.canDownloadAssetIds.includes(assetId));
+  const hasMembership = (permissions?.membershipTiers.length ?? 0) > 0;
+  const canStream = input.trackId
+    ? Boolean(permissions?.canStreamTrackIds.includes(input.trackId) || hasMembership)
+    : hasMembership;
+  const canDownload = hasMembership || input.assetIds.some((assetId) => permissions?.canDownloadAssetIds.includes(assetId));
 
   return {
     canStream,
@@ -204,6 +210,7 @@ export function buildTrackMediaObject(
     previewAssetId: preview?.assetId,
     fullAssetId: full?.assetId,
     lyricsAssetId: lyrics?.assetId,
+    lyricsText: track.lyricsText ?? null,
     loopAssetId: loop?.assetId,
     assets: {
       preview,
@@ -231,6 +238,7 @@ export function buildReleaseMediaObject(input: MediaObjectInput): ReleaseMediaOb
     .sort((a, b) => a.position - b.position)
     .map((track) => buildTrackMediaObject(track, input));
   const artwork = input.mediaAssets.find((asset) => asset.id === input.release.coverAssetId);
+  const motionArtwork = input.mediaAssets.find((asset) => asset.path.startsWith("loops/") && asset.ownerId === input.release.id);
   const trackEntitlements = tracks.map((track) => track.entitlement);
   const canStream = trackEntitlements.some((entitlement) => entitlement.canStream);
   const canDownload = trackEntitlements.some((entitlement) => entitlement.canDownload);
@@ -250,7 +258,9 @@ export function buildReleaseMediaObject(input: MediaObjectInput): ReleaseMediaOb
     status: input.release.status ?? "published",
     scheduledPublishAt: input.release.scheduledPublishAt,
     artworkAssetId: artwork?.id,
+    motionArtworkAssetId: motionArtwork?.id,
     artwork: artwork ? toMediaAssetContract(artwork) : undefined,
+    motionArtwork: motionArtwork ? toMediaAssetContract(motionArtwork) : undefined,
     products: input.products,
     productSlug: firstPricedProduct?.productSlug ?? firstPricedProduct?.slug ?? null,
     price: typeof priceCents === "number" ? priceCents / 100 : undefined,

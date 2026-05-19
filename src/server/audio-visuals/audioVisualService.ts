@@ -1,5 +1,6 @@
 import "server-only";
 
+import crypto from "node:crypto";
 import { emitAfterSuccessfulAction } from "@/server/events/eventedWriteService";
 import { getServerSupabase } from "@/server/supabase/client";
 
@@ -26,7 +27,9 @@ export type AudioVisualRecord = {
 export type AudioVisualWriteInput = {
   title: string;
   slug?: string;
-  youtubeUrl: string;
+  youtubeUrl?: string;
+  videoUrl?: string;
+  mediaType?: string;
   releaseId?: string | null;
   trackId?: string | null;
   status?: AudioVisualStatus;
@@ -188,7 +191,13 @@ function sortVisuals(a: AudioVisualRecord, b: AudioVisualRecord) {
 }
 
 function buildRecord(input: AudioVisualWriteInput, existing?: AudioVisualRecord): AudioVisualRecord {
-  const normalized = parseYouTubeAudioVisualUrl(input.youtubeUrl);
+  const sourceUrl = input.youtubeUrl ?? input.videoUrl ?? existing?.youtubeUrl ?? "";
+  const parsed = parseMediaVisualInput({
+    title: input.title || existing?.title || "Audio Visual",
+    youtubeUrl: sourceUrl,
+    videoUrl: input.videoUrl,
+    mediaType: input.mediaType ?? (existing?.metadata?.mediaType as string | undefined)
+  });
   const timestamp = nowIso();
   const status = input.status ?? existing?.status ?? "draft";
   const requestedPublishedAt = input.publishedAt !== undefined ? input.publishedAt : existing?.publishedAt ?? null;
@@ -198,13 +207,16 @@ function buildRecord(input: AudioVisualWriteInput, existing?: AudioVisualRecord)
     id: existing?.id ?? crypto.randomUUID(),
     title: input.title.trim(),
     slug: uniqueSlug(input.slug ?? input.title, existing?.id),
-    ...normalized,
+    youtubeUrl: parsed.youtubeUrl,
+    youtubeVideoId: parsed.youtubeVideoId,
+    embedUrl: parsed.embedUrl,
+    thumbnailUrl: parsed.thumbnailUrl || existing?.thumbnailUrl || "",
     releaseId: input.releaseId !== undefined ? input.releaseId : existing?.releaseId ?? null,
     trackId: input.trackId !== undefined ? input.trackId : existing?.trackId ?? null,
     status,
     publishedAt,
     sortOrder: input.sortOrder ?? existing?.sortOrder ?? 0,
-    metadata: input.metadata ?? existing?.metadata ?? {},
+    metadata: { ...(existing?.metadata ?? {}), ...parsed.metadata, ...(input.metadata ?? {}) },
     createdAt: existing?.createdAt ?? timestamp,
     updatedAt: timestamp
   };
@@ -283,6 +295,8 @@ export async function updateAudioVisual(id: string, input: Partial<AudioVisualWr
       title: input.title ?? existing.title,
       slug: input.slug ?? existing.slug,
       youtubeUrl: input.youtubeUrl ?? existing.youtubeUrl,
+      videoUrl: input.videoUrl,
+      mediaType: input.mediaType,
       releaseId: input.releaseId !== undefined ? input.releaseId : existing.releaseId,
       trackId: input.trackId !== undefined ? input.trackId : existing.trackId,
       status: input.status ?? existing.status,
@@ -318,4 +332,62 @@ export async function updateAudioVisual(id: string, input: Partial<AudioVisualWr
 
 export async function publishAudioVisual(id: string) {
   return updateAudioVisual(id, { status: "published", publishedAt: nowIso() });
+}
+
+export async function getAudioVisualById(id: string) {
+  const rows = await listAudioVisuals({ publicOnly: false, limit: 200 });
+  return rows.find((visual) => visual.id === id) ?? null;
+}
+
+export async function deleteAudioVisual(id: string) {
+  const existing = await getAudioVisualById(id);
+  if (!existing) return false;
+
+  const supabase = getServerSupabase();
+  if (supabase) {
+    const { error } = await supabase.from("audio_visuals").delete().eq("id", id);
+    if (error) return false;
+  }
+
+  memoryAudioVisuals.delete(id);
+  emitAfterSuccessfulAction({
+    type: "audio_visuals.updated",
+    entityId: id,
+    data: { visualId: id, slug: existing.slug, action: "deleted" }
+  });
+  return true;
+}
+
+/** Stable 11-char id for file-hosted visuals (MP4/MOV/WEBM) that satisfy the DB check constraint. */
+export function syntheticYoutubeIdForFileVisual(seed: string) {
+  const hash = crypto.createHash("sha256").update(seed).digest("base64url").replace(/[^A-Za-z0-9_-]/g, "");
+  return (hash.slice(0, 11) || "localvisual").padEnd(11, "0").slice(0, 11);
+}
+
+export function parseMediaVisualInput(input: {
+  youtubeUrl?: string;
+  videoUrl?: string;
+  mediaType?: string;
+  title: string;
+}) {
+  const mediaType = (input.mediaType ?? "youtube").toLowerCase();
+  const videoUrl = input.videoUrl?.trim() || input.youtubeUrl?.trim() || "";
+
+  if (mediaType === "mp4" || mediaType === "mov" || mediaType === "webm" || /\.(mp4|mov|webm)(\?|$)/i.test(videoUrl)) {
+    const ext = mediaType === "youtube" ? (videoUrl.match(/\.(mp4|mov|webm)/i)?.[1]?.toLowerCase() ?? "mp4") : mediaType;
+    const id = syntheticYoutubeIdForFileVisual(`${input.title}:${videoUrl}`);
+    return {
+      youtubeUrl: videoUrl,
+      youtubeVideoId: id,
+      embedUrl: videoUrl,
+      thumbnailUrl: "",
+      metadata: { mediaType: ext, videoUrl, embedSource: "file" as const }
+    };
+  }
+
+  const normalized = parseYouTubeAudioVisualUrl(videoUrl || input.youtubeUrl || "");
+  return {
+    ...normalized,
+    metadata: { mediaType: "youtube", embedSource: "youtube" as const }
+  };
 }

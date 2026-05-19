@@ -1,5 +1,8 @@
+import type { ScheduleParts } from "@/lib/scheduling/releaseScheduleTime";
 import { artists } from "@/server/data/seedData";
+import { buildSchedulePayload, persistReleaseSchedule } from "@/server/releases/scheduledPublishService";
 import { emitAfterSuccessfulAction } from "@/server/events/eventedWriteService";
+import { persistSyncEvent } from "@/server/events/syncEventPersistenceService";
 import { rememberContributorFromCredit, rememberReleaseMetadata } from "@/server/release-management/contributorDirectoryService";
 import {
   buildFrontendPreviewLinks,
@@ -60,6 +63,8 @@ export type ReleaseManagementTrack = {
   releaseId: string;
   title: string;
   audioFile?: string;
+  previewAudioFile?: string;
+  fullAudioFile?: string;
   credits?: string;
   position: number;
   explicit: boolean;
@@ -131,6 +136,9 @@ export type ReleaseManagementDraft = {
   };
   famousArtistReferences: string[];
   tags: string[];
+  coverArtPath?: string;
+  motionArtworkPath?: string;
+  frontendSyncTargets: string[];
   coverArtState: UploadReadinessState;
   audioAssetsState: UploadReadinessState;
   lyricsState: LyricReadinessState;
@@ -164,6 +172,31 @@ function nowIso() {
   return new Date().toISOString();
 }
 
+function persistReleaseTracklistSyncEvent(draft: ReleaseManagementDraft, updates: Record<string, unknown>) {
+  void persistSyncEvent({
+    type: "release.updated",
+    entityId: draft.id,
+    timestamp: Date.now(),
+    data: {
+      releaseId: draft.id,
+      slug: draft.slug,
+      source: "release_management",
+      syncScope: "tracklist",
+      frontendSyncTargets: draft.frontendSyncTargets,
+      trackCount: draft.tracks.length,
+      tracklist: draft.tracks.map((track) => ({
+        id: track.id,
+        title: track.title,
+        position: track.position,
+        previewAudioFile: track.previewAudioFile,
+        fullAudioFile: track.fullAudioFile,
+        audioState: track.audioState
+      })),
+      updates
+    }
+  });
+}
+
 function slugify(value: string) {
   return value
     .trim()
@@ -194,16 +227,20 @@ function assertTrackCount(releaseType: ReleaseType, trackCount: number) {
     throw new Error("Singles must contain exactly 1 track");
   }
 
-  if (releaseType === "ep" && (trackCount < 2 || trackCount > 4)) {
-    throw new Error("EPs must contain 2-4 tracks");
+  if (releaseType === "ep" && (trackCount < 0 || trackCount > 6)) {
+    throw new Error("EPs can contain up to 6 tracks while drafting");
   }
 
-  if (releaseType === "album" && trackCount < 5) {
-    throw new Error("Albums must contain at least 5 tracks");
+  if (releaseType === "album" && trackCount < 0) {
+    throw new Error("Albums cannot have a negative track count");
   }
 
-  if ((releaseType === "deluxe" || releaseType === "remix_pack") && trackCount < 1) {
-    throw new Error("Deluxe editions and remix packs must contain at least 1 track");
+  if (releaseType === "feature" && trackCount !== 1) {
+    throw new Error("Features must contain exactly 1 track");
+  }
+
+  if ((releaseType === "deluxe" || releaseType === "remix_pack") && trackCount < 0) {
+    throw new Error("Deluxe editions and remix packs cannot have a negative track count");
   }
 }
 
@@ -211,7 +248,7 @@ function makeTrack(releaseId: string, position: number): ReleaseManagementTrack 
   return {
     id: nextId("trk_draft"),
     releaseId,
-    title: `Track ${position}`,
+    title: "",
     position,
     explicit: false,
     isLiveVersion: false,
@@ -228,7 +265,7 @@ function defaultEmptyTrack(releaseId: string) {
 }
 
 function normalizeTrackArrayForRelease(draft: ReleaseManagementDraft) {
-  if (draft.releaseType === "single") {
+  if (draft.releaseType === "single" || draft.releaseType === "feature") {
     const firstTrack = draft.tracks[0] ?? defaultEmptyTrack(draft.id);
     firstTrack.position = 1;
     firstTrack.releaseId = draft.id;
@@ -281,6 +318,36 @@ function summarizeDraftForReadiness(draft: ReleaseManagementDraft) {
   });
 }
 
+function buildRelationalReleaseMediaObject(draft: ReleaseManagementDraft) {
+  const frontendSyncTargets = [...new Set(draft.frontendSyncTargets.length ? draft.frontendSyncTargets : draft.tags.filter((tag) => !tag.startsWith("frontend-import")))];
+  return {
+    releaseId: draft.id,
+    coverArt: draft.coverArtPath,
+    motionArtwork: draft.motionArtworkPath,
+    metadata: {
+      slug: draft.slug,
+      title: draft.title,
+      artistName: draft.artistName,
+      language: draft.language,
+      primaryGenre: draft.primaryGenre,
+      secondaryGenre: draft.secondaryGenre,
+      tags: draft.tags
+    },
+    tracklist: draft.tracks.map((track) => ({
+      trackId: track.id,
+      title: track.title,
+      position: track.position,
+      previewAudio: track.previewAudioFile,
+      fullAudio: track.fullAudioFile ?? track.audioFile,
+      audioState: track.audioState
+    })),
+    releaseType: draft.releaseType,
+    releaseDate: draft.scheduledPublishAt ?? draft.originalReleaseDate,
+    publishState: draft.status,
+    frontendSyncTargets
+  };
+}
+
 function refreshLifecycleFields(draft: ReleaseManagementDraft) {
   draft.contentReadiness = summarizeDraftForReadiness(draft);
   draft.previewLinks = buildFrontendPreviewLinks({ releaseId: draft.id, slug: draft.slug });
@@ -318,6 +385,7 @@ function refreshLifecycleFields(draft: ReleaseManagementDraft) {
       releaseType: draft.releaseType,
       visibilityState: draft.visibilityState,
       priority: draft.priority,
+      mediaObject: buildRelationalReleaseMediaObject(draft),
       readiness: draft.contentReadiness,
       previewLinks: draft.previewLinks,
       adaptiveWorkflow: buildAdaptiveWorkflow({
@@ -341,10 +409,11 @@ export function createReleaseDraft(input: {
   assertReleaseType(input.releaseType);
   const defaultTrackCounts: Record<ReleaseType, number> = {
     single: 1,
-    ep: 4,
-    album: 10,
-    deluxe: 15,
-    remix_pack: 5
+    ep: 0,
+    album: 0,
+    feature: 1,
+    deluxe: 0,
+    remix_pack: 0
   };
   const trackCount = input.trackCount ?? defaultTrackCounts[input.releaseType];
   assertTrackCount(input.releaseType, trackCount);
@@ -387,6 +456,7 @@ export function createReleaseDraft(input: {
     moodStyles: [],
     famousArtistReferences: [],
     tags: [],
+    frontendSyncTargets: [],
     coverArtState: "missing",
     audioAssetsState: "missing",
     lyricsState: "not_required",
@@ -426,6 +496,142 @@ export function createReleaseDraft(input: {
   return draft;
 }
 
+export function upsertImportedReleaseDraft(input: {
+  id: string;
+  slug: string;
+  title: string;
+  releaseType: ReleaseType;
+  artistName?: string;
+  status?: ReleaseManagementStatus;
+  visibilityState?: ReleaseVisibilityState;
+  originalReleaseDate?: string;
+  scheduledPublishAt?: string;
+  timezone?: string;
+  tracks: Array<{
+    id: string;
+    title: string;
+    position: number;
+    audioFile?: string;
+    previewAudioFile?: string;
+    fullAudioFile?: string;
+    audioState?: UploadReadinessState;
+  }>;
+  tags?: string[];
+  coverArtPath?: string;
+  motionArtworkPath?: string;
+  metadataNotes?: string;
+  frontendSections?: string[];
+  sourceKey: string;
+}) {
+  assertReleaseType(input.releaseType);
+  const existing = drafts.get(input.id);
+  const timestamp = nowIso();
+  const artist = artists[0];
+  const tracks = input.tracks
+    .filter((track) => track.title.trim())
+    .sort((a, b) => a.position - b.position)
+    .map((track, index) => ({
+      id: track.id,
+      releaseId: input.id,
+      title: track.title.trim(),
+      audioFile: track.audioFile,
+      previewAudioFile: track.previewAudioFile,
+      fullAudioFile: track.fullAudioFile,
+      position: index + 1,
+      explicit: false,
+      isLiveVersion: false,
+      compositionType: "original" as const,
+      partnerPlatformIds: {},
+      producerNames: [],
+      audioState: track.audioState ?? "missing",
+      lyricsState: "not_required" as const
+    }));
+  const hasUploadedAudio = tracks.some((track) => track.audioState === "uploaded" || track.audioState === "approved");
+  const draft: ReleaseManagementDraft = {
+    ...(existing ?? {
+      contentReadiness: {
+        metadata: "not_started",
+        audio: "not_started",
+        artwork: "not_started",
+        credits: "not_started",
+        visuals: "not_started",
+        publishing: "not_started"
+      },
+      creatorConfidence: [],
+      publishingStage: "draft",
+      continueCard: {
+        releaseId: input.id,
+        title: input.title,
+        href: `/releases/${input.id}`,
+        nextAction: "Review imported metadata",
+        percentComplete: 0,
+        lastModifiedAt: timestamp,
+        recoveryState: "active"
+      },
+      previewLinks: [],
+      createdAt: timestamp
+    }),
+    id: input.id,
+    slug: reserveStableSlug({ desired: input.slug, ownerId: input.id }),
+    customSlug: true,
+    artistId: artist?.id ?? "artist_2mrrw",
+    artistName: input.artistName?.trim() || artist?.name || "2MRRW",
+    title: input.title.trim(),
+    releaseType: input.releaseType,
+    status: input.status ?? existing?.status ?? "published",
+    visibilityState: input.visibilityState ?? existing?.visibilityState ?? "public",
+    readinessState: existing?.readinessState ?? (input.status === "published" && input.coverArtPath ? "ready_for_review" : "assets_pending"),
+    language: existing?.language ?? "en",
+    internalUpc: existing?.internalUpc ?? `2MRRW-FRONTEND-${input.slug.toUpperCase()}`,
+    copyrightOwner: existing?.copyrightOwner ?? "2MRRW",
+    originalReleaseDate: input.originalReleaseDate ?? existing?.originalReleaseDate,
+    scheduledPublishAt: input.scheduledPublishAt ?? existing?.scheduledPublishAt,
+    timezone: input.timezone ?? existing?.timezone,
+    primaryGenre: existing?.primaryGenre ?? { category: "hip-hop-rap", subgenre: "alternative-rap" },
+    moodStyles: existing?.moodStyles ?? [],
+    famousArtistReferences: existing?.famousArtistReferences ?? [],
+    tags: [...new Set([...(input.tags ?? []), ...(input.frontendSections ?? []), "frontend-import"].filter(Boolean))],
+    coverArtPath: input.coverArtPath ?? existing?.coverArtPath,
+    motionArtworkPath: input.motionArtworkPath ?? existing?.motionArtworkPath,
+    frontendSyncTargets: [...new Set([...(existing?.frontendSyncTargets ?? []), ...(input.frontendSections ?? [])])],
+    coverArtState: input.coverArtPath ? "uploaded" : existing?.coverArtState ?? "missing",
+    audioAssetsState: hasUploadedAudio ? "uploaded" : existing?.audioAssetsState ?? "missing",
+    lyricsState: existing?.lyricsState ?? "not_required",
+    tracks,
+    metadataNotes: input.metadataNotes ?? existing?.metadataNotes ?? `Imported from frontend source ${input.sourceKey}.`,
+    saveState: "synced",
+    updatedAt: timestamp
+  };
+
+  normalizeTrackArrayForRelease(draft);
+  refreshLifecycleFields(draft);
+  drafts.set(input.id, draft);
+  recordReleaseRevision({
+    releaseId: input.id,
+    kind: existing ? "metadata_edit" : "release_revision",
+    label: existing ? "Frontend import refreshed" : "Frontend release imported",
+    after: {
+      slug: draft.slug,
+      title: draft.title,
+      releaseType: draft.releaseType,
+      sourceKey: input.sourceKey,
+      frontendSections: input.frontendSections
+    }
+  });
+  emitAfterSuccessfulAction({
+    type: existing ? "release.updated" : "release.created",
+    entityId: input.id,
+    data: {
+      releaseId: input.id,
+      slug: draft.slug,
+      title: draft.title,
+      source: "frontend_import",
+      durable: false
+    }
+  });
+  return draft;
+}
+
 export function listReleaseDrafts() {
   return [...drafts.values()].map(normalizeTrackArrayForReleaseDraft).sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
 }
@@ -433,6 +639,100 @@ export function listReleaseDrafts() {
 export function getReleaseDraft(id: string) {
   const draft = drafts.get(id) ?? null;
   return draft ? normalizeTrackArrayForReleaseDraft(draft) : null;
+}
+
+export function addTrackToReleaseDraft(releaseId: string) {
+  const draft = getDraftOrThrow(releaseId);
+  normalizeTrackArrayForRelease(draft);
+  if (draft.releaseType === "single" || draft.releaseType === "feature") {
+    throw new Error("Singles use exactly one track slot");
+  }
+  if (draft.releaseType === "ep" && draft.tracks.length >= 6) {
+    throw new Error("EPs can contain 2-6 tracks");
+  }
+  draft.saveState = "saving";
+  const track = makeTrack(draft.id, draft.tracks.length + 1);
+  draft.tracks.push(track);
+  draft.updatedAt = nowIso();
+  draft.saveState = "saved";
+  refreshLifecycleFields(draft);
+  emitAfterSuccessfulAction({
+    type: "release.updated",
+    entityId: releaseId,
+    data: {
+      releaseId,
+      trackId: track.id,
+      durable: false,
+      updates: { trackAdded: true }
+    }
+  });
+  persistReleaseTracklistSyncEvent(draft, { trackAdded: true, trackId: track.id });
+  recordReleaseRevision({
+    releaseId,
+    kind: "metadata_edit",
+    label: "Track slot added",
+    after: { trackId: track.id, trackCount: draft.tracks.length }
+  });
+  return track;
+}
+
+export function removeTrackFromReleaseDraft(releaseId: string, trackId: string) {
+  const draft = getDraftOrThrow(releaseId);
+  normalizeTrackArrayForRelease(draft);
+  if (draft.releaseType === "single" || draft.releaseType === "feature") {
+    throw new Error("Singles must keep exactly one track slot");
+  }
+  const beforeCount = draft.tracks.length;
+  draft.tracks = draft.tracks.filter((track) => track.id !== trackId);
+  if (draft.tracks.length === beforeCount) {
+    throw new Error("Track not found");
+  }
+  normalizeTrackArrayForRelease(draft);
+  draft.updatedAt = nowIso();
+  draft.saveState = "saved";
+  refreshLifecycleFields(draft);
+  emitAfterSuccessfulAction({
+    type: "release.updated",
+    entityId: releaseId,
+    data: {
+      releaseId,
+      trackId,
+      durable: false,
+      updates: { trackRemoved: true }
+    }
+  });
+  persistReleaseTracklistSyncEvent(draft, { trackRemoved: true, trackId });
+  return draft;
+}
+
+export function reorderReleaseTracks(releaseId: string, trackIds: string[]) {
+  const draft = getDraftOrThrow(releaseId);
+  normalizeTrackArrayForRelease(draft);
+  if (draft.releaseType === "single" || draft.releaseType === "feature") {
+    throw new Error("Singles cannot reorder tracks");
+  }
+  const byId = new Map(draft.tracks.map((track) => [track.id, track]));
+  const reordered = trackIds.map((id) => byId.get(id)).filter((track): track is ReleaseManagementTrack => Boolean(track));
+  if (reordered.length !== draft.tracks.length) {
+    throw new Error("Track order must include every track exactly once");
+  }
+  draft.tracks = reordered.map((track, index) => ({ ...track, position: index + 1, releaseId: draft.id }));
+  draft.updatedAt = nowIso();
+  draft.saveState = "saved";
+  refreshLifecycleFields(draft);
+  emitAfterSuccessfulAction({
+    type: "release.updated",
+    entityId: releaseId,
+    data: { releaseId, durable: false, updates: { trackOrder: trackIds } }
+  });
+  persistReleaseTracklistSyncEvent(draft, { trackOrder: trackIds });
+  recordReleaseRevision({
+    releaseId,
+    kind: "metadata_edit",
+    label: "Track order updated",
+    after: { trackOrder: trackIds }
+  });
+  return draft;
 }
 
 export function updateReleaseMetadata(
@@ -455,6 +755,9 @@ export function updateReleaseMetadata(
       | "relationshipType"
       | "priority"
       | "timezone"
+      | "coverArtPath"
+      | "motionArtworkPath"
+      | "frontendSyncTargets"
     >
   > & {
     moodStyles?: string[];
@@ -486,12 +789,16 @@ export function updateReleaseMetadata(
   const requestedSlug = input.slug?.trim();
   const slugChanged = Boolean(requestedSlug && requestedSlug !== draft.slug);
   const generatedSlug = input.title && !draft.customSlug ? nextReleaseSlug(input.title, draft.id) : draft.slug;
+  const nextFrontendSyncTargets = input.frontendSyncTargets
+    ? [...new Set([...draft.frontendSyncTargets, ...input.frontendSyncTargets])]
+    : draft.frontendSyncTargets;
   Object.assign(draft, {
     ...input,
     ...(input.title ? { slug: generatedSlug } : {}),
     ...(requestedSlug ? { slug: reserveStableSlug({ desired: requestedSlug, ownerId: draft.id }), customSlug: true } : {}),
     ...(nextReferences ? { famousArtistReferences: nextReferences } : {}),
     ...(input.tags ? { tags: input.tags.map((tag) => createOrUpdateTag({ label: tag, scopes: ["release"] }).slug) } : {}),
+    frontendSyncTargets: nextFrontendSyncTargets,
     updatedAt: nowIso()
   });
   if (draft.parentReleaseId && draft.relationshipType) {
@@ -564,6 +871,8 @@ export function updateTrackInformation(
       | "generatedIsrc"
       | "partnerPlatformIds"
       | "producerNames"
+      | "previewAudioFile"
+      | "fullAudioFile"
       | "audioState"
       | "lyricsState"
     >
@@ -607,6 +916,7 @@ export function updateTrackInformation(
       updates: input
     }
   });
+  persistReleaseTracklistSyncEvent(draft, { trackUpdated: true, trackId: track.id, ...input });
   recordReleaseRevision({
     releaseId,
     kind: input.audioState ? "audio_replacement" : "metadata_edit",
@@ -680,21 +990,36 @@ export function validateTrackSplits(trackId: string) {
   };
 }
 
+function isFrontendImportedRelease(draft: Pick<ReleaseManagementDraft, "tags" | "status">) {
+  return draft.tags.some((tag) => tag === "frontend-import" || tag === "supabase-catalog");
+}
+
+function importedReleaseHasCatalogMedia(draft: ReleaseManagementDraft) {
+  const hasCover = draft.coverArtState === "uploaded" || draft.coverArtState === "approved" || Boolean(draft.coverArtPath);
+  const hasAudio = draft.tracks.some((track) => track.audioState === "uploaded" || track.audioState === "approved");
+  return hasCover && hasAudio;
+}
+
 export function validateReleaseStructure(draft: ReleaseManagementDraft): ReadinessCheck[] {
   const normalizedTracks = normalizeTrackArrayForRelease(draft);
+  const importedPublished = isFrontendImportedRelease(draft) && importedReleaseHasCatalogMedia(draft);
   const trackCountPassed = draft.releaseType === "single"
     ? normalizedTracks.length === 1
     : draft.releaseType === "ep"
-      ? normalizedTracks.length >= 2 && normalizedTracks.length <= 4
+      ? normalizedTracks.length >= 2 && normalizedTracks.length <= 6
+      : draft.releaseType === "feature"
+        ? normalizedTracks.length === 1
       : draft.releaseType === "album"
-        ? normalizedTracks.length >= 5
+        ? normalizedTracks.length >= 7
         : normalizedTracks.length >= 1;
   const trackCountMessage = draft.releaseType === "single"
     ? "Single has exactly 1 track"
     : draft.releaseType === "ep"
-      ? "EP has 2-4 tracks"
+      ? "EP has 2-6 tracks"
+      : draft.releaseType === "feature"
+        ? "Feature has exactly 1 track"
       : draft.releaseType === "album"
-        ? "Album has 5 or more tracks"
+        ? "Album has 7 or more tracks"
         : "Release has at least 1 track";
 
   return [
@@ -710,22 +1035,24 @@ export function validateReleaseStructure(draft: ReleaseManagementDraft): Readine
     },
     {
       key: "cover_art",
-      passed: draft.coverArtState === "uploaded" || draft.coverArtState === "approved",
+      passed: importedPublished || draft.coverArtState === "uploaded" || draft.coverArtState === "approved",
       message: "Cover artwork must meet 2MRRW quality requirements."
     },
     {
       key: "audio",
-      passed: normalizedTracks.every((track) => track.audioState === "uploaded" || track.audioState === "approved"),
+      passed: importedPublished || normalizedTracks.every((track) => track.audioState === "uploaded" || track.audioState === "approved"),
       message: "Every track needs uploaded audio"
     },
     {
       key: "track_information",
-      passed: normalizedTracks.every((track) => Boolean(track.title && track.compositionType)),
+      passed: importedPublished
+        ? normalizedTracks.every((track) => Boolean(track.title))
+        : normalizedTracks.every((track) => Boolean(track.title && track.compositionType)),
       message: "Every track needs a title and track details"
     },
     {
       key: "splits",
-      passed: normalizedTracks.every((track) => validateTrackSplits(track.id).passed),
+      passed: importedPublished || normalizedTracks.every((track) => validateTrackSplits(track.id).passed),
       message: "Every track needs contributor splits totaling exactly 100%"
     }
   ];
@@ -896,6 +1223,175 @@ export function recoverReleaseDraft(releaseId: string) {
     label: "Release recovered from archive",
     before,
     after: { status: draft.status, visibilityState: draft.visibilityState }
+  });
+  return draft;
+}
+
+export async function scheduleReleaseDraft(releaseId: string, parts: ScheduleParts) {
+  const draft = getDraftOrThrow(releaseId);
+  const readiness = getReadinessSummary(releaseId);
+  const importedWithMedia =
+    draft.tags.some((tag) => tag === "frontend-import" || tag === "supabase-catalog") &&
+    Boolean(draft.coverArtPath || draft.coverArtState === "uploaded" || draft.coverArtState === "approved") &&
+    draft.tracks.some((track) => track.audioState === "uploaded" || track.audioState === "approved");
+  if (!readiness.ready && !importedWithMedia) {
+    throw new Error("Release is not ready to schedule — complete metadata, cover, and audio first");
+  }
+
+  const schedule = buildSchedulePayload(parts);
+  const before = {
+    status: draft.status,
+    scheduledPublishAt: draft.scheduledPublishAt,
+    timezone: draft.timezone
+  };
+
+  draft.scheduledPublishAt = schedule.scheduledPublishAt;
+  draft.originalReleaseDate = schedule.releaseDate;
+  draft.timezone = schedule.publishTimezone;
+  draft.status = "scheduled";
+  draft.visibilityState = "scheduled";
+  draft.readinessState = "ready_for_review";
+  draft.updatedAt = nowIso();
+  draft.saveState = "syncing";
+  refreshLifecycleFields(draft);
+
+  const persisted = await persistReleaseSchedule(releaseId, {
+    scheduledPublishAt: schedule.scheduledPublishAt,
+    releaseDate: schedule.releaseDate,
+    releaseTime: schedule.releaseTime,
+    publishTimezone: schedule.publishTimezone,
+    status: "scheduled"
+  });
+
+  draft.saveState = persisted.persisted ? "synced" : "failed";
+  recordReleaseRevision({
+    releaseId,
+    kind: "status_change",
+    label: "Global drop scheduled",
+    before,
+    after: {
+      status: draft.status,
+      scheduledPublishAt: draft.scheduledPublishAt,
+      timezone: draft.timezone,
+      releaseDate: schedule.releaseDate
+    }
+  });
+  recordReleaseActivity({
+    releaseId,
+    kind: "processing",
+    message: `Scheduled for ${schedule.releaseDate} (${schedule.publishTimezone})`
+  });
+  emitAfterSuccessfulAction({
+    type: "release.updated",
+    entityId: releaseId,
+    data: {
+      releaseId,
+      status: "scheduled",
+      scheduledPublishAt: schedule.scheduledPublishAt,
+      publishTimezone: schedule.publishTimezone,
+      durable: persisted.persisted
+    }
+  });
+  if (!persisted.persisted) {
+    throw new Error(persisted.error ?? "Could not persist schedule to database");
+  }
+  return {
+    releaseId,
+    status: draft.status,
+    scheduledPublishAt: schedule.scheduledPublishAt,
+    releaseDate: schedule.releaseDate,
+    releaseTime: schedule.releaseTime,
+    publishTimezone: schedule.publishTimezone
+  };
+}
+
+export function unpublishReleaseDraft(releaseId: string) {
+  const draft = getDraftOrThrow(releaseId);
+  if (draft.status !== "published" && draft.status !== "scheduled") {
+    throw new Error("Only published or scheduled releases can be unpublished");
+  }
+  const before = { status: draft.status, visibilityState: draft.visibilityState, scheduledPublishAt: draft.scheduledPublishAt };
+  draft.status = "draft";
+  draft.visibilityState = "private";
+  draft.scheduledPublishAt = undefined;
+  draft.updatedAt = nowIso();
+  draft.saveState = "synced";
+  refreshLifecycleFields(draft);
+  recordReleaseRevision({
+    releaseId,
+    kind: "status_change",
+    label: "Release unpublished (removed from public surfaces)",
+    before,
+    after: { status: draft.status, visibilityState: draft.visibilityState, scheduledPublishAt: draft.scheduledPublishAt }
+  });
+  recordReleaseActivity({ releaseId, kind: "status_change", message: "Release unpublished and set to private draft" });
+  emitAfterSuccessfulAction({
+    type: "release.updated",
+    entityId: releaseId,
+    data: { releaseId, status: draft.status, visibilityState: draft.visibilityState, durable: false }
+  });
+  return draft;
+}
+
+export function duplicateReleaseDraft(releaseId: string) {
+  const source = getDraftOrThrow(releaseId);
+  const id = nextId("rel_draft");
+  const timestamp = nowIso();
+  const title = `${source.title} (Copy)`;
+  const slug = nextReleaseSlug(title, id);
+  const tracks = source.tracks.map((track, index) => ({
+    ...track,
+    id: nextId("trk_draft"),
+    releaseId: id,
+    position: index + 1
+  }));
+
+  const draft: ReleaseManagementDraft = {
+    ...source,
+    id,
+    slug,
+    customSlug: false,
+    title,
+    status: "metadata_incomplete",
+    visibilityState: "draft",
+    readinessState: "metadata_incomplete",
+    archivedAt: undefined,
+    archiveReason: undefined,
+    deletedAt: undefined,
+    recoveryAvailableUntil: undefined,
+    scheduledPublishAt: undefined,
+    tracks,
+    tags: [...new Set([...source.tags, "duplicate"])],
+    continueCard: {
+      releaseId: id,
+      title,
+      href: `/releases/${id}`,
+      nextAction: "Review duplicated release",
+      percentComplete: 0,
+      lastModifiedAt: timestamp,
+      recoveryState: "active"
+    },
+    previewLinks: buildFrontendPreviewLinks({ releaseId: id, slug }),
+    saveState: "saved",
+    createdAt: timestamp,
+    updatedAt: timestamp,
+    internalUpc: `2MRRW-${Date.now()}`
+  };
+
+  normalizeTrackArrayForRelease(draft);
+  refreshLifecycleFields(draft);
+  drafts.set(id, draft);
+  recordReleaseRevision({
+    releaseId: id,
+    kind: "release_revision",
+    label: `Duplicated from ${source.title}`,
+    after: { sourceReleaseId: releaseId, title: draft.title, slug: draft.slug }
+  });
+  recordReleaseActivity({ releaseId: id, kind: "metadata_edit", message: `Duplicated from release ${source.title}` });
+  emitAfterSuccessfulAction({
+    type: "release.created",
+    entityId: id,
+    data: { releaseId: id, sourceReleaseId: releaseId, slug: draft.slug, durable: false }
   });
   return draft;
 }

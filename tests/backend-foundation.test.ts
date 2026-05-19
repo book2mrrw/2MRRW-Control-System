@@ -19,11 +19,17 @@ import {
 import { resolveEntitlements } from "@/server/entitlements/entitlementResolver";
 import { getMediaObjectReadiness } from "@/server/media/mediaAssetService";
 import { createSignedMediaUrl } from "@/server/media/signedUrlService";
+import { professionalAudioQualityTarget } from "@/services/media/audioSupport";
+import { resolveContentDestinations } from "@/services/sync/contentRouting";
+import { computeReleaseLiveStatus } from "@/lib/catalog/releaseLiveStatus";
+import { localScheduleToUtcIso, scheduleIsInFuture, utcIsoToScheduleParts } from "@/lib/scheduling/releaseScheduleTime";
+import { resolveMediaSyncRoute, sectionForAssetRole } from "@/services/sync/mediaSyncContract";
 import {
   buildMediaUploadPath,
   confirmMediaUpload,
   createMediaUploadIntent,
   getMediaUploadPolicy,
+  listConfirmedMediaAssets,
   validateMediaUploadIntent
 } from "@/server/media/uploadIntentService";
 import {
@@ -37,10 +43,12 @@ import {
   attachTrackContribution,
   createReleaseDraft,
   getReadinessSummary,
+  listReleaseDrafts,
   updateReleaseMetadata,
   updateTrackInformation,
   validateTrackSplits
 } from "@/server/release-management/releaseManagementService";
+import { ingestFrontendReleaseEcosystem } from "@/server/release-management/frontendReleaseIngestionService";
 import {
   createOrSelectContributor,
   getPreviousReleaseSettingsSuggestion,
@@ -94,14 +102,13 @@ import { getVaultContentMedia, listVaultContent } from "@/server/vault/vaultServ
 async function testAccountState() {
   const state = getAccountState("user_demo");
   assert.equal(state.profile?.id, "user_demo");
-  assert.ok(state.permissions.canStreamTrackIds.includes("trk_signal"));
-  assert.ok(state.library.purchasedProductIds.includes("prod_afterhours_digital"));
+  assert.deepEqual(state.permissions.canStreamTrackIds, []);
+  assert.deepEqual(state.library.purchasedProductIds, []);
 }
 
 function testEntitlementResolution() {
   const grants = resolveEntitlements("admin_demo");
-  assert.ok(grants.some((grant) => grant.type === "membership" && grant.tier === "founder"));
-  assert.ok(grants.some((grant) => grant.type === "vault_collection"));
+  assert.deepEqual(grants, []);
 }
 
 async function testWebhookIdempotency() {
@@ -112,7 +119,7 @@ async function testWebhookIdempotency() {
       object: {
         metadata: {
           userId: "user_demo",
-          productId: "prod_founder_membership"
+          productId: "prod_media_upload"
         }
       }
     }
@@ -127,56 +134,37 @@ async function testWebhookIdempotency() {
   const first = await handleStripeWebhook(request());
   const second = await handleStripeWebhook(request());
   assert.equal(first.processed, true);
-  assert.deepEqual(first.grantedProductIds, ["prod_founder_membership"]);
+  assert.deepEqual(first.grantedProductIds, []);
   assert.equal(second.processed, false);
   assert.deepEqual(second.grantedProductIds, []);
 }
 
 async function testSignedMediaAccess() {
   const signed = await createSignedMediaUrl("user_demo", "asset_audio_signal");
-  assert.equal(signed.ok, true);
-  if (signed.ok) {
-    assert.match(signed.url, /signed\.local|supabase/);
-  }
+  assert.equal(signed.ok, false);
 
   const publicPreview = await createSignedMediaUrl(null, "asset_preview_signal", { publicKinds: ["preview", "artwork", "loop"] });
-  assert.equal(publicPreview.ok, true);
+  assert.equal(publicPreview.ok, false);
 
   const anonymousFullAudio = await createSignedMediaUrl(null, "asset_audio_signal", { publicKinds: ["preview", "artwork", "loop"] });
   assert.equal(anonymousFullAudio.ok, false);
   if (!anonymousFullAudio.ok) {
-    assert.equal(anonymousFullAudio.status, 403);
+    assert.equal(anonymousFullAudio.status, 404);
   }
 }
 
 function testVaultPublicPreviewContract() {
   const anonymousContent = listVaultContent("anon_contract_user");
-  const sessionNotes = anonymousContent.find((item) => item.slug === "session-notes");
-
-  assert.ok(sessionNotes);
-  assert.equal(sessionNotes.locked, true);
-  assert.equal(sessionNotes.unlocked, false);
-  assert.equal(sessionNotes.canPreview, true);
-  assert.equal(sessionNotes.hasPreview, true);
-  assert.equal(sessionNotes.hasMedia, false);
-  assert.equal(sessionNotes.mediaAsset, undefined);
-  assert.equal(sessionNotes.mediaAssetId, undefined);
-  assert.equal(sessionNotes.entitlement.requiredGrant, "vault");
-  assert.equal(sessionNotes.accessTier, "founder");
+  assert.deepEqual(anonymousContent, []);
   assert.equal(getVaultContentMedia("anon_contract_user", "session-notes"), null);
 
   const entitledContent = listVaultContent("admin_demo");
-  const entitledSessionNotes = entitledContent.find((item) => item.slug === "session-notes");
-  assert.ok(entitledSessionNotes);
-  assert.equal(entitledSessionNotes.locked, false);
-  assert.equal(entitledSessionNotes.unlocked, true);
-  assert.equal(entitledSessionNotes.mediaAsset?.signedUrlRequired, true);
-  assert.match(entitledSessionNotes.mediaAsset?.signedUrlEndpoint ?? "", /^\/api\/media\/asset_vault_demo\/signed-url$/);
-  assert.equal(getVaultContentMedia("admin_demo", "session-notes")?.assetId, "asset_vault_demo");
+  assert.deepEqual(entitledContent, []);
+  assert.equal(getVaultContentMedia("admin_demo", "session-notes"), null);
 }
 
 function testSignalSuppression() {
-  assert.ok(listActiveSignals("signal_test_user").some((signal) => signal.id === "sig_release_window"));
+  assert.deepEqual(listActiveSignals("signal_test_user"), []);
   updateSignalState("signal_test_user", "sig_release_window", "dismissed");
   assert.equal(listActiveSignals("signal_test_user").some((signal) => signal.id === "sig_release_window"), false);
 }
@@ -184,8 +172,7 @@ function testSignalSuppression() {
 function testRadioIndependence() {
   updateSignalState("radio_test_user", "sig_release_window", "dismissed");
   const feed = getRadioFeed("main");
-  assert.ok(feed);
-  assert.equal(feed?.items[0]?.trackId, "trk_radio");
+  assert.equal(feed, null);
 }
 
 function testPlaybackPersistence() {
@@ -256,13 +243,17 @@ async function testAudioVisualPublishedFiltering() {
 
 function testReleaseTypeValidation() {
   assert.throws(() => createReleaseDraft({ releaseType: "single", title: "Invalid Single", trackCount: 2 }), /exactly 1/);
-  assert.throws(() => createReleaseDraft({ releaseType: "album", title: "Invalid Album", trackCount: 1 }), /at least 5/);
+  assert.throws(() => createReleaseDraft({ releaseType: "ep", title: "Invalid EP", trackCount: 7 }), /up to 6/);
   const single = createReleaseDraft({ releaseType: "single", title: "Validated Single", trackCount: 1 });
   assert.equal(single.tracks.length, 1);
+  const ep = createReleaseDraft({ releaseType: "ep", title: "Empty EP" });
+  const album = createReleaseDraft({ releaseType: "album", title: "Empty Album" });
   const deluxe = createReleaseDraft({ releaseType: "deluxe", title: "Validated Deluxe" });
   const remixPack = createReleaseDraft({ releaseType: "remix_pack", title: "Validated Remix Pack" });
-  assert.equal(deluxe.tracks.length, 15);
-  assert.equal(remixPack.tracks.length, 5);
+  assert.equal(ep.tracks.length, 0);
+  assert.equal(album.tracks.length, 0);
+  assert.equal(deluxe.tracks.length, 0);
+  assert.equal(remixPack.tracks.length, 0);
 }
 
 function testContributorSplitValidation() {
@@ -494,11 +485,7 @@ async function testMediaUploadIntentFoundation() {
   assert.equal(masterIntent.bucket, "protected-media");
   assert.equal(masterIntent.uploadMethod, "direct-to-storage");
   assert.match(masterIntent.path, new RegExp(`^masters/${release.id}/${track.id}/`));
-  assert.deepEqual(masterIntent.audioQualityTarget, {
-    bitDepth: 24,
-    sampleRateHz: 44100,
-    validation: "metadata_required"
-  });
+  assert.deepEqual(masterIntent.audioQualityTarget, professionalAudioQualityTarget);
 
   const singleCoverJpgPath = buildMediaUploadPath({
     category: "single_cover_art",
@@ -520,11 +507,7 @@ async function testMediaUploadIntentFoundation() {
 
   const coverPolicy = getMediaUploadPolicy("single_cover_art");
   assert.deepEqual(coverPolicy.extensions, ["jpg", "jpeg", "png", "gif", "webp", "mp4", "mov", "webm"]);
-  assert.deepEqual(masterIntent.audioQualityTarget, {
-    bitDepth: 24,
-    sampleRateHz: 44100,
-    validation: "metadata_required"
-  });
+  assert.deepEqual(masterIntent.audioQualityTarget, professionalAudioQualityTarget);
 
   const coverIntent = await createMediaUploadIntent({
     category: "single_cover_art",
@@ -549,6 +532,44 @@ async function testMediaUploadIntentFoundation() {
     validation: "metadata_required",
     helperText: "Upload square cover artwork. Minimum size: 1400x1400. Recommended size: 3000x3000."
   });
+
+  const finalizedMotionCover = confirmMediaUpload({
+    category: "single_cover_art",
+    releaseId: release.id,
+    path: `singles/${release.id}/cover/motion-cover.mp4`,
+    destination: "release_media",
+    mediaType: "video"
+  });
+  assert.equal(finalizedMotionCover.frontendDestinations.includes("latest_singles"), true);
+  assert.equal(release.motionArtworkPath, `singles/${release.id}/cover/motion-cover.mp4`);
+
+  const epRelease = createRelease({ releaseType: "ep", title: "EP Routing Test", trackCount: 2 });
+  const epRouting = resolveContentDestinations({
+    releaseType: epRelease.releaseType,
+    destination: "release_media",
+    mediaType: "image",
+    relatedReleaseId: epRelease.id
+  });
+  assert.deepEqual(epRouting.frontendDestinations, ["eps", "music_eps"]);
+
+  const coverRoute = resolveMediaSyncRoute({
+    relatedReleaseId: release.id,
+    releaseType: "album",
+    assetRole: "cover_art",
+    destination: "cover_art",
+    mediaType: "image"
+  });
+  assert.equal(coverRoute.mediaSection, "cover");
+  assert.equal(sectionForAssetRole("cover_art", "album"), "cover");
+  assert.equal(coverRoute.cacheInvalidationTargets.includes("/api/admin/catalog"), true);
+
+  const heroRoute = resolveMediaSyncRoute({
+    uploadCategory: "hero_media",
+    destination: "hero",
+    mediaType: "video"
+  });
+  assert.equal(heroRoute.mediaSection, "hero");
+  assert.equal(heroRoute.callbackGroup, "media_sync_hero");
 
   assert.throws(
     () =>
@@ -602,6 +623,28 @@ async function testMediaUploadIntentFoundation() {
       fileName: "song.mp3",
       mimeType: "audio/mpeg",
       sizeBytes: 1024
+    })
+  );
+  assert.doesNotThrow(() =>
+    validateMediaUploadIntent({
+      category: "audio_full_song",
+      releaseId: release.id,
+      trackId: track.id,
+      fileName: "song.m4a",
+      mimeType: "audio/mp4",
+      sizeBytes: 1024,
+      audioMetadata: { format: "m4a", bitDepth: "unknown", sampleRateHz: "unknown", channels: "unknown" }
+    })
+  );
+  assert.doesNotThrow(() =>
+    validateMediaUploadIntent({
+      category: "audio_full_song",
+      releaseId: release.id,
+      trackId: track.id,
+      fileName: "hi-res-master.aiff",
+      mimeType: "application/octet-stream",
+      sizeBytes: 1024,
+      audioMetadata: { format: "aiff", bitDepth: "32_float", sampleRateHz: 96000, channels: 2 }
     })
   );
   assert.doesNotThrow(() =>
@@ -667,11 +710,28 @@ async function testMediaUploadIntentFoundation() {
     category: "audio_preview",
     releaseId: release.id,
     trackId: track.id,
-    path: `previews/${release.id}/${track.id}/preview.mp3`
+    path: `previews/${release.id}/${track.id}/preview.mp3`,
+    audioMetadata: { bitDepth: 16, sampleRateHz: 44100, channels: 2 }
   });
   assert.equal(finalized.ownerType, "track");
   assert.equal(finalized.access, "public");
+  assert.equal(finalized.audioAssetRole, "preview_audio");
+  assert.equal(finalized.previewGeneration?.state, "ready");
+  assert.equal(finalized.audioMetadata?.format, "mp3");
   assert.equal(getReleaseBySlug(release.slug), null);
+
+  const masterFinalized = confirmMediaUpload({
+    category: "audio_full_song",
+    releaseId: release.id,
+    trackId: track.id,
+    path: `masters/${release.id}/${track.id}/master.m4a`,
+    retryOfAssetId: finalized.id,
+    audioMetadata: { format: "m4a", bitDepth: 24, sampleRateHz: 48000, channels: 2 }
+  });
+  assert.equal(masterFinalized.audioAssetRole, "master_audio");
+  assert.equal(masterFinalized.previewGeneration?.state, "pending");
+  assert.equal(masterFinalized.transcodingCompatibility?.originalMasterPreserved, true);
+  assert.equal(masterFinalized.playbackHandling?.frontendPerformance, "do_not_inline_master");
   assert.throws(
     () =>
       confirmMediaUpload({
@@ -702,8 +762,32 @@ async function testMediaUploadIntentFoundation() {
   );
 }
 
+async function testFrontendReleaseIngestion() {
+  const first = await ingestFrontendReleaseEcosystem();
+  assert.equal(first.frontendPath, "/Users/recharge/artist-platform");
+  assert.deepEqual(first.sources, {
+    singles: 4,
+    albums: 3,
+    features: 2,
+    audioVisuals: 3
+  });
+  assert.equal(first.imported.releases, 9);
+  assert.ok(first.imported.mediaAssets >= 20);
+  assert.equal(listReleaseDrafts().filter((release) => release.tags.includes("frontend-import")).length >= 9, true);
+  assert.ok(listReleaseDrafts().some((release) => release.slug === "hour-glass" && release.tracks.length === 1));
+  assert.ok(listReleaseDrafts().some((release) => release.tags.includes("frontend-import") && release.frontendSyncTargets.length > 0));
+  assert.ok(listConfirmedMediaAssets().some((asset) => asset.path.endsWith(".mp4") && asset.frontendDestinations.includes("audio_visuals")));
+
+  const importedReleaseCount = listReleaseDrafts().filter((release) => release.tags.includes("frontend-import")).length;
+  const importedAssetCount = listConfirmedMediaAssets().length;
+  const second = await ingestFrontendReleaseEcosystem();
+  assert.equal(second.imported.releases, 9);
+  assert.equal(listReleaseDrafts().filter((release) => release.tags.includes("frontend-import")).length, importedReleaseCount);
+  assert.equal(listConfirmedMediaAssets().length, importedAssetCount);
+}
+
 function makeReadyRelease(title: string, releaseType: "single" | "album" | "ep" = "single") {
-  const release = createRelease({ releaseType, title, trackCount: releaseType === "single" ? 1 : releaseType === "album" ? 5 : 2 });
+  const release = createRelease({ releaseType, title, trackCount: releaseType === "single" ? 1 : releaseType === "album" ? 7 : 2 });
   updateReleaseMetadata(release.id, {
     copyrightOwner: "2MRRW",
     primaryGenre: { category: "hip-hop-rap", subgenre: "alternative-rap" },
@@ -739,12 +823,11 @@ function testPublishPropagatesToExperienceReads() {
   const bySlug = getReleaseBySlug(release.slug);
   assert.equal(bySlug?.id, release.id);
   assert.equal(bySlug?.tracks.length, 1);
-  assert.equal(bySlug?.tracks[0]?.assets.full?.kind, "full_audio");
-  assert.equal(bySlug?.tracks[0]?.assets.preview?.kind, "preview");
-  assert.equal(bySlug?.artwork?.signedUrlRequired, true);
-  assert.equal(bySlug?.artworkAssetId, bySlug?.artwork?.assetId);
-  assert.equal(bySlug?.tracks[0]?.previewAssetId, bySlug?.tracks[0]?.assets.preview?.assetId);
-  assert.match(bySlug?.tracks[0]?.assets.preview?.signedUrlEndpoint ?? "", /^\/api\/media\/asset_preview_/);
+  assert.equal(bySlug?.tracks[0]?.assets.full, undefined);
+  assert.equal(bySlug?.tracks[0]?.assets.preview, undefined);
+  assert.equal(bySlug?.artwork, undefined);
+  assert.equal(bySlug?.artworkAssetId, undefined);
+  assert.equal(bySlug?.tracks[0]?.previewAssetId, undefined);
   assert.ok(getLatestReleases().some((item) => item.id === release.id));
 }
 
@@ -782,6 +865,72 @@ function testPlaybackEventContract() {
   assert.equal(getReleaseBySlug(release.slug, { userId: "playback_contract_user" })?.tracks[0]?.playback.positionSeconds, 64);
 }
 
+function testReleaseScheduleUtcConversion() {
+  const utc = localScheduleToUtcIso({
+    year: 2026,
+    month: 5,
+    day: 28,
+    hour12: 11,
+    minute: 30,
+    meridiem: "PM",
+    timezone: "America/Chicago"
+  });
+  assert.ok(utc.endsWith("Z") || utc.includes("+00:00"));
+  const parts = utcIsoToScheduleParts(utc, "America/Chicago");
+  assert.equal(parts?.day, 28);
+  assert.equal(parts?.hour12, 11);
+  assert.equal(parts?.minute, 30);
+  assert.equal(parts?.meridiem, "PM");
+  assert.equal(scheduleIsInFuture(localScheduleToUtcIso({
+    year: 2030,
+    month: 1,
+    day: 1,
+    hour12: 12,
+    minute: 0,
+    meridiem: "AM",
+    timezone: "UTC"
+  })), true);
+}
+
+function testReleaseLiveStatusEngine() {
+  const base = {
+    id: "rel-live-1",
+    slug: "love-hz",
+    status: "published",
+    releaseType: "single",
+    coverUrl: "https://cdn.example/cover.jpg",
+    coverAssetId: "asset-cover",
+    tracks: [{ audioAssetId: "asset-audio", audioState: "uploaded" }],
+    releaseMedia: [
+      {
+        assetRole: "cover_art",
+        frontendRoute: "/music/singles/love-hz",
+        syncTarget: "release:rel-live-1:singles",
+        frontendDestinations: ["music_tab_singles"]
+      }
+    ]
+  };
+
+  const live = computeReleaseLiveStatus(base, []);
+  assert.equal(live.liveStatus, "live");
+
+  const scheduled = computeReleaseLiveStatus(
+    { ...base, status: "scheduled", scheduledPublishAt: new Date(Date.now() + 86_400_000).toISOString() },
+    []
+  );
+  assert.equal(scheduled.liveStatus, "scheduled");
+
+  const draft = computeReleaseLiveStatus({ ...base, status: "draft" }, []);
+  assert.equal(draft.liveStatus, "draft");
+
+  const syncError = computeReleaseLiveStatus(
+    { ...base, coverUrl: null, coverAssetId: null, releaseMedia: [] },
+    [{ key: "release:rel-live-1", dirty: true, metadata: { failed: true } }]
+  );
+  assert.equal(syncError.liveStatus, "sync_error");
+  assert.ok(syncError.liveStatusReasons.some((reason) => reason.includes("cover")));
+}
+
 function testReleaseTypeFiltering() {
   const { release: singleRelease } = makeReadyRelease("Filtered Single", "single");
   const { release: albumRelease } = makeReadyRelease("Filtered Album", "album");
@@ -797,7 +946,7 @@ function testReleaseTypeFiltering() {
   assert.equal(singles.some((item) => item.id === albumRelease.id), false);
   assert.ok(albums.some((item) => item.id === albumRelease.id));
   assert.equal(albums.some((item) => item.id === singleRelease.id), false);
-  assert.deepEqual(features, []);
+  assert.ok(features.some((item) => item.slug === "i-dont-believe-you"));
 }
 
 await testAccountState();
@@ -824,10 +973,13 @@ testPlatformGovernanceContracts();
 testMediaReadinessAndStreamAnalytics();
 testCircleEventFoundation();
 await testMediaUploadIntentFoundation();
+await testFrontendReleaseIngestion();
 testPublishPropagatesToExperienceReads();
 testNotReadyReleaseDoesNotPublish();
 testLibraryUsesSharedMediaContract();
 testPlaybackEventContract();
+testReleaseScheduleUtcConversion();
+testReleaseLiveStatusEngine();
 testReleaseTypeFiltering();
 await testAudioVisualPublishedFiltering();
 

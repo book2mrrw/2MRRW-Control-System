@@ -1,5 +1,6 @@
 export {
   createRelease,
+  publishImportedReleaseToCatalog,
   publishRelease,
   publishReleaseDurable,
   upsertRelease,

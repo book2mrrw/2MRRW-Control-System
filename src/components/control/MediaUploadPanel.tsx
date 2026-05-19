@@ -1,6 +1,9 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState, type ChangeEvent, type DragEvent } from "react";
+import { useEffect, useMemo, useState, type DragEvent } from "react";
+import { professionalAudioExtensions, professionalAudioMimeTypes, type AudioUploadMetadata } from "@/services/media/audioSupport";
+import { enqueueUpload, patchUploadQueue } from "@/hooks/sync/useUploadQueue";
+import type { MediaDestination, RoutedMediaType } from "@/services/sync/contentRouting";
 
 type DraftTrack = { id: string; title: string; position: number };
 type Draft = { id: string; title: string; tracks: DraftTrack[] };
@@ -13,22 +16,19 @@ type ArtworkValidation = {
   warnings: string[];
 };
 
-type OptimisticUpload = {
-  tempId: string;
-  fileName: string;
-  fileType: string;
-  category: UploadCategory;
-  ownerType: string;
-  ownerId: string;
-  slot: string;
-  previewUrl: string;
-  progress: number;
-  status: "pending" | "uploading" | "processing" | "confirmed" | "failed";
-  error?: string;
-  remoteAssetPath?: string;
-};
-
 type UploadCategory =
+  | "release_cover"
+  | "track_audio"
+  | "hero_media"
+  | "vault_media"
+  | "audio_visual"
+  | "collectible_media"
+  | "merch_media"
+  | "latest_singles"
+  | "albums"
+  | "features"
+  | "preview_snippets"
+  | "full_song_files"
   | "single_cover_art"
   | "album_cover_art"
   | "audio_preview"
@@ -39,6 +39,25 @@ type UploadCategory =
   | "collector_card_asset"
   | "vault_asset";
 
+const professionalAudioAccept = [
+  ...professionalAudioExtensions.map((extension) => `.${extension}`),
+  ...professionalAudioMimeTypes
+].join(",");
+const coverAccept = ".jpg,.jpeg,.png,.webp,.gif,.mp4,.mov,.webm,image/jpeg,image/png,image/webp,image/gif,video/mp4,video/quicktime,video/webm";
+const visualAccept = `${coverAccept},${professionalAudioAccept}`;
+const mediaSectionOptions: Array<{ value: MediaDestination; label: string }> = [
+  { value: "hero", label: "HERO SECTION" },
+  { value: "release_media", label: "LATEST SINGLES" },
+  { value: "release_media", label: "ALBUMS" },
+  { value: "release_media", label: "FEATURES" },
+  { value: "audio_visuals", label: "AUDIO VISUALS" },
+  { value: "vault", label: "VAULT MEDIA" },
+  { value: "audio_files", label: "AUDIO FILES" },
+  { value: "cover_art", label: "COVER ART" },
+  { value: "preview_snippets", label: "PREVIEW SNIPPETS" },
+  { value: "full_song_files", label: "FULL SONG FILES" }
+];
+
 const uploadOptions: Array<{
   value: UploadCategory;
   label: string;
@@ -47,48 +66,130 @@ const uploadOptions: Array<{
   note: string;
 }> = [
   {
-    value: "single_cover_art",
-    label: "Release Artwork",
-    accept: ".jpg,.jpeg,.png,.webp,.mp4,.mov,.webm,image/jpeg,image/png,image/webp,video/mp4,video/quicktime,video/webm",
+    value: "hero_media",
+    label: "Hero Section",
+    accept: visualAccept,
+    ownerField: "signalId",
+    note: "Hero media syncs to homepage and landing hero surfaces."
+  },
+  {
+    value: "latest_singles",
+    label: "Latest Singles",
+    accept: visualAccept,
+    ownerField: "releaseId",
+    note: "Latest singles sync to homepage, music tab, singles tab, and carousel surfaces."
+  },
+  {
+    value: "albums",
+    label: "Albums",
+    accept: visualAccept,
+    ownerField: "releaseId",
+    note: "Album media syncs to album pages, carousels, music tabs, and featured album areas."
+  },
+  {
+    value: "features",
+    label: "Features",
+    accept: visualAccept,
+    ownerField: "releaseId",
+    note: "Feature media syncs to collaborator, feature, and carousel surfaces."
+  },
+  {
+    value: "audio_visual",
+    label: "Audio Visuals",
+    accept: visualAccept,
+    ownerField: "radioId",
+    note: "Audio visuals sync music videos, cinematic loops, visualizers, and uploaded motion assets."
+  },
+  {
+    value: "vault_media",
+    label: "Vault Media",
+    accept: visualAccept,
+    ownerField: "vaultContentId",
+    note: "Vault media syncs to vault previews and cinematic vault assets."
+  },
+  {
+    value: "track_audio",
+    label: "Audio Files",
+    accept: professionalAudioAccept,
+    ownerField: "trackId",
+    note: "Audio files stay linked to exact tracks and release metadata."
+  },
+  {
+    value: "release_cover",
+    label: "Cover Art",
+    accept: coverAccept,
     ownerField: "releaseId",
     note: "Cover art is tied to the exact release."
   },
   {
-    value: "album_cover_art",
-    label: "Release Artwork",
-    accept: ".jpg,.jpeg,.png,.webp,.mp4,.mov,.webm,image/jpeg,image/png,image/webp,video/mp4,video/quicktime,video/webm",
-    ownerField: "releaseId",
-    note: "Cover art is tied to the exact release."
+    value: "preview_snippets",
+    label: "Preview Snippets",
+    accept: professionalAudioAccept,
+    ownerField: "trackId",
+    note: "Preview audio is tied to the exact track."
   },
-  { value: "audio_preview", label: "Audio", accept: ".mp3,.wav,.flac,.aif,.aiff,audio/mpeg,audio/wav,audio/x-wav,audio/flac,audio/aiff,audio/x-aiff", ownerField: "trackId", note: "Audio is tied to the exact track." },
-  { value: "audio_full_song", label: "Audio", accept: ".wav,.mp3,.flac,.aif,.aiff,audio/mpeg,audio/wav,audio/x-wav,audio/flac,audio/aiff,audio/x-aiff", ownerField: "trackId", note: "Audio is tied to the exact track." },
-  { value: "lyrics", label: "Lyrics", accept: ".txt,.pdf,.docx,text/plain,application/pdf", ownerField: "trackId", note: "Lyrics are tied to the exact song." },
-  { value: "signal_asset", label: "Hero / Press Media", accept: ".jpg,.jpeg,.png,.webp,.gif,.mp4,.mov,.wav,.mp3,.flac,.aif,.aiff,image/*,video/*,audio/*", ownerField: "signalId", note: "Hero and press media are tied to homepage hero, vault hero, landing hero, or press areas." },
-  { value: "collector_card_asset", label: "Additional / Visual Media", accept: ".jpg,.jpeg,.png,.webp,.gif,.mp4,.mov,.webm,image/*,video/*", ownerField: "collectorId", note: "Additional media and music video files are tied to product, visual, or media library sections." },
-  { value: "radio_asset", label: "Circle Content", accept: ".jpg,.jpeg,.png,.webp,.gif,.mp4,.mov,.wav,.mp3,.flac,.aif,.aiff,image/*,video/*,audio/*", ownerField: "radioId", note: "Assign Circle uploads to a post, area, or artist update." },
-  { value: "vault_asset", label: "Vault Assets", accept: ".jpg,.jpeg,.png,.webp,.gif,.mp4,.mov,.wav,.mp3,.flac,.aif,.aiff,.pdf,.docx,image/*,video/*,audio/*", ownerField: "vaultContentId", note: "Vault media is structured file storage with optional metadata and versioned uploads." }
+  {
+    value: "full_song_files",
+    label: "Full Song Files",
+    accept: professionalAudioAccept,
+    ownerField: "trackId",
+    note: "Full audio is tied to the exact track."
+  },
+  {
+    value: "lyrics",
+    label: "Lyrics",
+    accept: ".txt,.lrc,.pdf,.doc,.docx,text/plain,application/pdf",
+    ownerField: "trackId",
+    note: "Lyrics documents stay linked to the exact track."
+  }
 ];
 
 const defaultsByMode: Record<string, UploadCategory> = {
-  artwork: "single_cover_art",
-  audio: "audio_full_song",
-  videos: "signal_asset",
-  loops: "collector_card_asset",
-  press: "signal_asset",
-  vault: "vault_asset"
+  all: "hero_media",
+  artwork: "release_cover",
+  audio: "track_audio",
+  videos: "hero_media",
+  loops: "audio_visual",
+  hero: "hero_media",
+  vault: "vault_media",
+  visual: "hero_media"
 };
 
-const coverArtworkHelperText = "Upload square cover artwork. PNG, JPG/JPEG, WEBP, or MP4 short visual cover. Minimum size: 1400x1400. Recommended size: 3000x3000.";
-const coverExtensions = new Set(["jpg", "jpeg", "png", "webp", "mp4", "mov", "webm"]);
-const coverMimeTypes = new Set(["image/jpeg", "image/png", "image/webp", "video/mp4", "video/quicktime", "video/webm"]);
+const routingDefaultsByCategory: Record<UploadCategory, { destination: MediaDestination; mediaType: RoutedMediaType }> = {
+  release_cover: { destination: "cover_art", mediaType: "image" },
+  track_audio: { destination: "audio_files", mediaType: "audio" },
+  hero_media: { destination: "hero", mediaType: "video" },
+  vault_media: { destination: "vault", mediaType: "video" },
+  audio_visual: { destination: "audio_visuals", mediaType: "video" },
+  collectible_media: { destination: "release_media", mediaType: "image" },
+  merch_media: { destination: "release_media", mediaType: "image" },
+  latest_singles: { destination: "release_media", mediaType: "image" },
+  albums: { destination: "release_media", mediaType: "image" },
+  features: { destination: "release_media", mediaType: "image" },
+  preview_snippets: { destination: "preview_snippets", mediaType: "audio" },
+  full_song_files: { destination: "full_song_files", mediaType: "audio" },
+  single_cover_art: { destination: "cover_art", mediaType: "image" },
+  album_cover_art: { destination: "cover_art", mediaType: "image" },
+  audio_preview: { destination: "preview_snippets", mediaType: "audio" },
+  audio_full_song: { destination: "full_song_files", mediaType: "audio" },
+  lyrics: { destination: "release_media", mediaType: "document" },
+  signal_asset: { destination: "hero", mediaType: "image" },
+  radio_asset: { destination: "audio_visuals", mediaType: "video" },
+  collector_card_asset: { destination: "release_media", mediaType: "image" },
+  vault_asset: { destination: "vault", mediaType: "video" }
+};
+
+const coverArtworkHelperText = "Upload square cover artwork. Minimum size: 1400x1400. Recommended size: 3000x3000.";
+const coverExtensions = new Set(["jpg", "jpeg", "png", "webp", "gif", "mp4", "mov", "webm"]);
+const coverMimeTypes = new Set(["image/jpeg", "image/png", "image/webp", "image/gif", "video/mp4", "video/quicktime", "video/webm"]);
 const coverMaxBytes = 70 * 1024 * 1024;
 
 function isCoverCategory(category: UploadCategory) {
-  return category === "single_cover_art" || category === "album_cover_art";
+  return category === "release_cover" || category === "single_cover_art" || category === "album_cover_art";
 }
 
 function isAudioCategory(category: UploadCategory) {
-  return category === "audio_full_song" || category === "audio_preview";
+  return category === "track_audio" || category === "audio_full_song" || category === "audio_preview" || category === "preview_snippets" || category === "full_song_files";
 }
 
 function extensionFor(name: string) {
@@ -97,6 +198,13 @@ function extensionFor(name: string) {
 
 function isVideoArtwork(file: File) {
   return file.type.startsWith("video/") || ["mp4", "mov", "webm"].includes(extensionFor(file.name));
+}
+
+function audioFormatFor(fileName: string): AudioUploadMetadata["format"] {
+  const extension = extensionFor(fileName);
+  if (extension === "aif") return "aiff";
+  if (extension === "mp3" || extension === "wav" || extension === "aiff" || extension === "flac" || extension === "aac" || extension === "m4a") return extension;
+  return undefined;
 }
 
 function statusLabel(state: ArtworkState) {
@@ -114,25 +222,38 @@ function ownershipLabel(ownerField?: string) {
   if (ownerField === "trackId") return "Track owner";
   if (ownerField === "signalId") return "Hero owner";
   if (ownerField === "vaultContentId") return "Vault panel owner";
-  if (ownerField === "collectorId") return "Merch / visual owner";
-  if (ownerField === "radioId") return "Audio Visuals section owner";
+  if (ownerField === "collectorId") return "Media group owner";
+  if (ownerField === "radioId") return "Audiovisual section owner";
   return "Media owner";
 }
 
-export function MediaUploadPanel({ draft, mode = "all" }: { draft: Draft | null; mode?: string }) {
-  const fileInputRef = useRef<HTMLInputElement | null>(null);
-  const [category, setCategory] = useState<UploadCategory>(defaultsByMode[mode] ?? "single_cover_art");
+export function MediaUploadPanel({
+  draft,
+  mode = "all",
+  fixedCategory,
+  compact = false,
+  acceptOverride,
+  onUploadComplete
+}: {
+  draft: Draft | null;
+  mode?: string;
+  fixedCategory?: UploadCategory;
+  compact?: boolean;
+  acceptOverride?: string;
+  onUploadComplete?: () => void;
+}) {
+  const resolvedDefault = fixedCategory ?? defaultsByMode[mode] ?? "single_cover_art";
+  const [category, setCategory] = useState<UploadCategory>(resolvedDefault);
   const [trackId, setTrackId] = useState(draft?.tracks[0]?.id ?? "");
   const [externalOwnerId, setExternalOwnerId] = useState("");
-  const [sectionAssignment, setSectionAssignment] = useState("");
-  const [mediaTypeAssignment, setMediaTypeAssignment] = useState("");
+  const [sectionAssignment, setSectionAssignment] = useState<MediaDestination>(routingDefaultsByCategory[resolvedDefault].destination);
+  const [mediaTypeAssignment, setMediaTypeAssignment] = useState<RoutedMediaType>(routingDefaultsByCategory[resolvedDefault].mediaType);
+  const [youtubeUrl, setYoutubeUrl] = useState("");
   const [file, setFile] = useState<File | null>(null);
-  const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
-  const [dragActive, setDragActive] = useState(false);
-  const [uploadProgress, setUploadProgress] = useState(0);
-  const [optimisticUploads, setOptimisticUploads] = useState<OptimisticUpload[]>([]);
   const [previewOpen, setPreviewOpen] = useState(false);
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
+  const [videoDurationReady, setVideoDurationReady] = useState(true);
+  const [audioDurationSeconds, setAudioDurationSeconds] = useState<number | undefined>();
   const [status, setStatus] = useState("Drop a file or click to prepare an upload.");
   const [artworkValidation, setArtworkValidation] = useState<ArtworkValidation>({
     state: "idle",
@@ -140,23 +261,72 @@ export function MediaUploadPanel({ draft, mode = "all" }: { draft: Draft | null;
     warnings: []
   });
   const selectedOption = useMemo(() => uploadOptions.find((option) => option.value === category), [category]);
-  const allowMultiple = category === "vault_asset" || category === "collector_card_asset" || mode === "all" || mode === "vault";
-  const acceptedTypes = selectedOption?.accept ?? "";
   const needsTrack = selectedOption?.ownerField === "trackId";
   const usesDraftRelease = selectedOption?.ownerField === "releaseId" || needsTrack;
   const previewUrl = useMemo(() => (file ? URL.createObjectURL(file) : ""), [file]);
 
   useEffect(() => {
     return () => {
-      optimisticUploads.forEach((upload) => URL.revokeObjectURL(upload.previewUrl));
-    };
-  }, [optimisticUploads]);
-
-  useEffect(() => {
-    return () => {
       if (previewUrl) URL.revokeObjectURL(previewUrl);
     };
   }, [previewUrl]);
+
+  useEffect(() => {
+    if (fixedCategory) setCategory(fixedCategory);
+  }, [fixedCategory]);
+
+  useEffect(() => {
+    const defaults = routingDefaultsByCategory[category];
+    setSectionAssignment(defaults.destination);
+    setMediaTypeAssignment(defaults.mediaType);
+    setDeleteConfirmOpen(false);
+    setStatus("Drop a file or click to prepare an upload.");
+  }, [category]);
+
+  useEffect(() => {
+    if (!file || !isVideoArtwork(file)) {
+      setVideoDurationReady(true);
+      return;
+    }
+    const url = URL.createObjectURL(file);
+    const video = document.createElement("video");
+    video.preload = "metadata";
+    video.onloadedmetadata = () => {
+      const seconds = video.duration;
+      const valid = Number.isFinite(seconds) && seconds >= 4 && seconds <= 90;
+      setVideoDurationReady(valid);
+      setStatus(valid ? `Video duration verified: ${Math.round(seconds)}s.` : "Video duration should be between 4s and 90s for frontend loops.");
+      URL.revokeObjectURL(url);
+    };
+    video.onerror = () => {
+      setVideoDurationReady(false);
+      setStatus("Video duration could not be read. Replace the file before upload.");
+      URL.revokeObjectURL(url);
+    };
+    video.src = url;
+  }, [file]);
+
+  useEffect(() => {
+    if (!file || !isAudioCategory(category)) {
+      setAudioDurationSeconds(undefined);
+      return;
+    }
+    const url = URL.createObjectURL(file);
+    const audio = document.createElement("audio");
+    audio.preload = "metadata";
+    audio.onloadedmetadata = () => {
+      const seconds = audio.duration;
+      setAudioDurationSeconds(Number.isFinite(seconds) && seconds > 0 ? seconds : undefined);
+      setStatus(Number.isFinite(seconds) && seconds > 0 ? `Audio metadata detected: ${Math.round(seconds)}s. Master quality will be preserved.` : "Audio selected. Server probing will retain quality metadata when available.");
+      URL.revokeObjectURL(url);
+    };
+    audio.onerror = () => {
+      setAudioDurationSeconds(undefined);
+      setStatus("Audio selected. Local metadata could not be read, so server-side probing will handle quality metadata later.");
+      URL.revokeObjectURL(url);
+    };
+    audio.src = url;
+  }, [category, file]);
 
   useEffect(() => {
     if (!file || !isCoverCategory(category)) {
@@ -169,7 +339,7 @@ export function MediaUploadPanel({ draft, mode = "all" }: { draft: Draft | null;
     if (!coverExtensions.has(extension) || (file.type && !coverMimeTypes.has(file.type))) {
       setArtworkValidation({
         state: "needs_replacement",
-        message: "Artwork needs replacement: JPG, PNG, GIF, MP4, MOV, and WEBM are the supported formats.",
+        message: "Artwork needs replacement: JPG, PNG, WEBP, GIF, MP4, MOV, and WEBM are the supported formats.",
         warnings: []
       });
       return;
@@ -230,18 +400,7 @@ export function MediaUploadPanel({ draft, mode = "all" }: { draft: Draft | null;
     if (isVideoArtwork(file)) {
       const video = document.createElement("video");
       video.preload = "metadata";
-      video.onloadedmetadata = () => {
-        if (Number.isFinite(video.duration) && (video.duration < 3 || video.duration > 90)) {
-          setArtworkValidation({
-            state: "needs_replacement",
-            message: `Visual cover needs replacement: detected ${Math.round(video.duration)}s. MP4/MOV/WEBM cover loops must be 3-90 seconds.`,
-            warnings: []
-          });
-          URL.revokeObjectURL(url);
-          return;
-        }
-        applyDimensions(video.videoWidth, video.videoHeight);
-      };
+      video.onloadedmetadata = () => applyDimensions(video.videoWidth, video.videoHeight);
       video.onerror = () => {
         setArtworkValidation({
           state: "needs_replacement",
@@ -267,163 +426,164 @@ export function MediaUploadPanel({ draft, mode = "all" }: { draft: Draft | null;
     image.src = url;
   }, [category, file]);
 
-  function handleSelectedFiles(fileList: FileList | File[]) {
-    const files = Array.from(fileList);
-    const nextFiles = allowMultiple ? files : files.slice(0, 1);
-    const ownerType = ownershipLabel(selectedOption?.ownerField);
-    const ownerId = selectedOption?.ownerField === "releaseId"
-      ? draft?.id ?? "pending-release"
-      : selectedOption?.ownerField === "trackId"
-        ? trackId || "pending-track"
-        : externalOwnerId || "pending-owner";
-    setOptimisticUploads((current) => [
-      ...nextFiles.map((nextFile) => ({
-        tempId: `temp_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
-        fileName: nextFile.name,
-        fileType: nextFile.type || extensionFor(nextFile.name),
-        category,
-        ownerType,
-        ownerId,
-        slot: isAudioCategory(category) ? "track_audio" : isCoverCategory(category) ? "cover_art" : category,
-        previewUrl: URL.createObjectURL(nextFile),
-        progress: 0,
-        status: "pending" as const
-      })),
-      ...current
-    ].slice(0, 6));
-    setSelectedFiles(nextFiles);
-    setFile(nextFiles[0] ?? null);
-    setDeleteConfirmOpen(false);
-    setUploadProgress(0);
-    setStatus(nextFiles.length
-      ? `${nextFiles.length === 1 ? nextFiles[0]?.name : `${nextFiles.length} files`} selected and pending upload.`
-      : "No file selected.");
-  }
-
-  function handleFileUpload(event: ChangeEvent<HTMLInputElement>) {
-    handleSelectedFiles(event.currentTarget.files ?? []);
-  }
-
-  function captureDroppedFile(event: DragEvent<HTMLDivElement>) {
+  function captureDroppedFile(event: DragEvent<HTMLLabelElement>) {
     event.preventDefault();
-    setDragActive(false);
-    handleSelectedFiles(event.dataTransfer.files ?? []);
+    setFile(event.dataTransfer.files?.[0] ?? null);
+    setDeleteConfirmOpen(false);
   }
 
   function clearSelectedFile() {
     setFile(null);
-    setSelectedFiles([]);
-    setOptimisticUploads((current) => {
-      current.forEach((upload) => URL.revokeObjectURL(upload.previewUrl));
-      return [];
-    });
-    setUploadProgress(0);
-    if (fileInputRef.current) {
-      fileInputRef.current.value = "";
-    }
     setDeleteConfirmOpen(false);
     setStatus("Media selection removed. Frontend sync remains unchanged until a replacement is uploaded.");
   }
 
   async function requestUploadIntent() {
     if (!file || (usesDraftRelease && !draft)) return;
+    if (!videoDurationReady) {
+      setStatus("Video duration should be between 4s and 90s before upload.");
+      return;
+    }
     if (isCoverCategory(category) && artworkValidation.state !== "approved") {
       setStatus("Artwork needs replacement before upload can be prepared.");
       return;
     }
-    setUploadProgress(10);
-    setOptimisticUploads((current) => current.map((upload, index) => index === 0 ? { ...upload, status: "uploading", progress: 10 } : upload));
     setArtworkValidation((current) => isCoverCategory(category) ? { ...current, state: "uploading", message: "Uploading artwork" } : current);
     setStatus(isCoverCategory(category) ? "Uploading artwork" : "Preparing upload...");
+    const queueId = enqueueUpload({
+      label: `${category}${draft?.title ? ` · ${draft.title}` : ""}`,
+      releaseId: draft?.id,
+      category,
+      status: "uploading"
+    });
     const ownerPayload = selectedOption?.ownerField && selectedOption.ownerField !== "releaseId" && selectedOption.ownerField !== "trackId"
       ? { [selectedOption.ownerField]: externalOwnerId }
       : {};
+    const audioMetadata = audioSelected && file ? {
+      format: audioFormatFor(file.name),
+      bitDepth: "unknown",
+      sampleRateHz: "unknown",
+      channels: "unknown",
+      durationSeconds: audioDurationSeconds
+    } satisfies AudioUploadMetadata : undefined;
     const intentResponse = await fetch("/api/admin/media/upload-intent", {
       method: "POST",
-      headers: { "Content-Type": "application/json", "x-admin": "true" },
+      headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         category,
         releaseId: usesDraftRelease ? draft?.id : undefined,
         trackId: needsTrack ? trackId : undefined,
         ...ownerPayload,
+        destination: sectionAssignment,
+        mediaType: mediaTypeAssignment,
         fileName: file.name,
         mimeType: file.type || "application/octet-stream",
-        sizeBytes: file.size
+        sizeBytes: file.size,
+        ...(audioMetadata ? { audioMetadata } : {})
       })
     });
     const intentPayload = await intentResponse.json().catch(() => null);
     const intent = intentPayload?.data;
     if (!intentResponse.ok || !intent?.signedUploadUrl) {
-      setUploadProgress(0);
-      setOptimisticUploads((current) => current.map((upload, index) => index === 0 ? { ...upload, status: "failed", progress: 0, error: intentPayload?.error?.message || "Upload intent failed." } : upload));
+      patchUploadQueue(queueId, { status: "failed", error: intentPayload?.error?.message || "Upload intent rejected" });
       setStatus(intentPayload?.error?.message || "This file does not meet the upload requirements.");
       setArtworkValidation((current) => isCoverCategory(category) ? { ...current, state: "needs_replacement", message: intentPayload?.error?.message || "Artwork needs replacement." } : current);
       return;
     }
     if (intent.mocked) {
-      setUploadProgress(25);
-      setOptimisticUploads((current) => current.map((upload, index) => index === 0 ? { ...upload, status: "processing", progress: 25, remoteAssetPath: intent.path } : upload));
-      setStatus(`Upload prepared for ${intent.path}. Connect live media storage before sending file bytes.`);
+      await fetch("/api/admin/media/upload-complete", {
+        method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        category,
+        releaseId: usesDraftRelease ? draft?.id : undefined,
+        trackId: needsTrack ? trackId : undefined,
+        ...ownerPayload,
+        destination: sectionAssignment,
+        mediaType: mediaTypeAssignment,
+        path: intent.path,
+        ...(audioMetadata ? { audioMetadata } : {})
+      })
+    });
+    patchUploadQueue(queueId, { status: "complete", path: intent.path });
+    onUploadComplete?.();
+    setStatus(`Upload metadata synced for ${intent.path}. Connect live media storage to send file bytes.`);
       setArtworkValidation((current) => isCoverCategory(category) ? { ...current, state: "approved", message: `${current.message} Final media checks are still modeled as validation metadata until probing is wired.` } : current);
       return;
     }
     setStatus(isCoverCategory(category) ? "Uploading artwork" : "Uploading media...");
-    setUploadProgress(45);
-    setOptimisticUploads((current) => current.map((upload, index) => index === 0 ? { ...upload, status: "uploading", progress: 45 } : upload));
     const uploadResponse = await fetch(intent.signedUploadUrl, {
       method: "PUT",
       headers: { "Content-Type": file.type || "application/octet-stream" },
       body: file
     });
     if (!uploadResponse.ok) {
-      setUploadProgress(0);
-      setOptimisticUploads((current) => current.map((upload, index) => index === 0 ? { ...upload, status: "failed", progress: 0, error: "Storage upload failed." } : upload));
+      patchUploadQueue(queueId, { status: "failed", error: "Storage upload failed" });
       setStatus("Upload failed. No completed media was recorded.");
       setArtworkValidation((current) => isCoverCategory(category) ? { ...current, state: "needs_replacement", message: "Artwork needs replacement: storage upload failed." } : current);
       return;
     }
-    setUploadProgress(80);
-    setOptimisticUploads((current) => current.map((upload, index) => index === 0 ? { ...upload, status: "processing", progress: 80 } : upload));
     setArtworkValidation((current) => isCoverCategory(category) ? { ...current, state: "processing", message: "Processing artwork" } : current);
-    const completeResponse = await fetch("/api/admin/media/upload-complete", {
+    await fetch("/api/admin/media/upload-complete", {
       method: "POST",
-      headers: { "Content-Type": "application/json", "x-admin": "true" },
+      headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         category,
         releaseId: usesDraftRelease ? draft?.id : undefined,
         trackId: needsTrack ? trackId : undefined,
         ...ownerPayload,
-        path: intent.path
+        destination: sectionAssignment,
+        mediaType: mediaTypeAssignment,
+        path: intent.path,
+        ...(audioMetadata ? { audioMetadata } : {})
       })
     });
-    if (!completeResponse.ok) {
-      const completePayload = await completeResponse.json().catch(() => null);
-      setUploadProgress(0);
-      setOptimisticUploads((current) => current.map((upload, index) => index === 0 ? { ...upload, status: "failed", progress: 0, error: completePayload?.error?.message || "Upload completion failed." } : upload));
-      setStatus(completePayload?.error?.message || "Upload completion failed.");
-      return;
-    }
-    setUploadProgress(100);
-    setOptimisticUploads((current) => current.map((upload, index) => index === 0 ? { ...upload, status: "confirmed", progress: 100, remoteAssetPath: intent.path } : upload));
+    patchUploadQueue(queueId, { status: "complete", path: intent.path });
+    onUploadComplete?.();
     setStatus(`Upload confirmed at ${intent.path}.`);
     setArtworkValidation((current) => isCoverCategory(category) ? { ...current, state: "approved", message: `${current.message} Final server media probing is still modeled as metadata validation until that service is wired.` } : current);
   }
 
+  async function requestAudioVisualEmbed() {
+    if (category !== "audio_visual" || !youtubeUrl.trim()) return;
+    setStatus("Saving YouTube audio visual...");
+    const response = await fetch("/api/admin/audio-visuals", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "x-admin": "true" },
+      body: JSON.stringify({
+        title: draft?.title ? `${draft.title} Visual` : externalOwnerId || "Audio Visual",
+        youtubeUrl,
+        releaseId: draft?.id,
+        status: "published",
+        metadata: {
+          frontendSection: "audio_visuals",
+          mediaType: "embed",
+          destination: sectionAssignment || "audio_visuals"
+        }
+      })
+    });
+    const payload = await response.json().catch(() => null);
+    setStatus(response.ok ? "YouTube audio visual published to the frontend audio visual section." : payload?.error?.message || "YouTube audio visual could not be saved.");
+  }
+
   const coverSelected = isCoverCategory(category);
   const audioSelected = isAudioCategory(category);
+  const embedSelected = category === "audio_visual" && mediaTypeAssignment === "embed";
   const externalOwnerReady = selectedOption?.ownerField === "releaseId" || selectedOption?.ownerField === "trackId" || externalOwnerId.trim().length > 0;
   const relationalAssignmentReady = Boolean(sectionAssignment && mediaTypeAssignment && externalOwnerReady);
-  const canRequestUpload = Boolean(file && relationalAssignmentReady && (!usesDraftRelease || draft) && (!coverSelected || artworkValidation.state === "approved"));
+  const canRequestUpload = Boolean(file && relationalAssignmentReady && videoDurationReady && (!usesDraftRelease || draft) && (!coverSelected || artworkValidation.state === "approved"));
   const selectedTrack = draft?.tracks.find((track) => track.id === trackId);
   const ownerValue = selectedOption?.ownerField === "releaseId"
     ? draft?.title
     : selectedOption?.ownerField === "trackId"
       ? selectedTrack ? `${selectedTrack.position}. ${selectedTrack.title}` : "Choose a track"
       : externalOwnerId || "Choose owner";
-  const selectedFileSummary = selectedFiles.length > 1 ? `${selectedFiles.length} files selected` : file?.name ?? "No file selected";
+
+  const fileAccept = acceptOverride ?? selectedOption?.accept ?? "";
 
   return (
-    <section className="upload-panel">
+    <section className={`upload-panel${compact ? " upload-panel-compact" : ""}`}>
+      {!compact ? (
       <div className="upload-ownership-card">
         <div>
           <p className="meta-label">Ownership</p>
@@ -436,7 +596,10 @@ export function MediaUploadPanel({ draft, mode = "all" }: { draft: Draft | null;
           <span>Live persistence follows the existing upload-intent and upload-complete services.</span>
         </div>
       </div>
+      ) : null}
+      {!compact ? (
       <div className="release-upload-controls">
+        {!fixedCategory ? (
         <label>
           Category
           <select value={category} onChange={(event) => setCategory(event.target.value as UploadCategory)}>
@@ -447,6 +610,7 @@ export function MediaUploadPanel({ draft, mode = "all" }: { draft: Draft | null;
             ))}
           </select>
         </label>
+        ) : null}
         {needsTrack && draft ? (
           <label>
             Track
@@ -467,103 +631,45 @@ export function MediaUploadPanel({ draft, mode = "all" }: { draft: Draft | null;
         ) : null}
         <label>
           Section assignment
-          <select value={sectionAssignment} onChange={(event) => setSectionAssignment(event.target.value)}>
-            <option value="">Choose destination</option>
-            <option value="homepage-hero">Homepage hero</option>
-            <option value="vault-hero">Vault hero</option>
-            <option value="landing-hero">Landing hero</option>
-            <option value="release-page">Release page</option>
-            <option value="audio-visuals">Audio Visuals</option>
-            <option value="vault-panel">Vault panel</option>
-            <option value="merch-products">Merch products</option>
-            <option value="circle">Circle</option>
-            <option value="background-loops">Background Loops</option>
+          <select value={sectionAssignment} onChange={(event) => setSectionAssignment(event.target.value as MediaDestination)}>
+            {mediaSectionOptions.map((option) => (
+              <option key={`${option.label}-${option.value}`} value={option.value}>{option.label}</option>
+            ))}
           </select>
         </label>
         <label>
           Media type
-          <select value={mediaTypeAssignment} onChange={(event) => setMediaTypeAssignment(event.target.value)}>
-            <option value="">Choose type</option>
+          <select value={mediaTypeAssignment} onChange={(event) => setMediaTypeAssignment(event.target.value as RoutedMediaType)}>
             <option value="image">Image</option>
-            <option value="gif">GIF</option>
-            <option value="mp4">MP4</option>
-            <option value="mov">MOV</option>
-            <option value="webm">WEBM</option>
-            <option value="wav">WAV</option>
-            <option value="mp3">MP3</option>
-            <option value="youtube">YouTube embed</option>
+            <option value="video">Video / loop</option>
+            <option value="audio">Audio</option>
+            <option value="embed">YouTube embed</option>
           </select>
         </label>
       </div>
-      <input
-        type="file"
-        ref={fileInputRef}
-        className="hidden"
-        multiple={allowMultiple}
-        accept={acceptedTypes}
-        onChange={handleFileUpload}
-      />
-      <div
-        className="release-upload-zone"
-        data-drag-active={dragActive ? "true" : "false"}
-        onClick={() => fileInputRef.current?.click()}
-        onDragEnter={(event) => {
-          event.preventDefault();
-          setDragActive(true);
-        }}
-        onDragLeave={(event) => {
-          event.preventDefault();
-          setDragActive(false);
-        }}
-        onDragOver={(event) => {
-          event.preventDefault();
-          setDragActive(true);
-        }}
-        onDrop={captureDroppedFile}
-        role="button"
-        tabIndex={0}
-        onKeyDown={(event) => {
-          if (event.key === "Enter" || event.key === " ") {
-            event.preventDefault();
-            fileInputRef.current?.click();
-          }
-        }}
-      >
-        <span>{coverSelected ? coverArtworkHelperText : "Drag & drop or click to select media"}</span>
-        <strong>{selectedFileSummary}</strong>
-        <small>{selectedOption?.note} Accepted: {acceptedTypes}</small>
-      </div>
-      {uploadProgress > 0 ? (
-        <div className="upload-progress" aria-label={`Upload progress ${uploadProgress}%`}>
-          <span style={{ width: `${uploadProgress}%` }} />
-        </div>
       ) : null}
-      {optimisticUploads.length ? (
-        <div className="optimistic-upload-grid" aria-label="Optimistic media upload state">
-          {optimisticUploads.map((upload) => (
-            <article className="optimistic-upload-card" data-status={upload.status} key={upload.tempId}>
-              <div className="optimistic-preview">
-                {upload.fileType.startsWith("video/") || ["mp4", "mov", "webm"].includes(extensionFor(upload.fileName)) ? (
-                  <video src={upload.previewUrl} autoPlay muted loop playsInline />
-                ) : upload.fileType.startsWith("audio/") || ["mp3", "wav", "flac", "aif", "aiff"].includes(extensionFor(upload.fileName)) ? (
-                  <div className="waveform-placeholder" aria-hidden="true">
-                    {Array.from({ length: 14 }, (_, index) => <span key={index} style={{ animationDelay: `${index * 45}ms` }} />)}
-                  </div>
-                ) : (
-                  <img alt="" src={upload.previewUrl} />
-                )}
-              </div>
-              <div>
-                <p className="meta-label">{upload.status}</p>
-                <strong>{upload.fileName}</strong>
-                <span>{upload.ownerType}: {upload.ownerId} / {upload.slot}</span>
-                {upload.error ? <small>{upload.error}</small> : null}
-              </div>
-              <div className="upload-progress">
-                <span style={{ width: `${upload.progress}%` }} />
-              </div>
-            </article>
-          ))}
+      <label className="release-upload-zone" onDragOver={(event) => event.preventDefault()} onDrop={captureDroppedFile}>
+        <span>{coverSelected ? coverArtworkHelperText : "Drag & drop or click to select media"}</span>
+        <strong>{file ? file.name : "No file selected"}</strong>
+        <small>{selectedOption?.note}</small>
+        <input type="file" accept={fileAccept} onChange={(event) => {
+          setFile(event.currentTarget.files?.[0] ?? null);
+          setDeleteConfirmOpen(false);
+        }} />
+      </label>
+      {embedSelected ? (
+        <div className="artwork-validation-card">
+          <div>
+            <p className="meta-label">YouTube embed</p>
+            <strong>Audio visual section</strong>
+          </div>
+          <label>
+            YouTube URL
+            <input value={youtubeUrl} onChange={(event) => setYoutubeUrl(event.target.value)} placeholder="https://www.youtube.com/watch?v=..." />
+          </label>
+          <button className="control-button secondary" disabled={!youtubeUrl.trim()} onClick={requestAudioVisualEmbed} type="button">
+            Save YouTube Embed
+          </button>
         </div>
       ) : null}
       {coverSelected ? (
@@ -574,9 +680,8 @@ export function MediaUploadPanel({ draft, mode = "all" }: { draft: Draft | null;
           </div>
           <p>{artworkValidation.message}</p>
           <ul>
-            <li>Format validation: PNG, JPG/JPEG, WEBP, MP4, MOV, WEBM before processing.</li>
+            <li>Format validation: JPG, PNG, WEBP, GIF, MP4, MOV, WEBM before processing.</li>
             <li>Resolution validation: must be square and at least 1400x1400.</li>
-            <li>Visual cover validation: video loops must be 3-90 seconds.</li>
             <li>File size validation: must be 70MB or smaller.</li>
             <li>Corruption detection: local media preview must load before upload.</li>
           </ul>
@@ -608,27 +713,32 @@ export function MediaUploadPanel({ draft, mode = "all" }: { draft: Draft | null;
             <p className="meta-label">Audio validation</p>
             <strong>{file ? "Processing" : "Select audio"}</strong>
           </div>
-          <p>Upload a high-quality MP3, WAV, FLAC, or AIFF master for 2MRRW.</p>
+          <p>Upload preview snippets or full master audio without reducing original quality.</p>
           <ul>
-            <li>Target quality: up to 24-bit with 44.1kHz minimum review.</li>
-            <li>Waveform: preview the selected audio before upload.</li>
-            <li>Status: Uploading, Processing, Ready.</li>
+            <li>Formats: MP3, WAV, AIFF, FLAC, AAC, and M4A.</li>
+            <li>Quality metadata: 16-bit, 24-bit, 32-bit float, 44.1kHz, 48kHz, 88.2kHz, and 96kHz.</li>
+            <li>Waveform and optimized preview generation stay queued separately from the untouched master.</li>
           </ul>
           {file && previewUrl ? (
-            <audio controls src={previewUrl} />
+            <>
+              <audio controls src={previewUrl} />
+              <small>Waveform preview hook ready; worker output will attach after processing.</small>
+            </>
           ) : null}
         </div>
       ) : null}
       <button className="control-button" disabled={!canRequestUpload} onClick={requestUploadIntent} type="button">
         {file ? "Replace / Upload Media" : "Prepare Upload"}
       </button>
-      {!relationalAssignmentReady ? <p className="form-status">Choose destination, media type, and ownership before upload. This keeps every asset attached to the right release, track, hero, vault panel, Audio Visuals section, or merch product.</p> : null}
+      {!compact && !relationalAssignmentReady ? <p className="form-status">Choose destination, media type, and ownership before upload. This keeps every asset attached to the right release, track, hero, vault panel, audiovisual section, or merch product.</p> : null}
+      {!compact ? (
       <div className="inline-action-row" aria-label="Media item actions">
         <button className="control-button secondary" disabled={!file} type="button">Preview</button>
         <button className="control-button secondary" disabled={!file} type="button">Schedule</button>
         <button className="control-button secondary" disabled={!file} type="button">Publish</button>
         <button className="control-button secondary" disabled={!file} onClick={() => setDeleteConfirmOpen(true)} type="button">Delete</button>
       </div>
+      ) : null}
       {deleteConfirmOpen ? (
         <div className="delete-confirm-card" role="alertdialog" aria-label="Confirm media removal">
           <div>
@@ -648,7 +758,9 @@ export function MediaUploadPanel({ draft, mode = "all" }: { draft: Draft | null;
           <button className="control-button secondary" onClick={() => setPreviewOpen(false)} type="button">
             Close Preview
           </button>
-          {isVideoArtwork(file) ? (
+          {audioSelected ? (
+            <audio controls src={previewUrl} />
+          ) : isVideoArtwork(file) ? (
             <video autoPlay controls loop src={previewUrl} />
           ) : (
             <img alt="Fullscreen selected cover artwork preview" src={previewUrl} />
