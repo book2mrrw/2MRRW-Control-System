@@ -32,7 +32,13 @@ export async function GET(request: Request) {
   const url = new URL(request.url);
   const limit = Number(url.searchParams.get("limit") ?? 100);
   const apiBase = process.env.NEXT_PUBLIC_APP_URL?.replace(/\/$/, "") ?? "https://2-mrrw-control-system.vercel.app";
-  const releases = await getLatestReleasesDurable({ limit: Number.isFinite(limit) ? limit : 100 });
+  const boundedLimit = Number.isFinite(limit) ? limit : 100;
+  const releases = await Promise.race([
+    getLatestReleasesDurable({ limit: boundedLimit }),
+    new Promise<Awaited<ReturnType<typeof getLatestReleasesDurable>>>((resolve) => {
+      setTimeout(() => resolve([]), 5_000);
+    })
+  ]);
   if (!releases.length) {
     const fallback = buildStudioCatalogFallback().slice(0, Number.isFinite(limit) ? limit : 100);
     const enriched = fallback.map((row) => ({
