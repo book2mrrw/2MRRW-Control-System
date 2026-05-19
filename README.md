@@ -37,6 +37,18 @@ Backend-first foundation for the 2MRRW Artist Control System.
 - Accepted cover formats are JPG, PNG, GIF, MP4, and MOV.
 - The UI performs client-side format, file size, resolution, and preview-load validation. Server-side media probing is represented as explicit validation metadata until a durable probing service is added.
 
+## Operations scripts
+
+| Script | Purpose |
+|--------|---------|
+| `./scripts/trigger-scheduled-cron.sh` | Manual scheduled publish (reads `CRON_SECRET` from `.env.local`) |
+| `npm run backfill:covers` | Upload cover art from artist-platform URLs into Supabase Storage |
+| `./scripts/gh.sh` | GitHub CLI when `gh` is not on PATH |
+
+**Health:** `GET /api/health` — catalog count, cron configured, storage sample.
+
+**Drop rehearsal:** see `DROP_REHEARSAL.md` and `MEGA_GO_LIVE_CHECKLIST.md`.
+
 ## Local Verification
 
 ```bash

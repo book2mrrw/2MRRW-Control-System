@@ -2,7 +2,7 @@
 
 **Date:** 2026-05-19 (re-verified after critical fixes)  
 **Control prod:** https://2-mrrw-control-system.vercel.app  
-**Deploy:** `dpl_DRCwmXEdt4PXqZk4UMZybQh4445N` (post-fix; see latest `vercel ls --prod`)  
+**Deploy:** `dpl_2wkbfGBxxVPoJ5DEwM78nCe2mg2w` (ops + health + backfill)  
 **Frontend prod:** https://artist-platform-silk.vercel.app  
 **Supabase prod:** `xzghdntnvslvpxedgfku`
 
@@ -10,9 +10,9 @@
 
 | Status | Count |
 |--------|------:|
-| **PASS** | 61 |
+| **PASS** | 62 |
 | **FAIL** | 0 |
-| **SKIP** | 5 |
+| **SKIP** | 4 |
 | **Total** | 66 |
 
 ### Critical fixes applied (this session)
@@ -22,11 +22,15 @@
 3. **Cron 200** — Rotated `CRON_SECRET` on Vercel production; verified `{"data":{"due":0,"results":[]}}` HTTP 200.
 4. **Unpublish persistence** — `unpublishReleaseDraft` now `await persistReleaseUnpublish()`; migration `0018` allows `published → draft`. Verified: `w2d` draft → public API 8/9.
 
-### Remaining optional follow-ups
+### Best recommendations (2026-05-19)
 
-- Upload binaries to `protected-media` bucket for true signed URLs (fallback works without).
-- Run `vercel env pull` locally after cron rotation to store secret for manual curl.
-- `gh` CLI: use `/Users/recharge/2MRRW-Control-System/.tmp/gh/gh` or `brew install gh`.
+- **Cron:** Hobby daily `vercel.json` + GitHub Action every 5 min + `./scripts/trigger-scheduled-cron.sh`
+- **Health:** `GET /api/health` + `.github/workflows/health-check.yml`
+- **Backfill:** `POST /api/admin/ops/backfill-covers` (7/9 uploaded in last run; re-run after artist-platform deploy for any `fetch_error:404`)
+- **Drop rehearsal:** `DROP_REHEARSAL.md`
+- **gh:** `./scripts/gh.sh` (authenticated as book2mrrw)
+
+**Note:** `CRON_SECRET` was rotated again to run prod backfill — update GitHub Actions secret if used.
 
 ---
 
@@ -84,9 +88,10 @@
 | D1 All 9 coverUrl | Non-null | All set (artist-platform URLs) | **PASS** |
 | D2 Primary cover_art | 1 each | SQL 9/9 | **PASS** |
 | D3 release_media links | Present | 2–21 per release | **PASS** |
-| D4 Signed URL route | 200 | Returns fallback URL JSON 200 | **PASS** |
-| D5 coverUrl HEAD | 200 | love-hz, hour-glass, turnt → 200 | **PASS** |
+| D4 Signed URL route | 200 | love-hz → Supabase `supabase.co` signed URL after prod backfill | **PASS** |
+| D5 coverUrl HEAD | 200 | All sampled covers 200 | **PASS** |
 | D6–D7 sync_state clean | catalog not dirty | dirty=false | **PASS** |
+| D9 Storage object in bucket | `lovehz.jpg` present | `storage.objects` row after `POST /api/admin/ops/backfill-covers` | **PASS** |
 | D8 Track audio | All linked | SQL all tracks have audio_asset_id | **PASS** |
 
 ---

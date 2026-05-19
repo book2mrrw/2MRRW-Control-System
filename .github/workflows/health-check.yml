@@ -1,0 +1,24 @@
+name: Production health check
+
+on:
+  schedule:
+    - cron: "*/30 * * * *"
+  workflow_dispatch:
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Check Control System health
+        env:
+          CONTROL_SYSTEM_URL: ${{ secrets.CONTROL_SYSTEM_URL }}
+        run: |
+          URL="${CONTROL_SYSTEM_URL:-https://2-mrrw-control-system.vercel.app}"
+          echo "GET ${URL%/}/api/health"
+          body="$(curl -fsS "${URL%/}/api/health")"
+          echo "$body"
+          echo "$body" | grep -q '"status":"ok"' || {
+            echo "Health check degraded or failed"
+            exit 1
+          }

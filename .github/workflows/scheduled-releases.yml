@@ -1,0 +1,24 @@
+name: Scheduled releases cron
+
+on:
+  schedule:
+    # Every 5 minutes (Hobby-friendly alternative to Vercel Pro cron)
+    - cron: "*/5 * * * *"
+  workflow_dispatch:
+
+jobs:
+  trigger:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Trigger Control System scheduled publish
+        env:
+          CRON_SECRET: ${{ secrets.CRON_SECRET }}
+          CONTROL_SYSTEM_URL: ${{ secrets.CONTROL_SYSTEM_URL }}
+        run: |
+          if [ -z "$CRON_SECRET" ] || [ -z "$CONTROL_SYSTEM_URL" ]; then
+            echo "Set repository secrets: CRON_SECRET, CONTROL_SYSTEM_URL"
+            exit 1
+          fi
+          curl -fsS -H "Authorization: Bearer ${CRON_SECRET}" \
+            "${CONTROL_SYSTEM_URL%/}/api/cron/scheduled-releases"

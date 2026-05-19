@@ -3,7 +3,7 @@
 **Audit date:** 2026-05-19  
 **Production URL:** https://2-mrrw-control-system.vercel.app  
 **Media Control Room:** https://2-mrrw-control-system.vercel.app/media  
-**Latest deploy:** `dpl_GvULKn8bU9x8zF3JVQQBEG8oX31j` (prod alias active)  
+**Latest deploy:** `dpl_2wkbfGBxxVPoJ5DEwM78nCe2mg2w` (health, backfill API, GitHub workflows)  
 **PR:** https://github.com/book2mrrw/2MRRW-Control-System/pull/2 (merged)
 
 ---
@@ -13,17 +13,63 @@
 | Plan | `vercel.json` schedule | Behavior |
 |------|------------------------|----------|
 | **Hobby** (current) | `0 6 * * *` | Auto-publish runs once daily at **06:00 UTC**. Due releases within the last 24h are processed in that run. |
-| **Pro** | Change to `*/5 * * * *` | Auto-publish every 5 minutes (near-exact drop times). Redeploy after editing `vercel.json`. |
+| **Pro** | Change to `*/5 * * * *` in `vercel.json` + redeploy | Auto-publish every 5 minutes (near-exact drop times). |
 
-**Precise drop on Hobby (recommended):** at the scheduled UTC instant, run:
+**5-minute drops on Hobby (no Pro upgrade):** enable GitHub Action (free):
+
+1. Repo → **Settings** → **Secrets** → add `CRON_SECRET`, `CONTROL_SYSTEM_URL` (`https://2-mrrw-control-system.vercel.app`)
+2. Workflow `.github/workflows/scheduled-releases.yml` runs every 5 minutes
+
+**Manual trigger at drop time:**
 
 ```bash
-# CRON_SECRET lives in Vercel Production env only — pull locally: vercel env pull
+./scripts/trigger-scheduled-cron.sh
+# or
 curl -sS -H "Authorization: Bearer $CRON_SECRET" \
   "https://2-mrrw-control-system.vercel.app/api/cron/scheduled-releases"
 ```
 
-Expect JSON like `{"due":1,"results":[{"ok":true,"status":"published"}]}`. Then confirm the release on `/api/public/releases` and **LIVE** badge in Media Control Room.
+Expect JSON like `{"due":1,"results":[{"ok":true,"status":"published"}]}`. See **`DROP_REHEARSAL.md`** for full rehearsal.
+
+### CRON_SECRET hygiene
+
+- Rotated at go-live; **do not rotate again** unless compromised.
+- **Quarterly:** rotate in Vercel → redeploy → update GitHub secret `CRON_SECRET` → `vercel env pull` (if not redacted).
+- `vercel env pull` often **redacts** secrets (length 0). Copy `CRON_SECRET` once from Vercel dashboard → paste into local `.env.local` for scripts.
+
+### GitHub CLI (`gh`)
+
+```bash
+./scripts/gh.sh auth status   # or: brew install gh && gh auth login
+```
+
+Bundled binary: `.tmp/gh/gh` (see `scripts/gh.sh`).
+
+### Health monitoring
+
+```bash
+curl -sS https://2-mrrw-control-system.vercel.app/api/health | jq .
+```
+
+- `status`: `ok` | `degraded`
+- `catalog.publishedReleases`, `cron.configured`, `storage.usesFallback`
+
+Optional: `.github/workflows/health-check.yml` (every 30 min) — set `CONTROL_SYSTEM_URL` secret.
+
+### Storage backfill (Supabase bucket)
+
+Fallback URLs work without bucket objects. For **true** signed URLs:
+
+```bash
+# Local (needs real SUPABASE_SERVICE_ROLE_KEY in .env.local — not the vercel pull placeholder)
+npm run backfill:covers
+
+# Production (uses Vercel service role)
+curl -sS -X POST -H "Authorization: Bearer $CRON_SECRET" \
+  "https://2-mrrw-control-system.vercel.app/api/admin/ops/backfill-covers"
+```
+
+Verify: `/api/health` → `storage.usesFallback: false` and love-hz signed URL contains `supabase.co`.
 
 ---
 

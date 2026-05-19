@@ -8,6 +8,7 @@
     "typecheck": "tsc --noEmit",
     "ingest:frontend": "node --conditions react-server --import tsx scripts/ingest-frontend.ts",
     "backfill:covers": "node --conditions react-server --import tsx scripts/backfill-storage-covers.ts",
+    "trigger:cron": "bash scripts/trigger-scheduled-cron.sh",
     "import:frontend-releases": "node --conditions react-server --import tsx src/scripts/ingestFrontend.ts --activate",
     "export:frontend-releases-sql": "node --conditions react-server --import tsx src/scripts/exportFrontendReleasesSql.ts",
     "test": "node --conditions react-server --import tsx tests/backend-foundation.test.ts",
