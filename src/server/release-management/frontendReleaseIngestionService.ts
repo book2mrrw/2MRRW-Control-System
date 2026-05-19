@@ -658,7 +658,11 @@ export async function ingestFrontendReleaseEcosystem(): Promise<FrontendReleaseI
   return result;
 }
 
-export async function ensureCatalogHydrated() {
+type HydrationResult = Awaited<ReturnType<typeof doHydrate>>;
+
+let hydrationPromise: Promise<HydrationResult> | null = null;
+
+async function doHydrate() {
   const hydrated = await hydrateReleaseManagementFromSupabase();
   if (hydrated.hydrated && hydrated.releases > 0) {
     return hydrated;
@@ -680,6 +684,12 @@ export async function ensureCatalogHydrated() {
   return hydrated;
 }
 
+export async function ensureCatalogHydrated() {
+  if (!hydrationPromise) hydrationPromise = doHydrate();
+  return hydrationPromise;
+}
+
 export async function ensureFrontendReleaseEcosystemImported() {
-  return ensureCatalogHydrated();
+  if (!hydrationPromise) hydrationPromise = doHydrate();
+  return hydrationPromise;
 }

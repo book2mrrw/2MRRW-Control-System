@@ -16,10 +16,10 @@
   },
   "dependencies": {
     "@supabase/ssr": "^0.10.3",
-    "@supabase/supabase-js": "latest",
+    "@supabase/supabase-js": "2.105.4",
     "lucide-react": "^1.16.0",
     "luxon": "^3.7.2",
-    "next": "latest",
+    "next": "16.2.6",
     "react": "latest",
     "react-dom": "latest",
     "server-only": "^0.0.1",

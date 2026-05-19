@@ -1,6 +1,6 @@
 import "server-only";
 
-import { createClient } from "@supabase/supabase-js";
+import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 
 function nonEmptyEnvValue(value: string | undefined) {
   return value && value.length > 0 ? value : undefined;
@@ -10,6 +10,8 @@ export function getSupabaseServerKey(env: Record<string, string | undefined> = p
   return nonEmptyEnvValue(env.SUPABASE_SERVICE_ROLE_KEY) ?? nonEmptyEnvValue(env.SUPABASE_SECRET_KEY);
 }
 
+let cachedServerClient: SupabaseClient | null = null;
+
 export function getServerSupabase() {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const serviceRoleKey = getSupabaseServerKey();
@@ -18,11 +20,16 @@ export function getServerSupabase() {
     return null;
   }
 
+  if (cachedServerClient) {
+    return cachedServerClient;
+  }
+
   // This module is server-only; never import it from browser components or expose the service role key.
-  return createClient(url, serviceRoleKey, {
+  cachedServerClient = createClient(url, serviceRoleKey, {
     auth: {
       autoRefreshToken: false,
       persistSession: false
     }
   });
+  return cachedServerClient;
 }

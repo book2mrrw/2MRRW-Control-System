@@ -1,7 +1,5 @@
 import { MediaPage } from "@/components/control/ReleasePages";
-import { ensureFrontendReleaseEcosystemImported } from "@/server/release-management/frontendReleaseIngestionService";
 
-export default async function LoopsMediaRoute() {
-  await ensureFrontendReleaseEcosystemImported();
+export default function LoopsMediaRoute() {
   return <MediaPage mode="loops" />;
 }

@@ -150,9 +150,72 @@ function enrichTrackFromReleaseMedia(track: CatalogTrack, releaseMedia: CatalogR
   };
 }
 
+const MEDIA_ASSET_SELECT =
+  "id, owner_type, owner_id, bucket, storage_path, access_level, asset_type, checksum_md5, version, is_active";
+
+async function fetchScopedMediaAssets(
+  supabase: NonNullable<ReturnType<typeof getServerSupabase>>,
+  releaseIds: string[],
+  trackRows: Array<{ id: string; audio_asset_id?: string | null; preview_asset_id?: string | null }>,
+  releaseMediaRows: Array<{ media_asset_id?: string | null }>
+) {
+  const trackIds = trackRows.map((row) => row.id as string);
+  const referencedIds = new Set<string>();
+  for (const row of trackRows) {
+    if (row.audio_asset_id) referencedIds.add(row.audio_asset_id as string);
+    if (row.preview_asset_id) referencedIds.add(row.preview_asset_id as string);
+  }
+  for (const row of releaseMediaRows) {
+    if (row.media_asset_id) referencedIds.add(row.media_asset_id as string);
+  }
+
+  const queries = [];
+  if (referencedIds.size > 0) {
+    queries.push(supabase.from("media_assets").select(MEDIA_ASSET_SELECT).in("id", [...referencedIds]));
+  }
+  if (releaseIds.length > 0) {
+    queries.push(
+      supabase.from("media_assets").select(MEDIA_ASSET_SELECT).eq("owner_type", "release").in("owner_id", releaseIds)
+    );
+  }
+  if (trackIds.length > 0) {
+    queries.push(
+      supabase.from("media_assets").select(MEDIA_ASSET_SELECT).eq("owner_type", "track").in("owner_id", trackIds)
+    );
+  }
+  if (!queries.length) return new Map<string, CatalogMediaAsset>();
+
+  const results = await Promise.all(queries);
+  const mediaById = new Map<string, CatalogMediaAsset>();
+  for (const result of results) {
+    if (result.error) continue;
+    for (const row of result.data ?? []) {
+      if (row.is_active === false) continue;
+      mediaById.set(row.id as string, {
+        id: row.id as string,
+        ownerType: row.owner_type as string,
+        ownerId: row.owner_id as string,
+        bucket: row.bucket as string,
+        storagePath: row.storage_path as string,
+        accessLevel: row.access_level as string,
+        assetType: row.asset_type as string | null,
+        checksumMd5: row.checksum_md5 as string | null,
+        version: row.version as number | undefined,
+        isActive: row.is_active as boolean | undefined
+      });
+    }
+  }
+  return mediaById;
+}
+
 export async function fetchDurableReleaseCatalog(): Promise<CatalogRelease[]> {
+  // [recovery-timing] remove after stabilization
+  console.time("[recovery-timing] fetchDurableReleaseCatalog");
   const supabase = getServerSupabase();
-  if (!supabase) return [];
+  if (!supabase) {
+    console.timeEnd("[recovery-timing] fetchDurableReleaseCatalog");
+    return [];
+  }
 
   const releaseSelect =
     "id, artist_id, slug, title, release_date, release_type, release_category, status, scheduled_publish_at, release_time, publish_timezone, schedule_attempts, schedule_last_error, published_at, ingestion_source, ingestion_ref, catalog_version, artists(id, name, slug)";
@@ -169,7 +232,10 @@ export async function fetchDurableReleaseCatalog(): Promise<CatalogRelease[]> {
       ? await supabase.from("releases").select(legacySelect).order("release_date", { ascending: false, nullsFirst: false })
       : primaryResult;
 
-  if (releaseResult.error || !releaseResult.data?.length) return [];
+  if (releaseResult.error || !releaseResult.data?.length) {
+    console.timeEnd("[recovery-timing] fetchDurableReleaseCatalog");
+    return [];
+  }
 
   const releaseIds = releaseResult.data.map((row) => row.id as string);
 
@@ -178,13 +244,12 @@ export async function fetchDurableReleaseCatalog(): Promise<CatalogRelease[]> {
   const legacyReleaseMediaSelect =
     "id, release_id, track_id, media_asset_id, asset_role, is_primary, version, is_active, metadata";
 
-  const [tracksResult, mediaResult, releaseMediaPrimary, creditsResult, distributionResult] = await Promise.all([
+  const [tracksResult, releaseMediaPrimary, creditsResult, distributionResult] = await Promise.all([
     supabase
       .from("tracks")
       .select("id, release_id, title, duration_seconds, position, audio_state, audio_asset_id, preview_asset_id, lyrics_text")
       .in("release_id", releaseIds)
       .order("position", { ascending: true }),
-    supabase.from("media_assets").select("id, owner_type, owner_id, bucket, storage_path, access_level, asset_type, checksum_md5, version, is_active"),
     supabase.from("release_media").select(releaseMediaSelect).in("release_id", releaseIds),
     supabase.from("release_credits").select("id, release_id, name, role").in("release_id", releaseIds),
     supabase.from("release_external_links").select("id, release_id, provider, url").in("release_id", releaseIds)
@@ -195,24 +260,11 @@ export async function fetchDurableReleaseCatalog(): Promise<CatalogRelease[]> {
       ? await supabase.from("release_media").select(legacyReleaseMediaSelect).in("release_id", releaseIds)
       : releaseMediaPrimary;
 
-  const mediaById = new Map(
-    (mediaResult.data ?? [])
-      .filter((row) => row.is_active !== false)
-      .map((row) => [
-        row.id as string,
-        {
-          id: row.id as string,
-          ownerType: row.owner_type as string,
-          ownerId: row.owner_id as string,
-          bucket: row.bucket as string,
-          storagePath: row.storage_path as string,
-          accessLevel: row.access_level as string,
-          assetType: row.asset_type as string | null,
-          checksumMd5: row.checksum_md5 as string | null,
-          version: row.version as number | undefined,
-          isActive: row.is_active as boolean | undefined
-        } satisfies CatalogMediaAsset
-      ])
+  const mediaById = await fetchScopedMediaAssets(
+    supabase,
+    releaseIds,
+    tracksResult.data ?? [],
+    releaseMediaResult.data ?? []
   );
 
   const tracksByRelease = new Map<string, CatalogTrack[]>();
@@ -263,7 +315,7 @@ export async function fetchDurableReleaseCatalog(): Promise<CatalogRelease[]> {
 
   const allMediaAssets = [...mediaById.values()];
 
-  return releaseResult.data.map((row) => {
+  const catalog = releaseResult.data.map((row) => {
     const artist = Array.isArray(row.artists) ? row.artists[0] : row.artists;
     const releaseId = row.id as string;
     const releaseMedia = releaseMediaByRelease.get(releaseId) ?? [];
@@ -323,6 +375,9 @@ export async function fetchDurableReleaseCatalog(): Promise<CatalogRelease[]> {
       musicVideo
     } satisfies CatalogRelease;
   });
+  // [recovery-timing] remove after stabilization
+  console.timeEnd("[recovery-timing] fetchDurableReleaseCatalog");
+  return catalog;
 }
 
 export async function fetchDurableReleaseById(releaseId: string) {

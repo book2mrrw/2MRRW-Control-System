@@ -165,26 +165,32 @@ export async function createSignedMediaUrl(
   assetId: string,
   options: { publicKinds?: MediaAssetContract["kind"][]; studioBypass?: boolean } = {}
 ) {
+  // [recovery-timing] remove after stabilization
+  console.time(`[recovery-timing] createSignedMediaUrl:${assetId}`);
   const access = assertCanAccessMedia(userId, assetId, {
     publicKinds: options.publicKinds,
     studioBypass: options.studioBypass
   });
   const persistedAsset = !access.asset ? await getPersistedMediaAsset(assetId) : null;
   if ((!access.allowed || !access.asset) && !persistedAsset) {
+    console.timeEnd(`[recovery-timing] createSignedMediaUrl:${assetId}`);
     return { ok: false as const, status: access.asset ? 403 : 404, message: access.reason };
   }
 
   if (persistedAsset && !(await canUsePersistedAsset(userId, persistedAsset, options))) {
+    console.timeEnd(`[recovery-timing] createSignedMediaUrl:${assetId}`);
     return { ok: false as const, status: 403, message: "Entitlement required" };
   }
 
   const supabase = getServerSupabase();
   const signableAsset = access.asset ?? persistedAsset;
   if (!signableAsset) {
+    console.timeEnd(`[recovery-timing] createSignedMediaUrl:${assetId}`);
     return { ok: false as const, status: 404, message: "Media asset not found" };
   }
 
   if (!supabase) {
+    console.timeEnd(`[recovery-timing] createSignedMediaUrl:${assetId}`);
     return {
       ok: true as const,
       url: `https://signed.local/${signableAsset.bucket}/${signableAsset.path}?asset=${assetId}`,
@@ -200,10 +206,13 @@ export async function createSignedMediaUrl(
   if (error || !data?.signedUrl) {
     const fallback = artworkPublicFallbackUrl(signableAsset.path);
     if (fallback) {
+      console.timeEnd(`[recovery-timing] createSignedMediaUrl:${assetId}`);
       return { ok: true as const, url: fallback, expiresIn: 300, mocked: false, fallback: true as const };
     }
+    console.timeEnd(`[recovery-timing] createSignedMediaUrl:${assetId}`);
     return { ok: false as const, status: 502, message: error?.message ?? "Unable to create signed URL" };
   }
 
+  console.timeEnd(`[recovery-timing] createSignedMediaUrl:${assetId}`);
   return { ok: true as const, url: data.signedUrl, expiresIn: 300, mocked: false };
 }

@@ -2,6 +2,8 @@ import { PageHeader, DataTable, StatusStrip } from "@/components/control/Operati
 import { buildIngestionDiagnosticsReport } from "@/server/diagnostics/ingestionDiagnosticsService";
 import { ensureCatalogHydrated } from "@/server/release-management/frontendReleaseIngestionService";
 
+export const dynamic = "force-dynamic";
+
 export default async function DiagnosticsPage() {
   await ensureCatalogHydrated();
   const report = await buildIngestionDiagnosticsReport();

@@ -1,5 +1,7 @@
 import Link from "next/link";
 import { PageHeader, StatusStrip } from "@/components/control/OperationalPrimitives";
+
+export const dynamic = "force-dynamic";
 import { getStreamingAnalyticsSummary, listAnalyticsEvents } from "@/server/analytics/analyticsService";
 import { ensureFrontendReleaseEcosystemImported } from "@/server/release-management/frontendReleaseIngestionService";
 import { getReleaseManagementOverview } from "@/server/release-management/releaseManagementService";

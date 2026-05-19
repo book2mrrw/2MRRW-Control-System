@@ -1465,6 +1465,11 @@ function SettingsPage() {
   );
 }
 
+function isStudioRoute(pathname: string | null) {
+  if (!pathname) return false;
+  return pathname === "/dashboard" || pathname.startsWith("/releases") || pathname.startsWith("/media");
+}
+
 export function CreatorReleaseSystem({ initialCatalog = [] }: { initialCatalog?: DurableCatalogRelease[] }) {
   const router = useRouter();
   const pathname = usePathname();
@@ -1481,7 +1486,7 @@ export function CreatorReleaseSystem({ initialCatalog = [] }: { initialCatalog?:
   }, [pathname]);
 
   useEffect(() => {
-    if (initialCatalog.length) return;
+    if (initialCatalog.length || !isStudioRoute(pathname)) return;
     let cancelled = false;
     void fetchControlCatalogReleases().then((rows) => {
       if (!cancelled && rows.length) setCatalog(rows);
@@ -1489,7 +1494,7 @@ export function CreatorReleaseSystem({ initialCatalog = [] }: { initialCatalog?:
     return () => {
       cancelled = true;
     };
-  }, [initialCatalog.length]);
+  }, [initialCatalog.length, pathname]);
 
   const refreshCatalog = useCallback(() => {
     void fetchControlCatalogReleases().then((rows) => {

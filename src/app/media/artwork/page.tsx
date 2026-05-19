@@ -1,7 +1,5 @@
 import { MediaPage } from "@/components/control/ReleasePages";
-import { ensureFrontendReleaseEcosystemImported } from "@/server/release-management/frontendReleaseIngestionService";
 
-export default async function ArtworkMediaRoute() {
-  await ensureFrontendReleaseEcosystemImported();
+export default function ArtworkMediaRoute() {
   return <MediaPage mode="artwork" />;
 }

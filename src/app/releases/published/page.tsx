@@ -1,7 +1,5 @@
 import { ReleaseIndexPage } from "@/components/control/ReleasePages";
-import { ensureFrontendReleaseEcosystemImported } from "@/server/release-management/frontendReleaseIngestionService";
 
-export default async function PublishedReleasesPage() {
-  await ensureFrontendReleaseEcosystemImported();
+export default function PublishedReleasesPage() {
   return <ReleaseIndexPage status="published" />;
 }

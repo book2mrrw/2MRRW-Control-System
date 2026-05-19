@@ -302,10 +302,12 @@ async function getPersistedCatalogRows({ includeUnpublished = false } = {}): Pro
   if (releaseError || !releaseRows?.length) return releaseError ? null : [];
 
   const releaseIds = releaseRows.map((row) => row.id);
-  const [{ data: trackRows, error: trackError }, { data: mediaRows, error: mediaError }, { data: artistRows, error: artistError }, { data: productRows, error: productError }, { data: releaseMediaRows, error: releaseMediaError }] =
+  const [{ data: trackRows, error: trackError }, { data: artistRows, error: artistError }, { data: productRows, error: productError }, { data: releaseMediaRows, error: releaseMediaError }] =
     await Promise.all([
-      supabase.from("tracks").select("id, release_id, title, duration_seconds, position, lyrics_text"),
-      supabase.from("media_assets").select("id, owner_type, owner_id, bucket, storage_path, access_level"),
+      supabase
+        .from("tracks")
+        .select("id, release_id, title, duration_seconds, position, lyrics_text")
+        .in("release_id", releaseIds),
       supabase.from("artists").select("id, name, slug"),
       getActiveProductRows(supabase),
       supabase
@@ -315,16 +317,60 @@ async function getPersistedCatalogRows({ includeUnpublished = false } = {}): Pro
         .eq("is_active", true)
     ]);
 
-  if (trackError || mediaError || artistError || productError || releaseMediaError) return null;
+  if (trackError || artistError || productError || releaseMediaError) return null;
 
-  const media = (mediaRows ?? []).map((row) => ({
-    id: row.id,
-    bucket: row.bucket,
-    path: row.storage_path,
-    ownerType: row.owner_type,
-    ownerId: row.owner_id,
-    access: row.access_level
-  }));
+  const trackIds = (trackRows ?? []).map((row) => row.id as string);
+  const referencedAssetIds = new Set<string>();
+  for (const row of releaseMediaRows ?? []) {
+    if (row.media_asset_id) referencedAssetIds.add(row.media_asset_id as string);
+  }
+
+  const mediaQueries = [];
+  if (referencedAssetIds.size > 0) {
+    mediaQueries.push(
+      supabase
+        .from("media_assets")
+        .select("id, owner_type, owner_id, bucket, storage_path, access_level")
+        .in("id", [...referencedAssetIds])
+    );
+  }
+  if (releaseIds.length > 0) {
+    mediaQueries.push(
+      supabase
+        .from("media_assets")
+        .select("id, owner_type, owner_id, bucket, storage_path, access_level")
+        .eq("owner_type", "release")
+        .in("owner_id", releaseIds)
+    );
+  }
+  if (trackIds.length > 0) {
+    mediaQueries.push(
+      supabase
+        .from("media_assets")
+        .select("id, owner_type, owner_id, bucket, storage_path, access_level")
+        .eq("owner_type", "track")
+        .in("owner_id", trackIds)
+    );
+  }
+
+  const mediaResults = mediaQueries.length ? await Promise.all(mediaQueries) : [];
+  if (mediaResults.some((result) => result.error)) return null;
+
+  const mediaById = new Map<string, { id: string; bucket: string; path: string; ownerType: string; ownerId: string; access: string }>();
+  for (const result of mediaResults) {
+    for (const row of result.data ?? []) {
+      mediaById.set(row.id as string, {
+        id: row.id as string,
+        bucket: row.bucket as string,
+        path: row.storage_path as string,
+        ownerType: row.owner_type as string,
+        ownerId: row.owner_id as string,
+        access: row.access_level as string
+      });
+    }
+  }
+
+  const media = [...mediaById.values()];
 
   return releaseRows
     .map((row) => {

@@ -8,9 +8,11 @@ import { resolveReleasePrimaryAssetForCatalog } from "@/server/media/resolveRele
 import type { DurableCatalogRelease } from "@/services/catalog/controlCatalogClient";
 
 export async function buildControlCatalogPayload(): Promise<DurableCatalogRelease[]> {
+  // [recovery-timing] remove after stabilization
+  console.time("[recovery-timing] buildControlCatalogPayload");
   await hydrateReleaseManagementFromSupabase();
   const [catalog, syncRows] = await Promise.all([fetchDurableReleaseCatalog(), fetchCatalogSyncState()]);
-  return Promise.all(
+  const payload = await Promise.all(
     catalog.map(async (release) => {
       const media = await resolveReleasePrimaryAssetForCatalog(release);
       const coverAsset = release.coverArt;
@@ -66,28 +68,18 @@ export async function buildControlCatalogPayload(): Promise<DurableCatalogReleas
         motionUrl: media.motionUrl ?? media.loopUrl,
         posterUrl: media.posterUrl,
         primaryAsset: media.primaryAsset,
-        tracks: await Promise.all(
-          release.tracks.map(async (track) => ({
-            id: track.id,
-            title: track.title,
-            position: track.position,
-            durationSeconds: track.durationSeconds,
-            audioState: track.audioState,
-            previewAssetId: track.previewAsset?.id ?? track.previewAssetId,
-            audioAssetId: track.audioAsset?.id ?? track.audioAssetId,
-            previewUrl: await resolveCatalogMediaUrl(
-              track.previewAsset?.id ?? track.previewAssetId,
-              track.previewAsset?.storagePath,
-              { publicKinds: ["preview"] }
-            ),
-            audioUrl: await resolveCatalogMediaUrl(
-              track.audioAsset?.id ?? track.audioAssetId,
-              track.audioAsset?.storagePath,
-              { studioBypass: true }
-            ),
-            lyricsText: track.lyricsText ?? null
-          }))
-        ),
+        tracks: release.tracks.map((track) => ({
+          id: track.id,
+          title: track.title,
+          position: track.position,
+          durationSeconds: track.durationSeconds,
+          audioState: track.audioState,
+          previewAssetId: track.previewAsset?.id ?? track.previewAssetId,
+          audioAssetId: track.audioAsset?.id ?? track.audioAssetId,
+          previewUrl: null,
+          audioUrl: null,
+          lyricsText: track.lyricsText ?? null
+        })),
         releaseMedia: release.releaseMedia.map((link) => ({
           id: link.id,
           assetRole: link.assetRole,
@@ -107,4 +99,7 @@ export async function buildControlCatalogPayload(): Promise<DurableCatalogReleas
       } satisfies DurableCatalogRelease;
     })
   );
+  // [recovery-timing] remove after stabilization
+  console.timeEnd("[recovery-timing] buildControlCatalogPayload");
+  return payload;
 }

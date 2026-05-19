@@ -1,11 +1,9 @@
 import Link from "next/link";
 import { FormSection, PageHeader } from "@/components/control/OperationalPrimitives";
 import { ReleaseReviewSchedulePanel } from "@/components/control/ReleaseReviewSchedulePanel";
-import { ensureFrontendReleaseEcosystemImported } from "@/server/release-management/frontendReleaseIngestionService";
 import { getReadinessSummary, getReleaseDraft, listReleaseDrafts } from "@/server/release-management/releaseManagementService";
 
 export default async function ReleaseSchedulerStepPage() {
-  await ensureFrontendReleaseEcosystemImported();
   const draft = getReleaseDraft(listReleaseDrafts()[0]?.id ?? "") ?? listReleaseDrafts()[0] ?? null;
   if (!draft) {
     return (
