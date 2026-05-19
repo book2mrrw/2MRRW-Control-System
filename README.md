@@ -47,7 +47,7 @@ Backend-first foundation for the 2MRRW Artist Control System.
 
 **Health:** `GET /api/health` — catalog count, cron configured, storage sample.
 
-**Drop rehearsal:** see `DROP_REHEARSAL.md` and `MEGA_GO_LIVE_CHECKLIST.md`.
+**Operations:** see `OPERATIONS.md` (daily ops + drop night). **Drop rehearsal:** `DROP_REHEARSAL.md`, `MEGA_GO_LIVE_CHECKLIST.md`.
 
 ## Local Verification
 
