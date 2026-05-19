@@ -17,7 +17,7 @@
 
 **5-minute drops on Hobby (no Pro upgrade):** enable GitHub Action (free):
 
-1. Repo → **Settings** → **Secrets** → add `CRON_SECRET`, `CONTROL_SYSTEM_URL` (`https://2-mrrw-control-system.vercel.app`)
+1. **DONE (2026-05-19):** GitHub secrets `CRON_SECRET`, `CONTROL_SYSTEM_URL` on `book2mrrw/2MRRW-Control-System`
 2. Workflow `.github/workflows/scheduled-releases.yml` runs every 5 minutes
 
 **Manual trigger at drop time:**

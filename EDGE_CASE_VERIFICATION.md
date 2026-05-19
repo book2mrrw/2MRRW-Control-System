@@ -2,7 +2,7 @@
 
 **Date:** 2026-05-19 (re-verified after critical fixes)  
 **Control prod:** https://2-mrrw-control-system.vercel.app  
-**Deploy:** `dpl_2wkbfGBxxVPoJ5DEwM78nCe2mg2w` (ops + health + backfill)  
+**Deploy:** `dpl_78TWqWQ8LoXWjykV11LEoeEeC6V5` (GitHub secrets + full cover backfill)  
 **Frontend prod:** https://artist-platform-silk.vercel.app  
 **Supabase prod:** `xzghdntnvslvpxedgfku`
 
@@ -26,11 +26,13 @@
 
 - **Cron:** Hobby daily `vercel.json` + GitHub Action every 5 min + `./scripts/trigger-scheduled-cron.sh`
 - **Health:** `GET /api/health` + `.github/workflows/health-check.yml`
-- **Backfill:** `POST /api/admin/ops/backfill-covers` (7/9 uploaded in last run; re-run after artist-platform deploy for any `fetch_error:404`)
+- **Backfill:** `POST /api/admin/ops/backfill-covers` — **9/9 uploaded** (2026-05-19 prod run)
 - **Drop rehearsal:** `DROP_REHEARSAL.md`
 - **gh:** `./scripts/gh.sh` (authenticated as book2mrrw)
+- **GitHub Actions secrets:** `CRON_SECRET`, `CONTROL_SYSTEM_URL` set on `book2mrrw/2MRRW-Control-System`
+- **env pull:** `vercel env pull` redacts `CRON_SECRET` / `SUPABASE_SERVICE_ROLE_KEY` (length 2) — copy from Vercel dashboard into `.env.local` for local scripts
 
-**Note:** `CRON_SECRET` was rotated again to run prod backfill — update GitHub Actions secret if used.
+**Note:** `CRON_SECRET` rotated 2026-05-19 and synced to GitHub Actions + Vercel production.
 
 ---
 
