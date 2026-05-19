@@ -1,6 +1,7 @@
 import "server-only";
 
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
+import { fetchWithTimeout } from "@/server/supabase/fetchWithTimeout";
 
 function nonEmptyEnvValue(value: string | undefined) {
   return value && value.length > 0 ? value : undefined;
@@ -29,6 +30,9 @@ export function getServerSupabase() {
     auth: {
       autoRefreshToken: false,
       persistSession: false
+    },
+    global: {
+      fetch: fetchWithTimeout
     }
   });
   return cachedServerClient;
