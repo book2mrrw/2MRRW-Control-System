@@ -63,5 +63,3 @@ curl -sS "https://2-mrrw-control-system.vercel.app/api/public/releases?limit=100
 - `STABLE_DEPLOYMENT_REFERENCE.md` — Vercel + env names + rollback
 - `docs/SAFE_RECOVERY_PROTOCOL.md` — full recovery playbook
 - `docs/PRE_VERIFICATION_RECOVERY.md` — media/catalog recovery detail
-- `2MRRW_RECOVERY_SYSTEM/` — offline recovery bundle (guides, snapshots, emergency commands)
-- `RECOVERY_SYSTEM_REPORT.md` — recovery system index and protections

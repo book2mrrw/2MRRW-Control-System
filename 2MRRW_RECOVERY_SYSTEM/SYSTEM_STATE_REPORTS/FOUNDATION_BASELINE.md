@@ -56,7 +56,3 @@ npm ls next react react-dom @supabase/supabase-js --depth=0
 npm run verify
 ./scripts/check-architecture-guardrails.sh
 ```
-
-## Recovery system
-
-Full disaster-recovery bundle: `2MRRW_RECOVERY_SYSTEM/` (see `RECOVERY_SYSTEM_REPORT.md`). Restore tag: `foundation-stable-v1`.

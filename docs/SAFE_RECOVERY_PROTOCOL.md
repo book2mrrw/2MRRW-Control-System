@@ -79,3 +79,7 @@ See `docs/PRE_VERIFICATION_RECOVERY.md`:
 | `foundation-stable-2026-05-19` | Date alias |
 
 See `RECOVERY_ANCHOR.md`.
+
+## Recovery system bundle
+
+Offline playbooks, env templates, and emergency commands: `2MRRW_RECOVERY_SYSTEM/RECOVERY_GUIDES/` (start with `FULL_RECOVERY_GUIDE.md` or `RAPID_RESTORE_CHECKLIST.md`).
