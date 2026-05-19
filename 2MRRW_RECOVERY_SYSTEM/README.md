@@ -41,6 +41,8 @@ git fetch --tags origin && git checkout foundation-stable-v1 && npm ci && npm ru
 
 See [`RECOVERY_GUIDES/ONE_COMMAND_RECOVERY.md`](RECOVERY_GUIDES/ONE_COMMAND_RECOVERY.md).
 
+**Platform (control + frontend):** `npm run foundation:recover-platform` — [`RECOVERY_GUIDES/PLATFORM_ONE_COMMAND_RECOVERY.md`](RECOVERY_GUIDES/PLATFORM_ONE_COMMAND_RECOVERY.md).
+
 ## Copy this folder off-machine
 
 Keep a second copy outside git:

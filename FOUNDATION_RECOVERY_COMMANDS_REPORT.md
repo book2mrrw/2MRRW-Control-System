@@ -20,7 +20,30 @@ One-command foundation recovery is implemented via npm scripts and `scripts/` sh
 
 Alias: `scripts/run-stable-restore.sh` → `run-foundation-recovery.sh`.
 
-### Flags
+## Command 3 — Platform (control + frontend)
+
+| npm script | Shell entrypoint | Description |
+|------------|------------------|-------------|
+| `foundation:recover-platform` | `scripts/run-platform-foundation-recovery.sh` | Backend `foundation:recover`, then frontend `recover:foundation` |
+| `foundation:verify-platform` | `scripts/verify-platform-foundation-state.sh` | `foundation:verify` + frontend `verify:foundation` |
+
+### Platform flags
+
+| Flag | Effect |
+|------|--------|
+| `--deploy` | Backend recover+deploy, backend verify, frontend recover, `verify:foundation`, `recover:deploy -- --deploy` |
+| `--verify-only` | Both verify scripts only (no git checkout) |
+| `--dry-run` | Print planned commands |
+
+### Platform env
+
+| Variable | Default | Used by |
+|----------|---------|---------|
+| `ARTIST_PLATFORM_PATH` | sibling `../artist-platform` or `~/artist-platform` | platform scripts |
+
+Guide: `2MRRW_RECOVERY_SYSTEM/RECOVERY_GUIDES/PLATFORM_ONE_COMMAND_RECOVERY.md`.
+
+### Flags (control-only)
 
 - `npm run foundation:recover -- --deploy` — runs deploy after recovery
 
@@ -46,6 +69,7 @@ Alias: `scripts/run-stable-restore.sh` → `run-foundation-recovery.sh`.
 | Artifact | Path |
 |----------|------|
 | 10-step flow | `2MRRW_RECOVERY_SYSTEM/RECOVERY_GUIDES/ONE_COMMAND_RECOVERY.md` |
+| Platform (Command 3) | `2MRRW_RECOVERY_SYSTEM/RECOVERY_GUIDES/PLATFORM_ONE_COMMAND_RECOVERY.md` |
 | Emergency playbook | `2MRRW_RECOVERY_SYSTEM/RECOVERY_GUIDES/EMERGENCY_RECOVERY_PLAYBOOK.md` |
 | Known-good commits | `2MRRW_RECOVERY_SYSTEM/KNOWN_GOOD_COMMITS/README.md` |
 | Stable deploy ref | `STABLE_DEPLOYMENT_REFERENCE.md` |
@@ -58,6 +82,8 @@ Alias: `scripts/run-stable-restore.sh` → `run-foundation-recovery.sh`.
 - `VERIFY_FOUNDATION_STATE`
 - `RUN_FOUNDATION_DEPLOY`
 - `CREATE_RECOVERY_CHECKPOINT`
+- `RUN_PLATFORM_FOUNDATION_RECOVERY`
+- `VERIFY_PLATFORM_FOUNDATION_STATE`
 
 ## User one-liner
 
@@ -69,4 +95,12 @@ With production deploy:
 
 ```bash
 npm run foundation:recover -- --deploy
+```
+
+Platform (control + frontend):
+
+```bash
+npm run foundation:recover-platform
+npm run foundation:recover-platform -- --deploy
+npm run foundation:verify-platform
 ```

@@ -40,4 +40,6 @@ Foundation tag: `foundation-stable-v1` → commit `6d988f5`.
 - Prefer `foundation:recover` over manual `git checkout` + scattered curls.
 - After recovery, run `npm run foundation:verify` and confirm **9** public releases.
 
+**Both repos:** `npm run foundation:recover-platform` (see `2MRRW_RECOVERY_SYSTEM/RECOVERY_GUIDES/PLATFORM_ONE_COMMAND_RECOVERY.md`).
+
 Docs: `2MRRW_RECOVERY_SYSTEM/RECOVERY_GUIDES/ONE_COMMAND_RECOVERY.md`, `FOUNDATION_RECOVERY_COMMANDS_REPORT.md`.

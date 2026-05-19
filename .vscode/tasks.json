@@ -47,6 +47,33 @@
       "problemMatcher": []
     },
     {
+      "label": "RUN_PLATFORM_FOUNDATION_RECOVERY",
+      "type": "shell",
+      "command": "npm run foundation:recover-platform",
+      "options": {
+        "cwd": "${workspaceFolder}"
+      },
+      "presentation": {
+        "reveal": "always",
+        "panel": "dedicated",
+        "focus": true
+      },
+      "problemMatcher": []
+    },
+    {
+      "label": "VERIFY_PLATFORM_FOUNDATION_STATE",
+      "type": "shell",
+      "command": "npm run foundation:verify-platform",
+      "options": {
+        "cwd": "${workspaceFolder}"
+      },
+      "presentation": {
+        "reveal": "always",
+        "panel": "dedicated"
+      },
+      "problemMatcher": []
+    },
+    {
       "label": "CREATE_RECOVERY_CHECKPOINT",
       "type": "shell",
       "command": "npm run foundation:checkpoint",

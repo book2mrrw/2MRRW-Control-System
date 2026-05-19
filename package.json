@@ -18,7 +18,9 @@
     "foundation:verify": "bash scripts/verify-foundation-state.sh",
     "foundation:deploy": "bash scripts/run-foundation-deploy.sh",
     "foundation:rollback": "bash scripts/run-safe-rollback.sh",
-    "foundation:checkpoint": "bash scripts/create-recovery-checkpoint.sh"
+    "foundation:checkpoint": "bash scripts/create-recovery-checkpoint.sh",
+    "foundation:recover-platform": "bash scripts/run-platform-foundation-recovery.sh",
+    "foundation:verify-platform": "bash scripts/verify-platform-foundation-state.sh"
   },
   "dependencies": {
     "@supabase/ssr": "^0.10.3",

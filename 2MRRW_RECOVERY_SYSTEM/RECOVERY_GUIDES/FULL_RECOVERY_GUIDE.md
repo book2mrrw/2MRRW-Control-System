@@ -86,11 +86,34 @@ curl -sS "https://2-mrrw-control-system.vercel.app/api/public/releases?limit=100
 
 ## Phase C — Recover frontend (artist-platform)
 
+**Preferred (from control repo):** Command 3 platform recovery — see [`PLATFORM_ONE_COMMAND_RECOVERY.md`](PLATFORM_ONE_COMMAND_RECOVERY.md).
+
+```bash
+cd ~/2MRRW-Control-System
+npm run foundation:recover-platform
+npm run foundation:verify-platform
+```
+
+With production deploy for both apps:
+
+```bash
+npm run foundation:recover-platform -- --deploy
+```
+
+Manual steps below if you need fine-grained control.
+
 ### C1. Clone or refresh
 
 ```bash
 git clone <ARTIST_PLATFORM_REPO_URL> artist-platform
 cd artist-platform
+```
+
+Or from control repo only:
+
+```bash
+cd ~/2MRRW-Control-System
+npm run foundation:recover-platform -- --dry-run
 ```
 
 ### C2. Critical env
@@ -103,12 +126,13 @@ Set in Vercel Production (names only — values from dashboard):
 
 Template: `2MRRW_RECOVERY_SYSTEM/ENVIRONMENT_BACKUPS/artist-platform.env.example` (in control repo bundle).
 
-### C3. Deploy frontend
+### C3. Frontend foundation recover (manual)
 
 ```bash
-npm ci
-npm run build   # if script exists
-npx vercel --prod --yes
+cd ~/artist-platform
+npm run recover:foundation
+npm run verify:foundation
+npm run recover:deploy -- --deploy   # production only when intended
 ```
 
 Verify site loads and catalog/hero calls control API.
