@@ -9,11 +9,25 @@ Offline-first disaster recovery bundle for the 2MRRW platform. Lives in the **co
 | Control | `2MRRW-Control-System` | https://2-mrrw-control-system.vercel.app |
 | Frontend | `artist-platform` | https://artist-platform-silk.vercel.app |
 
+## Operational lock-in checklist
+
+- [x] Sacred foundation tags documented (`FOUNDATION_TAG_DISCIPLINE.md`)
+- [x] Backend checkpoints: `npm run foundation:checkpoint`
+- [x] Frontend checkpoints: `npm run recover:checkpoint` (artist-platform)
+- [x] Platform checkpoints: `npm run foundation:checkpoint-platform`
+- [x] Milestone recall: `RECOVERY_GUIDES/MILESTONE_RECOVERY_RECALL.md`
+- [x] Control dependencies pinned (no `latest` on foundation packages)
+- [x] `LOCKFILES/foundation-lock.json` — lockfile archive at foundation era
+- [x] `ENVIRONMENT_BACKUPS/` — `control.env.example`, `artist-platform.env.example`
+- [x] Platform one-command recover: `foundation:recover-platform`
+- [x] Philosophy: `RECOVERY_GUIDES/OPERATIONAL_PHILOSOPHY.md`
+- [x] Final report: [`OPERATIONAL_LOCK_IN_REPORT.md`](../OPERATIONAL_LOCK_IN_REPORT.md)
+
 ## Directory map
 
 | Directory | Contents |
 |-----------|----------|
-| `FOUNDATION_SNAPSHOTS/` | Checkpoint notes from `scripts/create-recovery-checkpoint.sh` |
+| `FOUNDATION_SNAPSHOTS/` | Backend `checkpoint-*.md`, platform `platform-checkpoint-*.md` |
 | `DEPLOYMENT_REFERENCES/` | Vercel deploy IDs, rollback names |
 | `ENVIRONMENT_BACKUPS/` | `.env.example` templates only — **no secrets** |
 | `LOCKFILES/` | `foundation-lock.json` (`package-lock.json` at foundation lock-in) |

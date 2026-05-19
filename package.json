@@ -19,6 +19,7 @@
     "foundation:deploy": "bash scripts/run-foundation-deploy.sh",
     "foundation:rollback": "bash scripts/run-safe-rollback.sh",
     "foundation:checkpoint": "bash scripts/create-recovery-checkpoint.sh",
+    "foundation:checkpoint-platform": "bash scripts/run-platform-foundation-checkpoint.sh",
     "foundation:recover-platform": "bash scripts/run-platform-foundation-recovery.sh",
     "foundation:verify-platform": "bash scripts/verify-platform-foundation-state.sh"
   },
@@ -31,14 +32,14 @@
     "react": "19.2.6",
     "react-dom": "19.2.6",
     "server-only": "^0.0.1",
-    "stripe": "latest",
-    "zod": "latest"
+    "stripe": "22.1.1",
+    "zod": "4.4.3"
   },
   "devDependencies": {
     "@types/luxon": "^3.7.1",
-    "@types/node": "latest",
-    "@types/react": "latest",
-    "tsx": "latest",
-    "typescript": "latest"
+    "@types/node": "25.8.0",
+    "@types/react": "19.2.14",
+    "tsx": "4.22.1",
+    "typescript": "6.0.3"
   }
 }

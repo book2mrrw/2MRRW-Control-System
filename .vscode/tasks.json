@@ -2,88 +2,33 @@
   "version": "2.0.0",
   "tasks": [
     {
-      "label": "RUN_FOUNDATION_RECOVERY",
-      "type": "shell",
-      "command": "npm run foundation:recover",
-      "options": {
-        "cwd": "${workspaceFolder}"
-      },
-      "group": {
-        "kind": "build",
-        "isDefault": false
-      },
-      "presentation": {
-        "reveal": "always",
-        "panel": "dedicated",
-        "focus": true
-      },
+      "label": "CREATE_PLATFORM_CHECKPOINT",
+      "type": "npm",
+      "script": "foundation:checkpoint-platform",
       "problemMatcher": []
     },
     {
-      "label": "VERIFY_FOUNDATION_STATE",
+      "label": "CREATE_PLATFORM_CHECKPOINT (dry-run)",
       "type": "shell",
-      "command": "npm run foundation:verify",
-      "options": {
-        "cwd": "${workspaceFolder}"
-      },
-      "presentation": {
-        "reveal": "always",
-        "panel": "dedicated"
-      },
-      "problemMatcher": []
-    },
-    {
-      "label": "RUN_FOUNDATION_DEPLOY",
-      "type": "shell",
-      "command": "npm run foundation:deploy",
-      "options": {
-        "cwd": "${workspaceFolder}"
-      },
-      "presentation": {
-        "reveal": "always",
-        "panel": "dedicated",
-        "focus": true
-      },
+      "command": "npm run foundation:checkpoint-platform -- --dry-run",
       "problemMatcher": []
     },
     {
       "label": "RUN_PLATFORM_FOUNDATION_RECOVERY",
-      "type": "shell",
-      "command": "npm run foundation:recover-platform",
-      "options": {
-        "cwd": "${workspaceFolder}"
-      },
-      "presentation": {
-        "reveal": "always",
-        "panel": "dedicated",
-        "focus": true
-      },
+      "type": "npm",
+      "script": "foundation:recover-platform",
       "problemMatcher": []
     },
     {
       "label": "VERIFY_PLATFORM_FOUNDATION_STATE",
-      "type": "shell",
-      "command": "npm run foundation:verify-platform",
-      "options": {
-        "cwd": "${workspaceFolder}"
-      },
-      "presentation": {
-        "reveal": "always",
-        "panel": "dedicated"
-      },
+      "type": "npm",
+      "script": "foundation:verify-platform",
       "problemMatcher": []
     },
     {
-      "label": "CREATE_RECOVERY_CHECKPOINT",
-      "type": "shell",
-      "command": "npm run foundation:checkpoint",
-      "options": {
-        "cwd": "${workspaceFolder}"
-      },
-      "presentation": {
-        "reveal": "always",
-        "panel": "dedicated"
-      },
+      "label": "Create Backend Checkpoint",
+      "type": "npm",
+      "script": "foundation:checkpoint",
       "problemMatcher": []
     }
   ]

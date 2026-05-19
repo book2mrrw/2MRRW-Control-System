@@ -66,8 +66,31 @@ Frontend recovery details: `artist-platform/docs/foundation/FRONTEND_RECOVERY_CO
 
 ---
 
+## Platform checkpoint (milestone)
+
+Create synchronized backend + frontend checkpoint tags and a platform manifest:
+
+```bash
+npm run foundation:checkpoint-platform
+npm run foundation:checkpoint-platform -- --dry-run
+npm run foundation:checkpoint-platform -- "Before dependency audit"
+```
+
+Writes `2MRRW_RECOVERY_SYSTEM/FOUNDATION_SNAPSHOTS/platform-checkpoint-YYYYMMDD-HHMM.md` (fails if file exists).
+
+Individual repo checkpoints:
+
+| Repo | Command |
+|------|---------|
+| Control | `npm run foundation:checkpoint` |
+| Frontend | `cd artist-platform && npm run recover:checkpoint` |
+
+See [`MILESTONE_RECOVERY_RECALL.md`](MILESTONE_RECOVERY_RECALL.md).
+
 ## VS Code tasks
 
+- `CREATE_PLATFORM_CHECKPOINT`
+- `CREATE_PLATFORM_CHECKPOINT (dry-run)`
 - `RUN_PLATFORM_FOUNDATION_RECOVERY`
 - `VERIFY_PLATFORM_FOUNDATION_STATE`
 
