@@ -4,7 +4,7 @@ import { fetchDurableReleaseCatalog } from "@/server/catalog/releaseCatalogServi
 import { deriveReleaseLiveStatus, fetchCatalogSyncState } from "@/server/catalog/releaseLiveStatusEngine";
 import { hydrateReleaseManagementFromSupabase } from "@/server/release-management/releaseCatalogHydrationService";
 import { resolveCatalogMediaUrl } from "@/server/media/catalogMediaUrl";
-import { pickCardVisual } from "@/lib/media/mediaVisual";
+import { resolveReleasePrimaryAssetForCatalog } from "@/server/media/resolveReleasePrimaryAsset";
 import type { DurableCatalogRelease } from "@/services/catalog/controlCatalogClient";
 
 export async function buildControlCatalogPayload(): Promise<DurableCatalogRelease[]> {
@@ -12,25 +12,10 @@ export async function buildControlCatalogPayload(): Promise<DurableCatalogReleas
   const [catalog, syncRows] = await Promise.all([fetchDurableReleaseCatalog(), fetchCatalogSyncState()]);
   return Promise.all(
     catalog.map(async (release) => {
-      const primaryCoverLink =
-        release.releaseMedia.find(
-          (link) => link.isActive && link.isPrimary && (link.assetRole === "cover_art" || link.assetRole === "background_loop")
-        ) ??
-        release.releaseMedia.find(
-          (link) => link.isActive && (link.assetRole === "cover_art" || link.assetRole === "background_loop")
-        );
-      const coverAsset =
-        release.coverArt ??
-        (primaryCoverLink?.asset
-          ? primaryCoverLink.asset
-          : null);
-      const loopAsset =
-        release.backgroundLoop ??
-        release.releaseMedia.find((link) => link.isActive && link.assetRole === "background_loop")?.asset ??
-        release.musicVideo;
-      const coverUrl = await resolveCatalogMediaUrl(coverAsset?.id, coverAsset?.storagePath, { publicKinds: ["artwork", "loop"] });
-      const loopUrl = await resolveCatalogMediaUrl(loopAsset?.id, loopAsset?.storagePath, { publicKinds: ["artwork", "loop"] });
-      const cardVisual = pickCardVisual({ coverUrl, loopUrl });
+      const media = await resolveReleasePrimaryAssetForCatalog(release);
+      const coverAsset = release.coverArt;
+      const loopAsset = release.backgroundLoop;
+      const cardSrc = media.primaryAsset?.src ?? media.coverUrl ?? media.loopUrl;
       const live = deriveReleaseLiveStatus(
         {
           id: release.id,
@@ -40,8 +25,8 @@ export async function buildControlCatalogPayload(): Promise<DurableCatalogReleas
           scheduledPublishAt: release.scheduledPublishAt,
           scheduleLastError: release.scheduleLastError,
           publishedAt: release.publishedAt,
-          coverUrl: cardVisual.url ?? coverUrl,
-          coverAssetId: coverAsset?.id ?? null,
+          coverUrl: cardSrc,
+          coverAssetId: coverAsset?.id ?? loopAsset?.id ?? null,
           tracks: release.tracks.map((track) => ({
             audioAssetId: track.audioAsset?.id ?? track.audioAssetId,
             audioUrl: null,
@@ -75,9 +60,11 @@ export async function buildControlCatalogPayload(): Promise<DurableCatalogReleas
         liveStatusReasons: live.liveStatusReasons,
         updatedAt: live.updatedAt ?? release.publishedAt ?? release.releaseDate ?? null,
         coverAssetId: coverAsset?.id ?? null,
-        coverUrl: cardVisual.url ?? coverUrl,
+        coverUrl: media.coverUrl,
         loopAssetId: loopAsset?.id ?? null,
-        loopUrl,
+        loopUrl: media.loopUrl,
+        posterUrl: media.posterUrl,
+        primaryAsset: media.primaryAsset,
         tracks: await Promise.all(
           release.tracks.map(async (track) => ({
             id: track.id,

@@ -22,6 +22,7 @@ import { createSignedMediaUrl } from "@/server/media/signedUrlService";
 import { professionalAudioQualityTarget } from "@/services/media/audioSupport";
 import { resolveContentDestinations } from "@/services/sync/contentRouting";
 import { computeReleaseLiveStatus } from "@/lib/catalog/releaseLiveStatus";
+import { buildReleasePrimaryAsset } from "@/lib/media/releasePrimaryAsset";
 import { localScheduleToUtcIso, scheduleIsInFuture, utcIsoToScheduleParts } from "@/lib/scheduling/releaseScheduleTime";
 import { buildSchedulePayload } from "@/server/releases/scheduledPublishService";
 import { resolveMediaSyncRoute, sectionForAssetRole } from "@/services/sync/mediaSyncContract";
@@ -866,6 +867,17 @@ function testPlaybackEventContract() {
   assert.equal(getReleaseBySlug(release.slug, { userId: "playback_contract_user" })?.tracks[0]?.playback.positionSeconds, 64);
 }
 
+function testHourGlassPrimaryAssetPrefersVideoLoop() {
+  const asset = buildReleasePrimaryAsset({
+    slug: "hour-glass",
+    coverUrl: "https://artist-platform-silk.vercel.app/images/singles/hourglass.jpg",
+    loopUrl: "https://artist-platform-silk.vercel.app/videos/singles/hourglass.mp4"
+  });
+  assert.equal(asset?.type, "mp4");
+  assert.ok(asset?.src.includes("hourglass.mp4"));
+  assert.equal(asset?.poster?.includes("hourglass.jpg"), true);
+}
+
 function testSchedulePastDateRejectedByApiPayload() {
   assert.throws(
     () =>
@@ -995,6 +1007,7 @@ testPublishPropagatesToExperienceReads();
 testNotReadyReleaseDoesNotPublish();
 testLibraryUsesSharedMediaContract();
 testPlaybackEventContract();
+testHourGlassPrimaryAssetPrefersVideoLoop();
 testSchedulePastDateRejectedByApiPayload();
 testReleaseScheduleUtcConversion();
 testReleaseLiveStatusEngine();

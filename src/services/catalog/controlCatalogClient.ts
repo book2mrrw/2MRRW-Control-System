@@ -28,6 +28,15 @@ export type DurableCatalogReleaseMedia = {
 
 export type ReleaseLiveStatus = "live" | "scheduled" | "draft" | "sync_error";
 
+export type ReleasePrimaryAsset = {
+  type: "mp4" | "webm" | "mov" | "jpg" | "png" | "gif" | "avif";
+  src: string;
+  poster?: string;
+  loop?: boolean;
+  muted?: boolean;
+  autoplay?: boolean;
+};
+
 export type DurableCatalogRelease = {
   id: string;
   slug: string;
@@ -48,6 +57,8 @@ export type DurableCatalogRelease = {
   coverUrl?: string | null;
   loopAssetId?: string | null;
   loopUrl?: string | null;
+  posterUrl?: string | null;
+  primaryAsset?: ReleasePrimaryAsset | null;
   tracks: DurableCatalogTrack[];
   releaseMedia?: DurableCatalogReleaseMedia[];
   credits?: Array<{ id: string; name: string; role: string }>;
@@ -65,6 +76,8 @@ export type ControlUiRelease = {
   updatedAt?: string | null;
   coverUrl?: string | null;
   loopUrl?: string | null;
+  posterUrl?: string | null;
+  primaryAsset?: ReleasePrimaryAsset | null;
   emoji: string;
   grad: string;
 };
@@ -121,6 +134,8 @@ export function mapCatalogReleaseToUi(release: DurableCatalogRelease): ControlUi
     updatedAt: release.updatedAt,
     coverUrl: release.coverUrl,
     loopUrl: release.loopUrl,
+    posterUrl: release.posterUrl,
+    primaryAsset: release.primaryAsset,
     emoji: visual.emoji,
     grad: visual.grad
   };

@@ -19,7 +19,8 @@ import {
 } from "@/services/sync/mediaSyncContract";
 import { useMediaSync } from "@/hooks/sync/useMediaSync";
 import { useUploadQueue } from "@/hooks/sync/useUploadQueue";
-import { coverArtHints, detectMediaKind, pickCardVisual } from "@/lib/media/mediaVisual";
+import { coverArtHints, detectMediaKind } from "@/lib/media/mediaVisual";
+import { ReleaseMedia } from "@/components/media/ReleaseMedia";
 import { formatWhen } from "@/lib/formatWhen";
 import { ReleaseManagementSection } from "@/components/control/MediaSyncReleaseStudio";
 
@@ -91,27 +92,20 @@ function MediaVisualCard({
   release?: DurableCatalogRelease;
   size?: "card" | "hero";
 }) {
-  const visual = pickCardVisual({ coverUrl: ui.coverUrl, loopUrl: release?.loopUrl ?? ui.loopUrl });
   const className = size === "hero" ? "media-sync-hero-visual" : "media-sync-card-visual";
-
-  if (visual.url && (visual.kind === "video_loop" || visual.kind === "gif")) {
-    return (
-      <div className={className}>
-        <video autoPlay loop muted playsInline preload="metadata" src={visual.url} />
-      </div>
-    );
-  }
-  if (visual.url && visual.kind === "image") {
-    return (
-      <div className={`${className} has-image`}>
-        <img alt="" loading="lazy" src={visual.url} />
-      </div>
-    );
-  }
   return (
-    <div className={className} style={{ background: `linear-gradient(${ui.grad})` }}>
-      <span>{ui.emoji}</span>
-    </div>
+    <ReleaseMedia
+      alt={ui.title}
+      className={className}
+      coverUrl={release?.coverUrl ?? ui.coverUrl}
+      emoji={ui.emoji}
+      grad={ui.grad}
+      lazy
+      loopUrl={release?.loopUrl ?? ui.loopUrl}
+      posterUrl={release?.posterUrl ?? ui.posterUrl}
+      primaryAsset={release?.primaryAsset ?? ui.primaryAsset}
+      slug={release?.slug ?? ui.slug}
+    />
   );
 }
 

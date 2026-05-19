@@ -1,3 +1,4 @@
+import { buildReleasePrimaryAsset } from "@/lib/media/releasePrimaryAsset";
 import { getLatestReleasesDurable } from "@/server/releases/releaseReadService";
 import { resolveCatalogMediaUrl } from "@/server/media/catalogMediaUrl";
 import { ok } from "@/server/http";
@@ -39,14 +40,22 @@ export async function GET(request: Request) {
       const resolvedLoop = release.motionArtwork
         ? await resolveCatalogMediaUrl(release.motionArtwork.assetId, release.motionArtwork.sourcePath, { publicKinds: ["artwork", "loop"] })
         : null;
+      const coverUrl =
+        resolvedCover ?? (release.artwork?.signedUrlEndpoint ? `${apiBase}${release.artwork.signedUrlEndpoint}` : null);
+      const loopUrl =
+        resolvedLoop ??
+        (release.motionArtwork?.signedUrlEndpoint ? `${apiBase}${release.motionArtwork.signedUrlEndpoint}` : null);
+      const primaryAsset = buildReleasePrimaryAsset({
+        slug: release.slug,
+        coverUrl,
+        loopUrl,
+        posterUrl: coverUrl
+      });
       return {
         ...release,
-        coverUrl:
-          resolvedCover ??
-          (release.artwork?.signedUrlEndpoint ? `${apiBase}${release.artwork.signedUrlEndpoint}` : null),
-        loopUrl:
-          resolvedLoop ??
-          (release.motionArtwork?.signedUrlEndpoint ? `${apiBase}${release.motionArtwork.signedUrlEndpoint}` : null)
+        coverUrl,
+        loopUrl,
+        primaryAsset
       };
     })
   );

@@ -40,7 +40,7 @@ import {
   type ControlUiRelease,
   type DurableCatalogRelease
 } from "@/services/catalog/controlCatalogClient";
-import { pickCardVisual } from "@/lib/media/mediaVisual";
+import { ReleaseMedia } from "@/components/media/ReleaseMedia";
 import {
   archiveReleaseAction,
   duplicateReleaseAction,
@@ -223,25 +223,33 @@ function Cover({
   grad,
   size = "md",
   imageUrl,
-  loopUrl
+  loopUrl,
+  posterUrl,
+  primaryAsset,
+  slug
 }: {
   emoji: string;
   grad: string;
   size?: "sm" | "md" | "lg" | "xl";
   imageUrl?: string | null;
   loopUrl?: string | null;
+  posterUrl?: string | null;
+  primaryAsset?: import("@/services/catalog/controlCatalogClient").ReleasePrimaryAsset | null;
+  slug?: string;
 }) {
-  const visual = pickCardVisual({ coverUrl: imageUrl, loopUrl });
   return (
-    <div className={`release-cover cover-${size}${visual.url ? " has-image" : ""}`} style={{ background: visual.url ? undefined : `linear-gradient(${grad})` }}>
-      {visual.url && (visual.kind === "video_loop" || visual.kind === "gif") ? (
-        <video autoPlay loop muted playsInline preload="metadata" src={visual.url} />
-      ) : visual.url && visual.kind === "image" ? (
-        <img alt="" loading="lazy" src={visual.url} />
-      ) : (
-        emoji
-      )}
-    </div>
+    <ReleaseMedia
+      alt=""
+      className={`release-cover cover-${size}`}
+      coverUrl={imageUrl}
+      emoji={emoji}
+      grad={grad}
+      lazy
+      loopUrl={loopUrl}
+      posterUrl={posterUrl}
+      primaryAsset={primaryAsset}
+      slug={slug}
+    />
   );
 }
 
@@ -460,7 +468,7 @@ function Dashboard({
         </p>
       </div>
       <div className="card card-highlight mb-16" style={{ display: "flex", alignItems: "center", gap: 20, padding: "18px 22px" }}>
-        <Cover emoji={nextRelease?.emoji ?? "2M"} grad={nextRelease?.grad ?? "135deg,#111827,#374151"} size="lg" imageUrl={nextRelease?.coverUrl} loopUrl={nextRelease?.loopUrl} />
+        <Cover emoji={nextRelease?.emoji ?? "2M"} grad={nextRelease?.grad ?? "135deg,#111827,#374151"} size="lg" imageUrl={nextRelease?.coverUrl} loopUrl={nextRelease?.loopUrl} posterUrl={nextRelease?.posterUrl} primaryAsset={nextRelease?.primaryAsset} slug={nextRelease?.slug} />
         <div style={{ flex: 1, minWidth: 0 }}>
           <div style={{ fontSize: 10, fontWeight: 800, letterSpacing: "1.2px", color: "var(--pri)", marginBottom: 4 }}>NEXT RELEASE</div>
           <div style={{ fontSize: 20, fontWeight: 800, letterSpacing: "-.5px", marginBottom: 3 }}>{nextRelease?.title ?? "No release yet"}</div>
@@ -668,7 +676,7 @@ function Releases({
               tabIndex={0}
               onKeyDown={(e) => e.key === "Enter" && onOpenRelease(r.id)}
             >
-              <Cover emoji={r.emoji} grad={r.grad} size="md" imageUrl={r.coverUrl} loopUrl={r.loopUrl} />
+              <Cover emoji={r.emoji} grad={r.grad} size="md" imageUrl={r.coverUrl} loopUrl={r.loopUrl} posterUrl={r.posterUrl} primaryAsset={r.primaryAsset} slug={r.slug} />
               <div style={{ flex: 1, minWidth: 0 }}>
                 <div className="release-title">{r.title}</div>
                 <div className="release-meta">
@@ -1251,7 +1259,7 @@ function ReleaseDetailView({
           <Btn variant="ghost" onClick={onBack}>
             <ChevronLeft size={16} /> Back
           </Btn>
-          <Cover emoji={ui.emoji} grad={ui.grad} size="lg" imageUrl={ui.coverUrl} loopUrl={release.loopUrl ?? ui.loopUrl} />
+          <Cover emoji={ui.emoji} grad={ui.grad} size="lg" imageUrl={ui.coverUrl} loopUrl={release.loopUrl ?? ui.loopUrl} posterUrl={release.posterUrl ?? ui.posterUrl} primaryAsset={release.primaryAsset ?? ui.primaryAsset} slug={release.slug ?? ui.slug} />
           <div>
             <h1 style={{ fontSize: 22, fontWeight: 800, letterSpacing: "-.5px", marginBottom: 4 }}>{ui.title}</h1>
             <p style={{ fontSize: 13, color: "var(--tx3)" }}>

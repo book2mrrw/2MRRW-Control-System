@@ -19,7 +19,10 @@ import {
 } from "@/services/catalog/releaseStudioClient";
 import { resolveMediaSyncRoute } from "@/services/sync/mediaSyncContract";
 import { useMediaSync } from "@/hooks/sync/useMediaSync";
-import { coverArtHints, detectMediaKind, pickCardVisual } from "@/lib/media/mediaVisual";
+import { coverArtHints, detectMediaKind } from "@/lib/media/mediaVisual";
+import { ReleaseMedia } from "@/components/media/ReleaseMedia";
+import { ReleaseVideoPreview } from "@/components/media/ReleaseVideoPreview";
+import { buildReleasePrimaryAsset } from "@/lib/media/releasePrimaryAsset";
 
 export type ReleaseStudioActions = {
   busyKey: string | null;
@@ -62,27 +65,21 @@ function syncDirtyForRelease(rows: SyncStateRow[], releaseId: string) {
 }
 
 function StudioVisualCard({ ui, release, size = "card" }: VisualProps) {
-  const visual = pickCardVisual({ coverUrl: release?.coverUrl ?? ui.coverUrl, loopUrl: release?.loopUrl ?? ui.loopUrl });
   const className = size === "hero" ? "media-sync-hero-visual" : "media-sync-card-visual";
 
-  if (visual.url && (visual.kind === "video_loop" || visual.kind === "gif")) {
-    return (
-      <div className={className}>
-        <video autoPlay loop muted playsInline preload="metadata" src={visual.url} />
-      </div>
-    );
-  }
-  if (visual.url && visual.kind === "image") {
-    return (
-      <div className={`${className} has-image`}>
-        <img alt="" loading="lazy" src={visual.url} />
-      </div>
-    );
-  }
   return (
-    <div className={className} style={{ background: `linear-gradient(${ui.grad})` }}>
-      <span>{ui.emoji}</span>
-    </div>
+    <ReleaseMedia
+      alt={ui.title}
+      className={className}
+      coverUrl={release?.coverUrl ?? ui.coverUrl}
+      emoji={ui.emoji}
+      grad={ui.grad}
+      lazy
+      loopUrl={release?.loopUrl ?? ui.loopUrl}
+      posterUrl={release?.posterUrl ?? ui.posterUrl}
+      primaryAsset={release?.primaryAsset ?? ui.primaryAsset}
+      slug={release?.slug ?? ui.slug}
+    />
   );
 }
 
@@ -530,7 +527,15 @@ function ReleaseWorkspacePanel({
   const liveStatus = resolveCardLiveStatus(release);
   const syncing = actions.isBusy(release.id, "sync");
   const motionAccept = ".mp4,.mov,.webm,video/mp4,video/quicktime,video/webm";
-  const displayCoverUrl = release.coverUrl ?? release.loopUrl;
+  const primary =
+    release.primaryAsset ??
+    buildReleasePrimaryAsset({
+      slug: release.slug,
+      coverUrl: release.coverUrl,
+      loopUrl: release.loopUrl,
+      posterUrl: release.posterUrl
+    });
+  const hasCardMedia = Boolean(primary?.src ?? release.coverUrl ?? release.loopUrl);
   const tabs: Array<{ id: WorkspaceTab; label: string }> = isAlbumLike
     ? [
         { id: "cover", label: "Cover Art" },
@@ -576,19 +581,34 @@ function ReleaseWorkspacePanel({
       <div className="media-sync-ws-body">
         {tab === "cover" ? (
           <>
-            <AssetPanel title="Cover Art" status={displayCoverUrl ? "Linked" : "Missing"} ok={Boolean(displayCoverUrl)} hint="Syncs → Singles · Release page · Carousel · Mobile">
-              {displayCoverUrl ? (
-                <div className={`media-sync-asset-preview art${detectMediaKind(displayCoverUrl) === "image" ? " has-image" : ""}`}>
-                  {detectMediaKind(displayCoverUrl) === "image" ? <img alt="" src={displayCoverUrl} /> : <video autoPlay loop muted playsInline src={displayCoverUrl} />}
+            <AssetPanel title="Cover Art" status={hasCardMedia ? "Linked" : "Missing"} ok={hasCardMedia} hint="Syncs → Singles · Release page · Carousel · Mobile">
+              {hasCardMedia && primary ? (
+                <div className="media-sync-asset-preview art has-image">
+                  <ReleaseVideoPreview asset={primary} className="media-sync-asset-preview-inner" />
                 </div>
-              ) : <div className="media-sync-asset-preview empty">No cover yet</div>}
+              ) : (
+                <div className="media-sync-asset-preview empty">No cover yet</div>
+              )}
               <MediaUploadPanel draft={draft} mode="artwork" fixedCategory="release_cover" compact acceptOverride={isAlbumLike ? undefined : `${motionAccept},image/*`} onUploadComplete={onUploadComplete} />
             </AssetPanel>
             {isAlbumLike ? (
               <AssetPanel title="Motion Cover" status={release.loopUrl ? "Linked" : "Missing"} ok={Boolean(release.loopUrl)} hint="MP4 / MOV / WebM · up to 90s loop">
                 {release.loopUrl ? (
-                  <div className="media-sync-asset-preview art"><video autoPlay loop muted playsInline src={release.loopUrl} /></div>
-                ) : <div className="media-sync-asset-preview empty">No motion loop</div>}
+                  <div className="media-sync-asset-preview art has-image">
+                    <ReleaseVideoPreview
+                      asset={
+                        buildReleasePrimaryAsset({
+                          loopUrl: release.loopUrl,
+                          coverUrl: release.coverUrl,
+                          posterUrl: release.posterUrl
+                        })!
+                      }
+                      className="media-sync-asset-preview-inner"
+                    />
+                  </div>
+                ) : (
+                  <div className="media-sync-asset-preview empty">No motion loop</div>
+                )}
                 <MediaUploadPanel draft={draft} mode="artwork" fixedCategory="release_cover" compact acceptOverride={motionAccept} onUploadComplete={onUploadComplete} />
               </AssetPanel>
             ) : null}

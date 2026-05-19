@@ -238,7 +238,11 @@ export function buildReleaseMediaObject(input: MediaObjectInput): ReleaseMediaOb
     .sort((a, b) => a.position - b.position)
     .map((track) => buildTrackMediaObject(track, input));
   const artwork = input.mediaAssets.find((asset) => asset.id === input.release.coverAssetId);
-  const motionArtwork = input.mediaAssets.find((asset) => asset.path.startsWith("loops/") && asset.ownerId === input.release.id);
+  const motionArtwork =
+    input.mediaAssets.find((asset) => asset.path.startsWith("loops/") && asset.ownerId === input.release.id) ??
+    input.mediaAssets.find(
+      (asset) => asset.ownerId === input.release.id && /\.(mp4|mov|webm|m4v)(\?|#|$)/i.test(asset.path)
+    );
   const trackEntitlements = tracks.map((track) => track.entitlement);
   const canStream = trackEntitlements.some((entitlement) => entitlement.canStream);
   const canDownload = trackEntitlements.some((entitlement) => entitlement.canDownload);
