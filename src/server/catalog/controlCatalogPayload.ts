@@ -15,7 +15,7 @@ export async function buildControlCatalogPayload(): Promise<DurableCatalogReleas
       const media = await resolveReleasePrimaryAssetForCatalog(release);
       const coverAsset = release.coverArt;
       const loopAsset = release.backgroundLoop;
-      const cardSrc = media.primaryAsset?.src ?? media.coverUrl ?? media.loopUrl;
+      const cardSrc = media.primaryAsset?.src ?? media.motionUrl ?? media.loopUrl ?? media.posterUrl;
       const live = deriveReleaseLiveStatus(
         {
           id: release.id,
@@ -60,9 +60,10 @@ export async function buildControlCatalogPayload(): Promise<DurableCatalogReleas
         liveStatusReasons: live.liveStatusReasons,
         updatedAt: live.updatedAt ?? release.publishedAt ?? release.releaseDate ?? null,
         coverAssetId: coverAsset?.id ?? null,
-        coverUrl: media.coverUrl,
+        coverUrl: media.posterUrl ?? media.coverUrl,
         loopAssetId: loopAsset?.id ?? null,
-        loopUrl: media.loopUrl,
+        loopUrl: media.motionUrl ?? media.loopUrl,
+        motionUrl: media.motionUrl ?? media.loopUrl,
         posterUrl: media.posterUrl,
         primaryAsset: media.primaryAsset,
         tracks: await Promise.all(

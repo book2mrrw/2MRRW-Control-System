@@ -22,7 +22,7 @@ import { createSignedMediaUrl } from "@/server/media/signedUrlService";
 import { professionalAudioQualityTarget } from "@/services/media/audioSupport";
 import { resolveContentDestinations } from "@/services/sync/contentRouting";
 import { computeReleaseLiveStatus } from "@/lib/catalog/releaseLiveStatus";
-import { buildReleasePrimaryAsset } from "@/lib/media/releasePrimaryAsset";
+import { buildReleasePrimaryAsset, resolveDisplayPrimaryAsset } from "@/lib/media/releasePrimaryAsset";
 import { localScheduleToUtcIso, scheduleIsInFuture, utcIsoToScheduleParts } from "@/lib/scheduling/releaseScheduleTime";
 import { buildSchedulePayload } from "@/server/releases/scheduledPublishService";
 import { resolveMediaSyncRoute, sectionForAssetRole } from "@/services/sync/mediaSyncContract";
@@ -867,15 +867,60 @@ function testPlaybackEventContract() {
   assert.equal(getReleaseBySlug(release.slug, { userId: "playback_contract_user" })?.tracks[0]?.playback.positionSeconds, 64);
 }
 
-function testHourGlassPrimaryAssetPrefersVideoLoop() {
-  const asset = buildReleasePrimaryAsset({
-    slug: "hour-glass",
-    coverUrl: "https://artist-platform-silk.vercel.app/images/singles/hourglass.jpg",
-    loopUrl: "https://artist-platform-silk.vercel.app/videos/singles/hourglass.mp4"
+function testAnimatedSinglePrimaryAssetsPreferVideoLoop() {
+  const base = "https://artist-platform-silk.vercel.app";
+  const animatedSingles = [
+    { slug: "hour-glass", mp4: "hourglass.mp4", poster: "hourglass.jpg" },
+    { slug: "artificial", mp4: "artificial.mp4", poster: "artificial.jpg" },
+    { slug: "w2d", mp4: "w2d.mp4", poster: "w2d.jpg" },
+    { slug: "turnt-me-2-dis", mp4: "turntme2dis.mp4", poster: "turnt.jpg" }
+  ] as const;
+
+  for (const single of animatedSingles) {
+    const asset = buildReleasePrimaryAsset({
+      slug: single.slug,
+      releaseType: "single",
+      releaseCategory: "single",
+      coverUrl: `${base}/images/singles/${single.poster}`,
+      loopUrl: `${base}/videos/singles/${single.mp4}`
+    });
+    assert.equal(asset?.type, "mp4", single.slug);
+    assert.ok(asset?.src.includes(single.mp4), single.slug);
+  }
+
+  const turntFromSlugOnly = buildReleasePrimaryAsset({
+    slug: "turnt-me-2-dis",
+    releaseType: "single",
+    releaseCategory: "single",
+    coverUrl: `${base}/images/singles/turnt.jpg`
   });
-  assert.equal(asset?.type, "mp4");
-  assert.ok(asset?.src.includes("hourglass.mp4"));
-  assert.equal(asset?.poster?.includes("hourglass.jpg"), true);
+  assert.equal(turntFromSlugOnly?.type, "mp4");
+  assert.ok(turntFromSlugOnly?.src.includes("turntme2dis.mp4"));
+
+  const featureStatic = buildReleasePrimaryAsset({
+    slug: "i-dont-believe-you",
+    releaseType: "feature",
+    releaseCategory: "feature",
+    coverUrl: `${base}/images/features/idbu.jpg`
+  });
+  assert.equal(featureStatic?.type, "jpg");
+  assert.equal(featureStatic?.src.includes(".mp4"), false);
+
+  const staleJpegPrimary = {
+    type: "jpg" as const,
+    src: `${base}/images/singles/hourglass.jpg`,
+    loop: false,
+    muted: true,
+    autoplay: false
+  };
+  const fixed = resolveDisplayPrimaryAsset({
+    primaryAsset: staleJpegPrimary,
+    slug: "hour-glass",
+    releaseType: "single",
+    coverUrl: staleJpegPrimary.src,
+    loopUrl: `${base}/videos/singles/hourglass.mp4`
+  });
+  assert.equal(fixed?.type, "mp4");
 }
 
 function testSchedulePastDateRejectedByApiPayload() {
@@ -1007,7 +1052,7 @@ testPublishPropagatesToExperienceReads();
 testNotReadyReleaseDoesNotPublish();
 testLibraryUsesSharedMediaContract();
 testPlaybackEventContract();
-testHourGlassPrimaryAssetPrefersVideoLoop();
+testAnimatedSinglePrimaryAssetsPreferVideoLoop();
 testSchedulePastDateRejectedByApiPayload();
 testReleaseScheduleUtcConversion();
 testReleaseLiveStatusEngine();

@@ -57,6 +57,7 @@ export type DurableCatalogRelease = {
   coverUrl?: string | null;
   loopAssetId?: string | null;
   loopUrl?: string | null;
+  motionUrl?: string | null;
   posterUrl?: string | null;
   primaryAsset?: ReleasePrimaryAsset | null;
   tracks: DurableCatalogTrack[];
@@ -76,6 +77,7 @@ export type ControlUiRelease = {
   updatedAt?: string | null;
   coverUrl?: string | null;
   loopUrl?: string | null;
+  motionUrl?: string | null;
   posterUrl?: string | null;
   primaryAsset?: ReleasePrimaryAsset | null;
   emoji: string;
@@ -132,8 +134,9 @@ export function mapCatalogReleaseToUi(release: DurableCatalogRelease): ControlUi
     date: release.releaseDate?.slice(0, 10) ?? "Date TBD",
     tracks: release.tracks?.length ?? 0,
     updatedAt: release.updatedAt,
-    coverUrl: release.coverUrl,
-    loopUrl: release.loopUrl,
+    coverUrl: release.posterUrl ?? release.coverUrl,
+    loopUrl: release.motionUrl ?? release.loopUrl,
+    motionUrl: release.motionUrl ?? release.loopUrl,
     posterUrl: release.posterUrl,
     primaryAsset: release.primaryAsset,
     emoji: visual.emoji,

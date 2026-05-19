@@ -28,14 +28,15 @@ export const AnimatedCoverArt = memo(function AnimatedCoverArt({
   useEffect(() => {
     const video = videoRef.current;
     if (!video || !showVideo) return;
-    if (visible) {
+    if (visible || !lazy) {
       video.play().catch(() => {});
     } else {
       video.pause();
     }
-  }, [visible, showVideo, asset.src]);
+  }, [visible, showVideo, asset.src, lazy]);
 
   const onCanPlay = useCallback(() => setReady(true), []);
+  const onLoadedData = useCallback(() => setReady(true), []);
   const onError = useCallback(() => setFailed(true), []);
 
   if (!showVideo) {
@@ -48,31 +49,21 @@ export const AnimatedCoverArt = memo(function AnimatedCoverArt({
 
   return (
     <div ref={ref} className={`${className} release-media-video-wrap`.trim()}>
-      {poster ? (
-        <img
-          alt=""
-          aria-hidden
-          className={`release-media-poster${ready ? " is-hidden" : ""}`}
-          loading="lazy"
-          src={poster}
-        />
-      ) : null}
-      {visible || !lazy ? (
-        <video
-          ref={videoRef}
-          key={asset.src}
-          autoPlay={asset.autoplay ?? true}
-          className={`release-media-video${ready ? " is-ready" : ""}`}
-          loop={asset.loop ?? true}
-          muted={asset.muted ?? true}
-          playsInline
-          preload={lazy ? "none" : "metadata"}
-          poster={poster}
-          src={asset.src}
-          onCanPlay={onCanPlay}
-          onError={onError}
-        />
-      ) : null}
+      <video
+        ref={videoRef}
+        key={asset.src}
+        autoPlay={asset.autoplay ?? true}
+        className={`release-media-video${ready ? " is-ready" : ""}`}
+        loop={asset.loop ?? true}
+        muted={asset.muted ?? true}
+        playsInline
+        preload={lazy ? "metadata" : "auto"}
+        poster={poster}
+        src={asset.src}
+        onCanPlay={onCanPlay}
+        onLoadedData={onLoadedData}
+        onError={onError}
+      />
       {failed && poster ? <img alt={alt} className="release-media-video-fallback" loading="lazy" src={poster} /> : null}
     </div>
   );

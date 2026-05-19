@@ -1,3 +1,5 @@
+import { slugMotionPublicUrl } from "@/lib/media/frontendMediaFallbacks";
+
 const DEFAULT_FRONTEND_PUBLIC_BASE =
   process.env.ARTIST_PLATFORM_PUBLIC_URL ??
   process.env.NEXT_PUBLIC_FRONTEND_URL ??
@@ -16,15 +18,13 @@ const ARTWORK_FILENAME_PUBLIC_PATH: Record<string, string> = {
   "w2d.jpg": "/images/singles/w2d.jpg"
 };
 
-/** Motion loops — match artist-platform `public/videos/**` (frontend prefers video over static cover). */
+/** Motion loops — match artist-platform `public/videos/singles/*.mp4`. */
 const MOTION_FILENAME_PUBLIC_PATH: Record<string, string> = {
   "hourglass.mp4": "/videos/singles/hourglass.mp4",
+  "artificial.mp4": "/videos/singles/artificial.mp4",
+  "w2d.mp4": "/videos/singles/w2d.mp4",
+  "turntme2dis.mp4": "/videos/singles/turntme2dis.mp4",
   "visual.mp4": "/videos/singles/hourglass.mp4"
-};
-
-/** Slug → motion URL when DB only references artwork paths without a separate loop row. */
-const SLUG_MOTION_PUBLIC_PATH: Record<string, string> = {
-  "hour-glass": "/videos/singles/hourglass.mp4"
 };
 
 export function motionPublicFallbackUrl(storagePath?: string | null) {
@@ -36,11 +36,11 @@ export function motionPublicFallbackUrl(storagePath?: string | null) {
   return `${DEFAULT_FRONTEND_PUBLIC_BASE.replace(/\/$/, "")}${publicPath}`;
 }
 
-export function slugMotionPublicFallbackUrl(slug?: string | null) {
-  if (!slug) return null;
-  const publicPath = SLUG_MOTION_PUBLIC_PATH[slug];
-  if (!publicPath) return null;
-  return `${DEFAULT_FRONTEND_PUBLIC_BASE.replace(/\/$/, "")}${publicPath}`;
+export function slugMotionPublicFallbackUrl(
+  slug?: string | null,
+  options?: Parameters<typeof slugMotionPublicUrl>[1]
+) {
+  return slugMotionPublicUrl(slug, options);
 }
 
 export function artworkPublicFallbackUrl(storagePath?: string | null) {

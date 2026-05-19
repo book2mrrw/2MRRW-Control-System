@@ -1,11 +1,7 @@
 "use client";
 
 import { memo, useMemo } from "react";
-import {
-  buildReleasePrimaryAsset,
-  isVideoPrimaryAsset,
-  type ReleasePrimaryAsset
-} from "@/lib/media/releasePrimaryAsset";
+import { resolveDisplayPrimaryAsset, isVideoPrimaryAsset, type ReleasePrimaryAsset } from "@/lib/media/releasePrimaryAsset";
 import { AnimatedCoverArt } from "@/components/media/AnimatedCoverArt";
 import { MediaFallback } from "@/components/media/MediaFallback";
 
@@ -13,6 +9,7 @@ export type ReleaseMediaProps = {
   primaryAsset?: ReleasePrimaryAsset | null;
   coverUrl?: string | null;
   loopUrl?: string | null;
+  motionUrl?: string | null;
   posterUrl?: string | null;
   slug?: string;
   className?: string;
@@ -26,6 +23,7 @@ export const ReleaseMedia = memo(function ReleaseMedia({
   primaryAsset,
   coverUrl,
   loopUrl,
+  motionUrl,
   posterUrl,
   slug,
   className = "",
@@ -36,14 +34,15 @@ export const ReleaseMedia = memo(function ReleaseMedia({
 }: ReleaseMediaProps) {
   const asset = useMemo(
     () =>
-      primaryAsset ??
-      buildReleasePrimaryAsset({
+      resolveDisplayPrimaryAsset({
+        primaryAsset,
         slug,
         coverUrl,
         loopUrl,
+        motionUrl: motionUrl ?? loopUrl,
         posterUrl
       }),
-    [primaryAsset, slug, coverUrl, loopUrl, posterUrl]
+    [primaryAsset, slug, coverUrl, loopUrl, motionUrl, posterUrl]
   );
 
   if (!asset?.src) {
@@ -55,7 +54,7 @@ export const ReleaseMedia = memo(function ReleaseMedia({
   }
 
   return (
-    <div className={`${className} release-media-image-wrap`.trim()}>
+    <div className={`${className} release-media-image-wrap has-image`.trim()}>
       <img alt={alt} loading="lazy" src={asset.src} />
     </div>
   );

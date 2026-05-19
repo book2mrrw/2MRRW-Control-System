@@ -20,9 +20,9 @@ import {
 import { resolveMediaSyncRoute } from "@/services/sync/mediaSyncContract";
 import { useMediaSync } from "@/hooks/sync/useMediaSync";
 import { coverArtHints, detectMediaKind } from "@/lib/media/mediaVisual";
-import { ReleaseMedia } from "@/components/media/ReleaseMedia";
+import { ReleaseMediaCard } from "@/components/media/ReleaseMediaCard";
 import { ReleaseVideoPreview } from "@/components/media/ReleaseVideoPreview";
-import { buildReleasePrimaryAsset } from "@/lib/media/releasePrimaryAsset";
+import { resolveDisplayPrimaryAsset } from "@/lib/media/releasePrimaryAsset";
 
 export type ReleaseStudioActions = {
   busyKey: string | null;
@@ -68,14 +68,15 @@ function StudioVisualCard({ ui, release, size = "card" }: VisualProps) {
   const className = size === "hero" ? "media-sync-hero-visual" : "media-sync-card-visual";
 
   return (
-    <ReleaseMedia
+    <ReleaseMediaCard
       alt={ui.title}
       className={className}
-      coverUrl={release?.coverUrl ?? ui.coverUrl}
+      coverUrl={release?.posterUrl ?? release?.coverUrl ?? ui.posterUrl ?? ui.coverUrl}
       emoji={ui.emoji}
       grad={ui.grad}
       lazy
-      loopUrl={release?.loopUrl ?? ui.loopUrl}
+      loopUrl={release?.motionUrl ?? release?.loopUrl ?? ui.motionUrl ?? ui.loopUrl}
+      motionUrl={release?.motionUrl ?? release?.loopUrl ?? ui.motionUrl ?? ui.loopUrl}
       posterUrl={release?.posterUrl ?? ui.posterUrl}
       primaryAsset={release?.primaryAsset ?? ui.primaryAsset}
       slug={release?.slug ?? ui.slug}
@@ -527,14 +528,14 @@ function ReleaseWorkspacePanel({
   const liveStatus = resolveCardLiveStatus(release);
   const syncing = actions.isBusy(release.id, "sync");
   const motionAccept = ".mp4,.mov,.webm,video/mp4,video/quicktime,video/webm";
-  const primary =
-    release.primaryAsset ??
-    buildReleasePrimaryAsset({
-      slug: release.slug,
-      coverUrl: release.coverUrl,
-      loopUrl: release.loopUrl,
-      posterUrl: release.posterUrl
-    });
+  const primary = resolveDisplayPrimaryAsset({
+    primaryAsset: release.primaryAsset,
+    slug: release.slug,
+    coverUrl: release.posterUrl ?? release.coverUrl,
+    loopUrl: release.motionUrl ?? release.loopUrl,
+    motionUrl: release.motionUrl ?? release.loopUrl,
+    posterUrl: release.posterUrl
+  });
   const hasCardMedia = Boolean(primary?.src ?? release.coverUrl ?? release.loopUrl);
   const tabs: Array<{ id: WorkspaceTab; label: string }> = isAlbumLike
     ? [
@@ -595,16 +596,7 @@ function ReleaseWorkspacePanel({
               <AssetPanel title="Motion Cover" status={release.loopUrl ? "Linked" : "Missing"} ok={Boolean(release.loopUrl)} hint="MP4 / MOV / WebM · up to 90s loop">
                 {release.loopUrl ? (
                   <div className="media-sync-asset-preview art has-image">
-                    <ReleaseVideoPreview
-                      asset={
-                        buildReleasePrimaryAsset({
-                          loopUrl: release.loopUrl,
-                          coverUrl: release.coverUrl,
-                          posterUrl: release.posterUrl
-                        })!
-                      }
-                      className="media-sync-asset-preview-inner"
-                    />
+                    <ReleaseVideoPreview asset={primary!} className="media-sync-asset-preview-inner" />
                   </div>
                 ) : (
                   <div className="media-sync-asset-preview empty">No motion loop</div>

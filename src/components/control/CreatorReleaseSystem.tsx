@@ -40,7 +40,7 @@ import {
   type ControlUiRelease,
   type DurableCatalogRelease
 } from "@/services/catalog/controlCatalogClient";
-import { ReleaseMedia } from "@/components/media/ReleaseMedia";
+import { ReleaseMediaCard } from "@/components/media/ReleaseMediaCard";
 import {
   archiveReleaseAction,
   duplicateReleaseAction,
@@ -238,14 +238,15 @@ function Cover({
   slug?: string;
 }) {
   return (
-    <ReleaseMedia
+    <ReleaseMediaCard
       alt=""
       className={`release-cover cover-${size}`}
-      coverUrl={imageUrl}
+      coverUrl={posterUrl ?? imageUrl}
       emoji={emoji}
       grad={grad}
       lazy
       loopUrl={loopUrl}
+      motionUrl={loopUrl}
       posterUrl={posterUrl}
       primaryAsset={primaryAsset}
       slug={slug}

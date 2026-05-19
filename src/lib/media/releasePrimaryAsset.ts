@@ -1,10 +1,11 @@
 /**
  * Unified release card media — priority mirrors artist-platform `ReleaseArtwork`:
- * motion (video/gif loop) before static cover image.
+ * 1) motion loop (MP4/WebM/MOV/GIF)  2) static cover  3) poster for video only  4) placeholder
  *
- * @see artist-platform/src/app/page.js — getReleaseMotionArtworkUrl, getReleaseArtworkUrl
+ * @see artist-platform/src/app/page.js — getReleaseMotionArtworkUrl before getReleaseArtworkUrl
  */
 
+import { slugMotionPublicUrl } from "@/lib/media/frontendMediaFallbacks";
 import { detectMediaKind, extensionFromPath, isMotionMedia, type DetectedMediaKind } from "@/lib/media/mediaVisual";
 
 export type ReleasePrimaryAssetType = "mp4" | "webm" | "mov" | "jpg" | "png" | "gif" | "avif";
@@ -42,30 +43,44 @@ export function primaryAssetTypeFromUrl(url: string): ReleasePrimaryAssetType {
 
 export type BuildPrimaryAssetInput = {
   slug?: string;
+  releaseType?: string | null;
+  releaseCategory?: string | null;
   loopUrl?: string | null;
+  motionUrl?: string | null;
   coverUrl?: string | null;
   posterUrl?: string | null;
 };
 
+function normalizeMotionUrl(input: BuildPrimaryAssetInput) {
+  const slugMotion =
+    input.slug &&
+    slugMotionPublicUrl(input.slug, {
+      releaseType: input.releaseType,
+      releaseCategory: input.releaseCategory
+    });
+  const candidates = [input.loopUrl, input.motionUrl, slugMotion].filter(Boolean) as string[];
+  return candidates.find((url) => isMotionMedia(url)) ?? null;
+}
+
+function normalizePosterUrl(input: BuildPrimaryAssetInput, motionUrl: string | null) {
+  if (input.posterUrl && !isMotionMedia(input.posterUrl)) return input.posterUrl;
+  const cover = input.coverUrl?.trim() || null;
+  if (cover && !isMotionMedia(cover) && cover !== motionUrl) return cover;
+  return undefined;
+}
+
 /**
- * Client-safe builder when URLs are already resolved (catalog payload).
+ * Build primary display asset — motion ALWAYS wins over static JPEG.
  */
 export function buildReleasePrimaryAsset(input: BuildPrimaryAssetInput): ReleasePrimaryAsset | null {
-  const loopUrl = input.loopUrl?.trim() || null;
+  const motionUrl = normalizeMotionUrl(input);
   const coverUrl = input.coverUrl?.trim() || null;
-  const posterUrl = input.posterUrl?.trim() || null;
+  const poster = normalizePosterUrl(input, motionUrl);
 
-  const poster =
-    posterUrl && !isMotionMedia(posterUrl)
-      ? posterUrl
-      : coverUrl && !isMotionMedia(coverUrl)
-        ? coverUrl
-        : undefined;
-
-  if (loopUrl && isMotionMedia(loopUrl)) {
+  if (motionUrl) {
     return {
-      type: primaryAssetTypeFromUrl(loopUrl),
-      src: loopUrl,
+      type: primaryAssetTypeFromUrl(motionUrl),
+      src: motionUrl,
       poster,
       loop: true,
       muted: true,
@@ -95,18 +110,29 @@ export function buildReleasePrimaryAsset(input: BuildPrimaryAssetInput): Release
     };
   }
 
-  if (loopUrl && detectMediaKind(loopUrl) === "image") {
-    return {
-      type: primaryAssetTypeFromUrl(loopUrl),
-      src: loopUrl,
-      poster: loopUrl,
-      loop: false,
-      muted: true,
-      autoplay: false
-    };
+  return null;
+}
+
+/**
+ * Single resolver for all card UIs — ignores stale JPEG-only `primaryAsset` when motion URLs exist.
+ */
+export function resolveDisplayPrimaryAsset(input: BuildPrimaryAssetInput & { primaryAsset?: ReleasePrimaryAsset | null }) {
+  const motionUrl = normalizeMotionUrl(input);
+  const rebuilt = buildReleasePrimaryAsset(input);
+
+  if (motionUrl && rebuilt?.src === motionUrl) {
+    return rebuilt;
   }
 
-  return null;
+  if (input.primaryAsset && isVideoPrimaryAsset(input.primaryAsset.type)) {
+    return input.primaryAsset;
+  }
+
+  if (input.primaryAsset && !motionUrl && !isMotionMedia(input.coverUrl)) {
+    return input.primaryAsset;
+  }
+
+  return rebuilt ?? input.primaryAsset ?? null;
 }
 
 export function primaryAssetFromLegacyUrls(input: BuildPrimaryAssetInput) {

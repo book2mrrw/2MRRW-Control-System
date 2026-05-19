@@ -1,103 +1,104 @@
 import "server-only";
 
 import { buildReleasePrimaryAsset, type ReleasePrimaryAsset } from "@/lib/media/releasePrimaryAsset";
+import { slugMotionPublicUrl } from "@/lib/media/frontendMediaFallbacks";
 import { detectMediaKind, isMotionMedia } from "@/lib/media/mediaVisual";
-import { slugMotionPublicFallbackUrl } from "@/server/media/artworkPublicFallback";
 import { resolveCatalogMediaUrl } from "@/server/media/catalogMediaUrl";
 import type { CatalogMediaAsset, CatalogReleaseMedia } from "@/server/catalog/releaseCatalogService";
 
 export type ResolvedReleaseMedia = {
+  /** Still image / poster only — never use alone for card render when motion exists */
   coverUrl: string | null;
   loopUrl: string | null;
+  motionUrl: string | null;
   posterUrl: string | null;
   primaryAsset: ReleasePrimaryAsset | null;
 };
 
 type CatalogReleaseSlice = {
   slug: string;
+  releaseType?: string | null;
+  releaseCategory?: string | null;
   coverArt?: CatalogMediaAsset | null;
   backgroundLoop?: CatalogMediaAsset | null;
   musicVideo?: CatalogMediaAsset | null;
   releaseMedia: CatalogReleaseMedia[];
 };
 
-function pickCoverAsset(release: CatalogReleaseSlice) {
-  const link =
-    release.releaseMedia.find(
-      (row) => row.isActive && row.isPrimary && (row.assetRole === "cover_art" || row.assetRole === "cover")
-    ) ??
-    release.releaseMedia.find((row) => row.isActive && (row.assetRole === "cover_art" || row.assetRole === "cover"));
-  return release.coverArt ?? link?.asset ?? null;
-}
-
-function pickLoopAsset(release: CatalogReleaseSlice) {
-  const motionLink = release.releaseMedia.find(
-    (row) => row.isActive && row.asset?.storagePath && isMotionMedia(row.asset.storagePath)
-  );
-  const link =
-    release.releaseMedia.find((row) => row.isActive && row.assetRole === "background_loop") ?? motionLink;
-  return release.backgroundLoop ?? link?.asset ?? release.musicVideo ?? motionLink?.asset ?? null;
-}
-
-/** Prefer still image for poster (never an mp4 path). */
-function pickPosterAsset(release: CatalogReleaseSlice, coverAsset: CatalogMediaAsset | null, loopAsset: CatalogMediaAsset | null) {
-  if (coverAsset?.storagePath && !isMotionMedia(coverAsset.storagePath)) {
-    return coverAsset;
-  }
-  const stillLink = release.releaseMedia.find(
+function pickStillCoverAsset(release: CatalogReleaseSlice) {
+  const links = release.releaseMedia.filter(
     (row) =>
       row.isActive &&
       row.asset?.storagePath &&
       !isMotionMedia(row.asset.storagePath) &&
       (row.assetRole === "cover_art" || row.assetRole === "cover")
   );
-  if (stillLink?.asset) return stillLink.asset;
-  if (loopAsset?.storagePath && detectMediaKind(loopAsset.storagePath) === "image") {
-    return loopAsset;
+  const primary = links.find((row) => row.isPrimary) ?? links[0];
+  const cover = release.coverArt;
+  if (cover?.storagePath && !isMotionMedia(cover.storagePath)) return cover;
+  return primary?.asset ?? null;
+}
+
+function pickLoopAsset(release: CatalogReleaseSlice) {
+  const motionLinks = release.releaseMedia.filter(
+    (row) => row.isActive && row.asset?.storagePath && isMotionMedia(row.asset.storagePath)
+  );
+  const loopRole =
+    motionLinks.find((row) => row.assetRole === "background_loop") ??
+    motionLinks.find((row) => row.isPrimary) ??
+    motionLinks[0];
+  if (release.backgroundLoop?.storagePath) return release.backgroundLoop;
+  if (loopRole?.asset) return loopRole.asset;
+  if (release.musicVideo?.storagePath && isMotionMedia(release.musicVideo.storagePath)) {
+    return release.musicVideo;
   }
-  return coverAsset && !isMotionMedia(coverAsset.storagePath) ? coverAsset : null;
+  const motionCover = release.coverArt;
+  if (motionCover?.storagePath && isMotionMedia(motionCover.storagePath)) return motionCover;
+  return null;
 }
 
 export async function resolveReleasePrimaryAssetForCatalog(
   release: CatalogReleaseSlice
 ): Promise<ResolvedReleaseMedia> {
-  const coverAsset = pickCoverAsset(release);
+  const stillAsset = pickStillCoverAsset(release);
   const loopAsset = pickLoopAsset(release);
-  const posterAsset = pickPosterAsset(release, coverAsset, loopAsset);
 
-  const [coverUrl, loopUrl, posterUrl] = await Promise.all([
-    resolveCatalogMediaUrl(coverAsset?.id, coverAsset?.storagePath, { publicKinds: ["artwork", "loop"] }),
-    resolveCatalogMediaUrl(loopAsset?.id, loopAsset?.storagePath, { publicKinds: ["artwork", "loop"] }),
-    resolveCatalogMediaUrl(posterAsset?.id, posterAsset?.storagePath, { publicKinds: ["artwork", "loop"] })
+  const [stillUrl, loopUrl] = await Promise.all([
+    resolveCatalogMediaUrl(stillAsset?.id, stillAsset?.storagePath, { publicKinds: ["artwork", "loop"] }),
+    resolveCatalogMediaUrl(loopAsset?.id, loopAsset?.storagePath, { publicKinds: ["artwork", "loop"] })
   ]);
 
-  let resolvedLoopUrl = loopUrl;
-  if (!resolvedLoopUrl || !isMotionMedia(resolvedLoopUrl)) {
-    const slugMotion = slugMotionPublicFallbackUrl(release.slug);
-    if (slugMotion) resolvedLoopUrl = slugMotion;
+  let motionUrl = loopUrl && isMotionMedia(loopUrl) ? loopUrl : null;
+  if (!motionUrl) {
+    const slugMotion = slugMotionPublicUrl(release.slug, {
+      releaseType: release.releaseType,
+      releaseCategory: release.releaseCategory
+    });
+    if (slugMotion) motionUrl = slugMotion;
   }
 
-  const resolvedPoster = posterUrl && !isMotionMedia(posterUrl) ? posterUrl : null;
-  let primaryAsset = buildReleasePrimaryAsset({
+  const posterUrl =
+    stillUrl && !isMotionMedia(stillUrl)
+      ? stillUrl
+      : stillAsset?.storagePath && detectMediaKind(stillAsset.storagePath) === "image"
+        ? stillUrl
+        : null;
+
+  const primaryAsset = buildReleasePrimaryAsset({
     slug: release.slug,
-    loopUrl: resolvedLoopUrl,
-    coverUrl,
-    posterUrl: resolvedPoster
+    releaseType: release.releaseType,
+    releaseCategory: release.releaseCategory,
+    loopUrl: motionUrl,
+    motionUrl,
+    coverUrl: posterUrl,
+    posterUrl
   });
 
-  if (!primaryAsset && resolvedLoopUrl) {
-    primaryAsset = buildReleasePrimaryAsset({
-      slug: release.slug,
-      loopUrl: resolvedLoopUrl,
-      coverUrl: resolvedPoster,
-      posterUrl: resolvedPoster
-    });
-  }
-
   return {
-    coverUrl,
-    loopUrl: resolvedLoopUrl,
-    posterUrl: resolvedPoster,
+    coverUrl: posterUrl,
+    loopUrl: motionUrl,
+    motionUrl,
+    posterUrl,
     primaryAsset
   };
 }

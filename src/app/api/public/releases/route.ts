@@ -47,9 +47,12 @@ export async function GET(request: Request) {
         (release.motionArtwork?.signedUrlEndpoint ? `${apiBase}${release.motionArtwork.signedUrlEndpoint}` : null);
       const primaryAsset = buildReleasePrimaryAsset({
         slug: release.slug,
-        coverUrl,
+        releaseType: release.releaseType,
+        releaseCategory: release.releaseCategory,
         loopUrl,
-        posterUrl: coverUrl
+        motionUrl: loopUrl,
+        coverUrl: resolvedCover && !loopUrl ? resolvedCover : null,
+        posterUrl: resolvedCover
       });
       return {
         ...release,

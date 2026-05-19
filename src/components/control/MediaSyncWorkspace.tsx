@@ -20,7 +20,7 @@ import {
 import { useMediaSync } from "@/hooks/sync/useMediaSync";
 import { useUploadQueue } from "@/hooks/sync/useUploadQueue";
 import { coverArtHints, detectMediaKind } from "@/lib/media/mediaVisual";
-import { ReleaseMedia } from "@/components/media/ReleaseMedia";
+import { ReleaseMediaCard } from "@/components/media/ReleaseMediaCard";
 import { formatWhen } from "@/lib/formatWhen";
 import { ReleaseManagementSection } from "@/components/control/MediaSyncReleaseStudio";
 
@@ -94,14 +94,15 @@ function MediaVisualCard({
 }) {
   const className = size === "hero" ? "media-sync-hero-visual" : "media-sync-card-visual";
   return (
-    <ReleaseMedia
+    <ReleaseMediaCard
       alt={ui.title}
       className={className}
-      coverUrl={release?.coverUrl ?? ui.coverUrl}
+      coverUrl={release?.posterUrl ?? release?.coverUrl ?? ui.posterUrl ?? ui.coverUrl}
       emoji={ui.emoji}
       grad={ui.grad}
       lazy
-      loopUrl={release?.loopUrl ?? ui.loopUrl}
+      loopUrl={release?.motionUrl ?? release?.loopUrl ?? ui.motionUrl ?? ui.loopUrl}
+      motionUrl={release?.motionUrl ?? release?.loopUrl ?? ui.motionUrl ?? ui.loopUrl}
       posterUrl={release?.posterUrl ?? ui.posterUrl}
       primaryAsset={release?.primaryAsset ?? ui.primaryAsset}
       slug={release?.slug ?? ui.slug}

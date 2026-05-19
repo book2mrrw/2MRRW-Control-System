@@ -28,11 +28,15 @@ export function isMotionMedia(pathOrUrl?: string | null) {
   return kind === "video_loop" || kind === "gif";
 }
 
+/** @deprecated Use resolveDisplayPrimaryAsset / ReleaseMedia instead */
 export function pickCardVisual(input: { coverUrl?: string | null; loopUrl?: string | null }) {
   if (input.loopUrl && isMotionMedia(input.loopUrl)) {
     return { kind: detectMediaKind(input.loopUrl), url: input.loopUrl } as const;
   }
-  if (input.coverUrl) {
+  if (input.coverUrl && isMotionMedia(input.coverUrl)) {
+    return { kind: detectMediaKind(input.coverUrl), url: input.coverUrl } as const;
+  }
+  if (input.coverUrl && !isMotionMedia(input.coverUrl)) {
     return { kind: detectMediaKind(input.coverUrl), url: input.coverUrl } as const;
   }
   return { kind: "unknown" as const, url: null };
