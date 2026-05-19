@@ -2,7 +2,7 @@
 
 **Date:** 2026-05-19  
 **Production URL:** https://2-mrrw-control-system.vercel.app  
-**HEAD (stabilization base):** `84d5e6e` → post-recovery deploy commit TBD
+**HEAD (recovery deploy):** `6112e55` (stabilization base `84d5e6e`)
 
 ---
 
@@ -109,7 +109,8 @@ npx vercel --prod --yes
 git push origin main
 ```
 
-Deploy ID / commit: _filled after deploy_
+**Deploy:** `dpl_8psXqWEj4237G4fTPpRNu75t3bs9` — commit `6112e55`  
+**Pushed:** `main` → `origin/main`
 
 ---
 
@@ -136,14 +137,23 @@ curl -sS -o /dev/null -w '%{http_code} %{time_total}s\n' --max-time 15 -I \
 
 ---
 
-## Phase 8 — Curl results
+## Phase 8 — Curl results (post-deploy `6112e55`, 2026-05-19)
 
 | Endpoint | HTTP | Time | Notes |
 |----------|------|------|-------|
-| `/api/health/basic` | _TBD_ | _TBD_ | |
-| `/api/health/db` | _TBD_ | _TBD_ | |
-| `/api/public/releases?limit=5` | _TBD_ | _TBD_ | MP4 singles: _TBD_/4 |
-| `/media` (HEAD) | _TBD_ | _TBD_ | |
+| `/api/health/basic` | 200 | 0.76s | OK |
+| `/api/health/db` | 503 | 10.46s | `Supabase releases count timed out after 10000ms` (fail-fast vs prior >15s hang) |
+| `/api/public/releases?limit=5` | timeout | >25s | Still blocked on Supabase-backed `getLatestReleasesDurable` |
+| `/media` (HEAD) | 200 | 0.50s | Shell OK |
+
+**MP4 singles in API:** Not verified on prod — `/api/public/releases` did not return JSON (Supabase unreachable/slow from Vercel). Local `npm run test` asserts 4 singles → MP4 via `buildReleasePrimaryAsset`.
+
+### Pre-deploy baseline (before `6112e55`)
+
+| Endpoint | HTTP | Time |
+|----------|------|------|
+| `/api/health/basic` | 200 | 0.36s |
+| `/api/health/db` | timeout | >15s (no body) |
 
 ---
 
@@ -152,5 +162,6 @@ curl -sS -o /dev/null -w '%{http_code} %{time_total}s\n' --max-time 15 -I \
 | Item | Value |
 |------|--------|
 | **PRE_VERIFICATION commit** | `c75cab5` (`2026-05-19 04:10:34 -0500`) |
-| **Recovered** | Media stack already on `main`; Supabase 10s fetch timeout added |
+| **Recovered** | Media stack already on `main` (matches `b26558e`/`27bca5a`); Supabase 10s fetch timeout + health/db fail-fast |
 | **Deploy URL** | https://2-mrrw-control-system.vercel.app |
+| **Follow-up** | Fix Vercel ↔ Supabase connectivity (env, region, pooler); then re-run MP4 API smoke |
