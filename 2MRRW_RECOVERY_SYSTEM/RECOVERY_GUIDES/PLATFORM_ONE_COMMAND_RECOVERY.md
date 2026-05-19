@@ -59,7 +59,7 @@ npm run foundation:recover-platform -- --deploy --dry-run
 | Repo | Anchor | Commit |
 |------|--------|--------|
 | Control | tag `foundation-stable-v1` | `6d988f5` |
-| Frontend | branch `frontend-stable-foundation` | `ce6ae20` |
+| Frontend | branch `frontend-stable-foundation` | `recovery-anchor.json` (operational); `foundation-stable-v1` @ `ce6ae20` (UI origin) |
 | Frontend main (reference) | `main` | `914c765` |
 
 Frontend recovery details: `artist-platform/docs/foundation/FRONTEND_RECOVERY_COMMAND_REPORT.md`.

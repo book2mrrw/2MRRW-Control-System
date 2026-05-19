@@ -3,8 +3,11 @@
 # Usage: ./scripts/create-recovery-checkpoint.sh [optional note]
 set -euo pipefail
 
-ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-cd "$ROOT"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# shellcheck source=lib/recovery-common.sh
+source "${SCRIPT_DIR}/lib/recovery-common.sh"
+
+cd_repo
 
 if ! git rev-parse --git-dir >/dev/null 2>&1; then
   echo "error: not a git repository" >&2
@@ -15,7 +18,11 @@ if [[ -n "$(git status --porcelain)" ]]; then
   echo "warning: working tree has uncommitted changes; tag will still point at HEAD" >&2
 fi
 
-STAMP="$(date +%Y%m%d-%H%M)"
+if [[ -n "${CHECKPOINT_STAMP:-}" ]]; then
+  STAMP="${CHECKPOINT_STAMP}"
+else
+  STAMP="$(generate_unique_checkpoint_stamp)"
+fi
 TAG="checkpoint-${STAMP}"
 NOTE="${1:-Manual recovery checkpoint}"
 
@@ -24,15 +31,20 @@ BRANCH="$(git rev-parse --abbrev-ref HEAD)"
 SUBJECT="$(git log -1 --format='%s')"
 
 if git rev-parse "$TAG" >/dev/null 2>&1; then
-  echo "error: tag $TAG already exists" >&2
+  echo "error: tag $TAG already exists (refusing to overwrite)" >&2
+  exit 1
+fi
+
+SNAPSHOT_DIR="2MRRW_RECOVERY_SYSTEM/FOUNDATION_SNAPSHOTS"
+NOTE_FILE="${SNAPSHOT_DIR}/checkpoint-${STAMP}.md"
+if [[ -f "${NOTE_FILE}" ]]; then
+  echo "error: snapshot already exists: ${NOTE_FILE}" >&2
   exit 1
 fi
 
 git tag -a "$TAG" -m "Recovery checkpoint ${STAMP}: ${NOTE}"
 
-SNAPSHOT_DIR="2MRRW_RECOVERY_SYSTEM/FOUNDATION_SNAPSHOTS"
 mkdir -p "$SNAPSHOT_DIR"
-NOTE_FILE="${SNAPSHOT_DIR}/checkpoint-${STAMP}.md"
 
 cat >"$NOTE_FILE" <<EOF
 # Recovery checkpoint: ${TAG}

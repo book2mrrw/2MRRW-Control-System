@@ -64,3 +64,69 @@ print_recovery_next_steps() {
   info "Create checkpoint: npm run foundation:checkpoint"
   info "Docs: 2MRRW_RECOVERY_SYSTEM/RECOVERY_GUIDES/ONE_COMMAND_RECOVERY.md"
 }
+
+# Wall-clock checkpoint suffix (second precision). Tags look like checkpoint-YYYYMMDD-HHMMSS.
+CHECKPOINT_STAMP_FMT='%Y%m%d-%H%M%S'
+
+checkpoint_stamp_now() {
+  date "+${CHECKPOINT_STAMP_FMT}"
+}
+
+# True when control checkpoint tag or snapshot for stamp already exists.
+checkpoint_stamp_taken_control() {
+  local stamp="$1"
+  local snapshot_dir="${ROOT}/2MRRW_RECOVERY_SYSTEM/FOUNDATION_SNAPSHOTS"
+  if git rev-parse "checkpoint-${stamp}" >/dev/null 2>&1; then
+    return 0
+  fi
+  if [[ -f "${snapshot_dir}/checkpoint-${stamp}.md" ]]; then
+    return 0
+  fi
+  if [[ -f "${snapshot_dir}/platform-checkpoint-${stamp}.md" ]]; then
+    return 0
+  fi
+  return 1
+}
+
+# True when frontend checkpoint tag or manifest for stamp already exists.
+checkpoint_stamp_taken_frontend() {
+  local stamp="$1"
+  local frontend_dir="$2"
+  if [[ -z "${frontend_dir}" ]] || [[ ! -d "${frontend_dir}/.git" ]]; then
+    return 1
+  fi
+  if git -C "${frontend_dir}" rev-parse "frontend-checkpoint-${stamp}" >/dev/null 2>&1; then
+    return 0
+  fi
+  if [[ -f "${frontend_dir}/docs/foundation/checkpoints/checkpoint-${stamp}.md" ]]; then
+    return 0
+  fi
+  return 1
+}
+
+# Allocate a stamp that is free for control (and optionally frontend) checkpoint artifacts.
+# Never overwrites tags; loops with a 1s pause until a free stamp is found.
+generate_unique_checkpoint_stamp() {
+  local frontend_dir="${1:-}"
+  local max_attempts=60
+  local attempt=0
+  local stamp
+
+  while (( attempt < max_attempts )); do
+    stamp="$(checkpoint_stamp_now)"
+    if checkpoint_stamp_taken_control "${stamp}"; then
+      ((attempt++)) || true
+      sleep 1
+      continue
+    fi
+    if checkpoint_stamp_taken_frontend "${stamp}" "${frontend_dir}"; then
+      ((attempt++)) || true
+      sleep 1
+      continue
+    fi
+    echo "${stamp}"
+    return 0
+  done
+
+  fail "Could not allocate unique checkpoint stamp after ${max_attempts} attempts"
+}

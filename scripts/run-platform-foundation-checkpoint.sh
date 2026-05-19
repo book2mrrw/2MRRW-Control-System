@@ -20,7 +20,7 @@ Usage: run-platform-foundation-checkpoint.sh [--dry-run] ["note"]
 
   1. npm run foundation:checkpoint (control)
   2. npm run recover:checkpoint (artist-platform)
-  3. Write platform-checkpoint-YYYYMMDD-HHMM.md (fail if exists)
+  3. Write platform-checkpoint-YYYYMMDD-HHMMSS.md (fail if exists)
 
 Env:
   ARTIST_PLATFORM_PATH   Frontend repo path
@@ -53,7 +53,8 @@ resolve_artist_platform_dir() {
 ARTIST_PLATFORM_DIR="$(resolve_artist_platform_dir)"
 ARTIST_PLATFORM_DIR="$(cd "${ARTIST_PLATFORM_DIR}" && pwd)"
 
-STAMP="$(date +%Y%m%d-%H%M)"
+STAMP="$(generate_unique_checkpoint_stamp "${ARTIST_PLATFORM_DIR}")"
+export CHECKPOINT_STAMP="${STAMP}"
 SNAPSHOT_DIR="${ROOT}/2MRRW_RECOVERY_SYSTEM/FOUNDATION_SNAPSHOTS"
 PLATFORM_FILE="${SNAPSHOT_DIR}/platform-checkpoint-${STAMP}.md"
 
@@ -89,6 +90,22 @@ fi
 BACKEND_SHA="$(git rev-parse "${BACKEND_TAG}^{commit}" 2>/dev/null || git rev-parse HEAD)"
 FRONTEND_SHA="$(git -C "${ARTIST_PLATFORM_DIR}" rev-parse "${FRONTEND_TAG}^{commit}" 2>/dev/null || git -C "${ARTIST_PLATFORM_DIR}" rev-parse HEAD)"
 
+FRONTEND_V1_SHA="$(git -C "${ARTIST_PLATFORM_DIR}" rev-parse foundation-stable-v1^{commit} 2>/dev/null || echo ce6ae20e34fd7e1bf1278d5f6da5c07fb7fee15c)"
+FRONTEND_V1_SHORT="$(git -C "${ARTIST_PLATFORM_DIR}" rev-parse --short "${FRONTEND_V1_SHA}" 2>/dev/null || echo ce6ae20)"
+FRONTEND_ANCHOR_SHA="$(node -e "
+  const fs = require('fs');
+  const p = process.argv[1];
+  const j = JSON.parse(fs.readFileSync(p, 'utf8'));
+  process.stdout.write(j.commit || '');
+" "${ARTIST_PLATFORM_DIR}/docs/foundation/recovery-anchor.json" 2>/dev/null || git -C "${ARTIST_PLATFORM_DIR}" rev-parse HEAD)"
+FRONTEND_ANCHOR_SHORT="$(git -C "${ARTIST_PLATFORM_DIR}" rev-parse --short "${FRONTEND_ANCHOR_SHA}" 2>/dev/null || echo unknown)"
+FRONTEND_V2_TAG="$(node -e "
+  const fs = require('fs');
+  const p = process.argv[1];
+  const j = JSON.parse(fs.readFileSync(p, 'utf8'));
+  process.stdout.write(j.operationalTag || 'foundation-stable-v2');
+" "${ARTIST_PLATFORM_DIR}/docs/foundation/recovery-anchor.json" 2>/dev/null || echo foundation-stable-v2)"
+
 VERIFY_BACKEND="not run"
 VERIFY_FRONTEND="not run"
 if npm run foundation:verify >/dev/null 2>&1; then
@@ -104,7 +121,7 @@ fi
 
 SYNC_STATUS="aligned"
 if [[ "${BACKEND_TAG}" != "checkpoint-${STAMP}" ]] || [[ "${FRONTEND_TAG}" != "frontend-checkpoint-${STAMP}" ]]; then
-  SYNC_STATUS="staggered stamps (tags may differ by minute); see tags below"
+  SYNC_STATUS="staggered stamps (tags differ); see tags below"
 fi
 
 mkdir -p "${SNAPSHOT_DIR}"
@@ -133,7 +150,7 @@ Sacred foundations (not replaced by checkpoints):
 | Repo | Anchor |
 |------|--------|
 | Control | tag \`foundation-stable-v1\` (\`${FOUNDATION_SHA:-6d988f5}\`) |
-| Frontend | branch \`frontend-stable-foundation\` / tag \`foundation-stable-v1\` @ ce6ae20 |
+| Frontend | \`foundation-stable-v1\` @ ${FRONTEND_V1_SHORT} (UI origin); operational \`recovery-anchor.json\` @ ${FRONTEND_ANCHOR_SHORT}; tag \`${FRONTEND_V2_TAG}\` |
 
 ## Verification status
 
@@ -156,7 +173,7 @@ One command: \`npm run foundation:recover-platform\`
 1. Identify target checkpoint tags (this manifest or \`git tag -l '*checkpoint-*'\`)
 2. Control: \`git checkout <backend-checkpoint-tag>\` → \`npm ci\` → \`npm run verify\`
 3. Frontend: \`git checkout <frontend-checkpoint-tag>\` → \`npm ci\` → \`npm run verify:foundation\`
-4. For sacred baseline (not checkpoint): \`foundation-stable-v1\` / \`frontend-stable-foundation\`
+4. For sacred baseline (not checkpoint): \`npm run recover:foundation\` or \`foundation-stable-v2\` / \`frontend-stable-foundation\` (UI-only: \`foundation-stable-v1\`)
 
 ## Environment references
 

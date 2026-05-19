@@ -7,7 +7,7 @@ How to restore foundation anchors, checkpoint tags, and platform coordination ma
 | Repo | Anchor | Restore |
 |------|--------|---------|
 | Control | tag `foundation-stable-v1` (`6d988f5`) | `npm run foundation:recover` |
-| Frontend | branch `frontend-stable-foundation` (`ce6ae20`) | `npm run recover:foundation` |
+| Frontend | branch `frontend-stable-foundation` (`recovery-anchor.json`) | `npm run recover:foundation` |
 | Platform | both | `npm run foundation:recover-platform` |
 
 Manual control:
