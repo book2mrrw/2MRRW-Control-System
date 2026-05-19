@@ -57,12 +57,25 @@ git checkout b26558e
 git checkout c75cab5
 ```
 
-## Verification after checkout
+## One-command recovery (preferred)
+
+```bash
+npm run foundation:recover
+npm run foundation:recover -- --deploy   # includes production deploy
+npm run foundation:verify                # smoke without checkout
+```
+
+Scripts: `scripts/run-foundation-recovery.sh`, `scripts/verify-foundation-state.sh`, `scripts/run-foundation-deploy.sh`.
+
+See [`../RECOVERY_GUIDES/ONE_COMMAND_RECOVERY.md`](../RECOVERY_GUIDES/ONE_COMMAND_RECOVERY.md).
+
+## Verification after checkout (manual)
 
 ```bash
 npm ci
 npm run verify
 ./scripts/check-architecture-guardrails.sh
+npm run foundation:verify
 ```
 
 See [`../RECOVERY_GUIDES/KNOWN_GOOD_STATE_REFERENCE.md`](../RECOVERY_GUIDES/KNOWN_GOOD_STATE_REFERENCE.md).

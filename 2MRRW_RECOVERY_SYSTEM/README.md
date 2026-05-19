@@ -30,8 +30,16 @@ Offline-first disaster recovery bundle for the 2MRRW platform. Lives in the **co
 ## One-line disaster restore (control)
 
 ```bash
+npm run foundation:recover -- --deploy
+```
+
+Manual equivalent:
+
+```bash
 git fetch --tags origin && git checkout foundation-stable-v1 && npm ci && npm run verify && ./scripts/check-architecture-guardrails.sh && npx vercel --prod --yes
 ```
+
+See [`RECOVERY_GUIDES/ONE_COMMAND_RECOVERY.md`](RECOVERY_GUIDES/ONE_COMMAND_RECOVERY.md).
 
 ## Copy this folder off-machine
 

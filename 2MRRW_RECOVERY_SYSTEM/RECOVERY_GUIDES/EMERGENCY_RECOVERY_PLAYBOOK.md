@@ -4,6 +4,19 @@ Scenario-based steps. Always run post-smoke after control recovery.
 
 **Default tag:** `foundation-stable-v1` (`6d988f5`)
 
+## One-command foundation recovery
+
+| Situation | Command |
+|-----------|---------|
+| Full restore (local) | `npm run foundation:recover` |
+| Restore + production deploy | `npm run foundation:recover -- --deploy` |
+| Git checkout only | `npm run foundation:rollback` |
+| Verify (no checkout) | `npm run foundation:verify` |
+| Deploy after manual recovery | `npm run foundation:deploy` |
+| Save checkpoint before changes | `npm run foundation:checkpoint` |
+
+Guide: [`ONE_COMMAND_RECOVERY.md`](ONE_COMMAND_RECOVERY.md) · Report: [`../../FOUNDATION_RECOVERY_COMMANDS_REPORT.md`](../../FOUNDATION_RECOVERY_COMMANDS_REPORT.md)
+
 ---
 
 ## Scenario 1 — 504 / gateway timeout on control
@@ -17,11 +30,9 @@ Scenario-based steps. Always run post-smoke after control recovery.
 1. Promote known-good deploy `dpl_3Q5z4Q1b61JrHXVCZPn9EmiBbjgm` if recent deploy caused it.
 2. If still failing:
    ```bash
-   git checkout foundation-stable-v1
-   npm ci && npm run verify
-   ./scripts/check-architecture-guardrails.sh
-   npx vercel --prod --yes
+   npm run foundation:recover -- --deploy
    ```
+   Or step-by-step: `npm run foundation:rollback` → `npm ci` → `npm run foundation:deploy`
 3. Confirm layout has `initialCatalog={[]}` — see [`../../CURRENT_SYSTEM_STATE.md`](../../CURRENT_SYSTEM_STATE.md).
 4. Smoke health + 9 releases.
 
@@ -50,7 +61,7 @@ Scenario-based steps. Always run post-smoke after control recovery.
 
 1. Read Vercel build log — fix typecheck/test locally: `npm run verify`.
 2. If deploy is bad but build passed: **Promote** previous deploy (see [`DEPLOYMENT_RECOVERY_GUIDE.md`](DEPLOYMENT_RECOVERY_GUIDE.md)).
-3. If code is bad: `git checkout foundation-stable-v1`, verify, `npx vercel --prod --yes`.
+3. If code is bad: `npm run foundation:recover -- --deploy`
 4. Never force-push `main` to fix deploy.
 
 ---
@@ -62,7 +73,7 @@ Scenario-based steps. Always run post-smoke after control recovery.
 **Steps:**
 
 1. `./scripts/check-architecture-guardrails.sh` — note which rule failed.
-2. `git checkout foundation-stable-v1`
+2. `npm run foundation:rollback`
 3. `git checkout -b recovery/$(date +%Y%m%d) foundation-stable-v1`
 4. Cherry-pick only required fixes; `npm run verify` each pick.
 5. PR `recovery/*` → `main`.
@@ -128,8 +139,7 @@ See [`../../docs/SAFE_RECOVERY_PROTOCOL.md`](../../docs/SAFE_RECOVERY_PROTOCOL.m
 ## Universal post-recovery smoke
 
 ```bash
-curl -sS "https://2-mrrw-control-system.vercel.app/api/health/basic"
-curl -sS "https://2-mrrw-control-system.vercel.app/api/public/releases?limit=100"
+npm run foundation:verify
 ```
 
 ## Escalation

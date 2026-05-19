@@ -6,6 +6,7 @@ coverage/
 .local-home/
 .npm-cache/
 .vscode/
+!.vscode/tasks.json
 tsconfig.tsbuildinfo
 
 # Local environment and deployment state

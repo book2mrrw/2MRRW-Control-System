@@ -60,7 +60,16 @@ Full template: `.env.example`
 
 **Note:** Hobby plan may block multi-step rollback (`402` on `vercel rollback`). Use git tag + redeploy instead.
 
-### Option B — Git tag + redeploy
+### Option B — One-command foundation recovery (preferred)
+
+```bash
+npm run foundation:recover
+npm run foundation:recover -- --deploy
+```
+
+See [`../RECOVERY_GUIDES/ONE_COMMAND_RECOVERY.md`](../RECOVERY_GUIDES/ONE_COMMAND_RECOVERY.md).
+
+### Option C — Git tag + redeploy (manual)
 
 ```bash
 git fetch origin
@@ -68,7 +77,7 @@ git checkout foundation-stable-v1   # or foundation-stable-2026-05-19
 npx vercel --prod --yes
 ```
 
-### Option C — Git reset on a recovery branch (never on `main` without review)
+### Option D — Git reset on a recovery branch (never on `main` without review)
 
 ```bash
 git checkout -b recovery/$(date +%Y%m%d)
@@ -81,8 +90,17 @@ See `docs/SAFE_RECOVERY_PROTOCOL.md` — **never force-push `main`**.
 ## Post-rollback smoke
 
 ```bash
-curl -sS "https://2-mrrw-control-system.vercel.app/api/health/basic"
-curl -sS "https://2-mrrw-control-system.vercel.app/api/public/releases?limit=100" | jq '.releases | length'
+npm run foundation:verify
 ```
 
-Expect health `ok: true` and **9** public releases.
+Expect health `ok: true` and **9** public releases. Manual curls: see root [`../../STABLE_DEPLOYMENT_REFERENCE.md`](../../STABLE_DEPLOYMENT_REFERENCE.md).
+
+## Foundation npm commands
+
+| Command | Purpose |
+|---------|---------|
+| `npm run foundation:recover` | Full foundation recovery |
+| `npm run foundation:verify` | Local + prod smoke |
+| `npm run foundation:deploy` | Verify + build + deploy |
+| `npm run foundation:rollback` | Git checkout tag only |
+| `npm run foundation:checkpoint` | Dated checkpoint tag |

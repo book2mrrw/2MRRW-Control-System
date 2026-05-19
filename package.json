@@ -13,7 +13,12 @@
     "export:frontend-releases-sql": "node --conditions react-server --import tsx src/scripts/exportFrontendReleasesSql.ts",
     "test": "node --conditions react-server --import tsx tests/stability-foundation.test.ts && node --conditions react-server --import tsx tests/backend-foundation.test.ts",
     "test:stability": "node --conditions react-server --import tsx tests/stability-foundation.test.ts",
-    "verify": "npm run typecheck && npm run test"
+    "verify": "npm run typecheck && npm run test",
+    "foundation:recover": "bash scripts/run-foundation-recovery.sh",
+    "foundation:verify": "bash scripts/verify-foundation-state.sh",
+    "foundation:deploy": "bash scripts/run-foundation-deploy.sh",
+    "foundation:rollback": "bash scripts/run-safe-rollback.sh",
+    "foundation:checkpoint": "bash scripts/create-recovery-checkpoint.sh"
   },
   "dependencies": {
     "@supabase/ssr": "^0.10.3",

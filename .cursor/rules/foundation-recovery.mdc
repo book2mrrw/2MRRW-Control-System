@@ -1,0 +1,43 @@
+---
+description: Foundation disaster recovery — one npm command restores known-good control system
+globs:
+alwaysApply: false
+---
+
+# Foundation recovery
+
+When production control is broken (504, hydration, empty catalog, failed deploy, guardrail failures), **do not improvise rollbacks**.
+
+## Primary action
+
+Tell the user to run from repo root:
+
+```bash
+npm run foundation:recover
+```
+
+For restore **and** production deploy:
+
+```bash
+npm run foundation:recover -- --deploy
+```
+
+Foundation tag: `foundation-stable-v1` → commit `6d988f5`.
+
+## Other commands
+
+| Command | Use |
+|---------|-----|
+| `npm run foundation:verify` | Smoke test without changing branch |
+| `npm run foundation:deploy` | Verify + build + `vercel --prod --yes` |
+| `npm run foundation:rollback` | Git fetch tags + checkout foundation only |
+| `npm run foundation:checkpoint` | Create dated recovery tag before risky work |
+
+## Rules for agents
+
+- Never add `buildControlCatalogPayload` to `src/app/layout.tsx`.
+- Never force-push `main`.
+- Prefer `foundation:recover` over manual `git checkout` + scattered curls.
+- After recovery, run `npm run foundation:verify` and confirm **9** public releases.
+
+Docs: `2MRRW_RECOVERY_SYSTEM/RECOVERY_GUIDES/ONE_COMMAND_RECOVERY.md`, `FOUNDATION_RECOVERY_COMMANDS_REPORT.md`.
