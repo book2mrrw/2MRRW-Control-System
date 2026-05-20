@@ -47,10 +47,13 @@ export async function maybeSendDropNotification(item: VaultItemRecord) {
 
   const supabase = getServerSupabase();
   if (supabase) {
-    await supabase
+    const { error } = await supabase
       .from("vault_items")
       .update({ notification_sent: true, updated_at: new Date().toISOString() })
       .eq("id", item.id);
+    if (error) {
+      console.warn("[vault-drop] notification_sent persist skipped:", error.message);
+    }
   }
 
   await persistSyncEvent({

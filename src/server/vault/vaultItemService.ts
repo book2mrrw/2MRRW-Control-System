@@ -135,6 +135,17 @@ type VaultItemRow = {
 
 const memoryVaultItems = new Map<string, VaultItemRecord>();
 
+function isSchemaUnavailableError(error: { code?: string; message?: string } | null) {
+  const code = error?.code || "";
+  const message = String(error?.message || "");
+  return (
+    code === "42P01" ||
+    code === "42703" ||
+    /relation .* does not exist/i.test(message) ||
+    /column .* does not exist/i.test(message)
+  );
+}
+
 function nowIso() {
   return new Date().toISOString();
 }
@@ -200,7 +211,7 @@ function fromRow(row: VaultItemRow): VaultItemRecord {
   };
 }
 
-function toRow(item: VaultItemRecord): VaultItemRow {
+function toBaseRow(item: VaultItemRecord): VaultItemRow {
   return {
     id: item.id,
     slug: item.slug,
@@ -221,6 +232,15 @@ function toRow(item: VaultItemRecord): VaultItemRow {
     featured: item.featured,
     visibility: item.visibility,
     published_at: item.publishedAt ?? null,
+    metadata: item.metadata,
+    created_at: item.createdAt,
+    updated_at: item.updatedAt
+  };
+}
+
+function toRow(item: VaultItemRecord): VaultItemRow {
+  return {
+    ...toBaseRow(item),
     shelf_storage_path: item.shelfStoragePath ?? null,
     shelf_url: item.shelfUrl ?? null,
     content_storage_path: item.contentStoragePath ?? null,
@@ -234,10 +254,7 @@ function toRow(item: VaultItemRecord): VaultItemRow {
     notification_sent: item.notificationSent,
     glow_effect: item.glowEffect,
     promo_code: item.promoCode ?? null,
-    promo_code_hash: item.promoCodeHash ?? null,
-    metadata: item.metadata,
-    created_at: item.createdAt,
-    updated_at: item.updatedAt
+    promo_code_hash: item.promoCodeHash ?? null
   };
 }
 
@@ -326,7 +343,11 @@ async function persist(item: VaultItemRecord) {
   memoryVaultItems.set(item.id, item);
   const supabase = getServerSupabase();
   if (!supabase) return item;
-  const { error } = await supabase.from("vault_items").upsert(toRow(item), { onConflict: "id" });
+  let { error } = await supabase.from("vault_items").upsert(toRow(item), { onConflict: "id" });
+  if (error && isSchemaUnavailableError(error)) {
+    const retry = await supabase.from("vault_items").upsert(toBaseRow(item), { onConflict: "id" });
+    error = retry.error;
+  }
   if (error) return item;
   return item;
 }
