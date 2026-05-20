@@ -1,3 +1,5 @@
+import { vaultCategories, type VaultCategory } from "@/server/commerce/pricingTaxonomies";
+
 export type PricingTier = "single" | "ep" | "album";
 
 const TIER_BANDS: Record<PricingTier, { min: number; max: number }> = {
@@ -5,6 +7,9 @@ const TIER_BANDS: Record<PricingTier, { min: number; max: number }> = {
   ep: { min: 799, max: 5000 },
   album: { min: 799, max: 5000 }
 };
+
+const COLLECTOR_CARD_BAND = { min: 1999, max: 50000 };
+const VAULT_ITEM_BAND = { min: 0, max: 25000 };
 
 export function normalizePricingTier(
   releaseType?: string | null,
@@ -38,6 +43,38 @@ export function validateReleasePriceInCents(
     };
   }
   return { ok: true };
+}
+
+export function validateCollectorCardPriceInCents(
+  priceInCents: number | null | undefined
+): { ok: true } | { ok: false; message: string } {
+  if (priceInCents == null) {
+    return { ok: false, message: "Collector cards require a storefront price." };
+  }
+  if (!Number.isInteger(priceInCents) || priceInCents < COLLECTOR_CARD_BAND.min || priceInCents > COLLECTOR_CARD_BAND.max) {
+    return {
+      ok: false,
+      message: `Collector card price must be between ${COLLECTOR_CARD_BAND.min} and ${COLLECTOR_CARD_BAND.max} cents.`
+    };
+  }
+  return { ok: true };
+}
+
+export function validateVaultItemPriceInCents(
+  priceInCents: number | null | undefined
+): { ok: true } | { ok: false; message: string } {
+  if (priceInCents == null) return { ok: true };
+  if (!Number.isInteger(priceInCents) || priceInCents < VAULT_ITEM_BAND.min || priceInCents > VAULT_ITEM_BAND.max) {
+    return {
+      ok: false,
+      message: `Vault item price must be between ${VAULT_ITEM_BAND.min} and ${VAULT_ITEM_BAND.max} cents.`
+    };
+  }
+  return { ok: true };
+}
+
+export function validateVaultCategory(category: string): category is VaultCategory {
+  return (vaultCategories as readonly string[]).includes(category);
 }
 
 export function validateOptionalPriceInCents(

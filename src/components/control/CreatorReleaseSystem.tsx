@@ -28,6 +28,9 @@ import {
   Search,
   Settings,
   ShoppingBag,
+  Gem,
+  Lock,
+  Coins,
   Trash2,
   Upload,
   Video
@@ -59,8 +62,22 @@ import {
 } from "@/services/catalog/releaseStudioClient";
 import { MediaLibrary, ReleaseWorkspaceSections } from "@/components/control/MediaSyncWorkspace";
 import { ReleaseGiftModal } from "@/components/control/ReleaseGiftModal";
+import { CollectorsCardsPanel } from "@/components/control/CollectorsCardsPanel";
+import { VaultControlPanel } from "@/components/control/VaultControlPanel";
+import { CommerceControlPanel } from "@/components/control/CommerceControlPanel";
 
-type Page = "dashboard" | "releases" | "media" | "analytics" | "shop" | "settings" | "flow" | "release-detail";
+type Page =
+  | "dashboard"
+  | "releases"
+  | "media"
+  | "collectors"
+  | "vault"
+  | "commerce"
+  | "analytics"
+  | "shop"
+  | "settings"
+  | "flow"
+  | "release-detail";
 type ReleaseTypeId = "single" | "ep" | "album" | "deluxe";
 type BadgeVariant = "ok" | "pri" | "warn" | "muted" | "err";
 type ButtonVariant = "primary" | "secondary" | "ghost" | "success" | "danger";
@@ -118,9 +135,12 @@ const NAV_ITEMS = [
   { id: "dashboard", icon: LayoutDashboard, label: "Dashboard" },
   { id: "releases", icon: Package, label: "Releases", badge: 1 },
   { id: "media", icon: Camera, label: "Media" },
+  { id: "collectors", icon: Gem, label: "Collector's Cards" },
+  { id: "vault", icon: Lock, label: "Vault" },
+  { id: "commerce", icon: Coins, label: "Commerce" },
   { id: "analytics", icon: BarChart3, label: "Analytics" },
   { id: "shop", icon: ShoppingBag, label: "Shop" }
-] satisfies Array<{ id: Exclude<Page, "settings" | "flow">; icon: typeof LayoutDashboard; label: string; badge?: number }>;
+] satisfies Array<{ id: Exclude<Page, "settings" | "flow" | "release-detail">; icon: typeof LayoutDashboard; label: string; badge?: number }>;
 
 const RELEASE_TYPE_TAB_MAP: Record<string, Release["type"] | "AlbumOrEp"> = {
   Albums: "AlbumOrEp",
@@ -133,6 +153,9 @@ const PAGE_TITLES: Record<Page, string> = {
   dashboard: "Dashboard",
   releases: "Releases",
   media: "Media Library",
+  collectors: "Collector's Cards",
+  vault: "Vault",
+  commerce: "Commerce",
   analytics: "Analytics",
   shop: "Shop",
   settings: "Settings",
@@ -144,6 +167,9 @@ const PAGE_ROUTES: Partial<Record<Page, string>> = {
   dashboard: "/dashboard",
   releases: "/releases",
   media: "/media",
+  collectors: "/collectors",
+  vault: "/vault",
+  commerce: "/commerce",
   analytics: "/analytics",
   shop: "/shop",
   settings: "/settings",
@@ -164,6 +190,9 @@ function pageFromPathname(pathname: string): Page {
   if (releaseIdFromPathname(pathname)) return "release-detail";
   if (pathname.startsWith("/releases")) return "releases";
   if (pathname.startsWith("/media")) return "media";
+  if (pathname.startsWith("/collectors")) return "collectors";
+  if (pathname.startsWith("/vault")) return "vault";
+  if (pathname.startsWith("/commerce")) return "commerce";
   if (pathname.startsWith("/analytics")) return "analytics";
   if (pathname.startsWith("/shop")) return "shop";
   if (pathname.startsWith("/settings")) return "settings";
@@ -1723,6 +1752,9 @@ export function CreatorReleaseSystem({ initialCatalog = [] }: { initialCatalog?:
           {page === "dashboard" ? <Dashboard onNewRelease={() => navigate("flow")} onNav={navigate} releases={releases} /> : null}
           {page === "releases" ? <Releases onNewRelease={() => navigate("flow")} releases={releases} onOpenRelease={openRelease} actions={releaseActions} /> : null}
           {page === "media" ? <MediaLibrary catalog={catalog} releases={releases} onOpenRelease={openRelease} actions={releaseActions} onUploadComplete={refreshCatalog} /> : null}
+          {page === "collectors" ? <CollectorsCardsPanel /> : null}
+          {page === "vault" ? <VaultControlPanel /> : null}
+          {page === "commerce" ? <CommerceControlPanel /> : null}
           {page === "release-detail" && activeRelease && activeUi ? (
             <ReleaseDetailView release={activeRelease} ui={activeUi} onBack={() => router.push("/releases")} onRefresh={refreshCatalog} onOpenRelease={openRelease} actions={releaseActions} />
           ) : null}

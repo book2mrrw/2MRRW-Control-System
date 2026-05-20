@@ -1,5 +1,7 @@
 import "server-only";
 
+import { releaseProductSlug } from "@/server/commerce/pricingTaxonomies";
+import { upsertCatalogProduct } from "@/server/commerce/productCommerceService";
 import {
   normalizePricingTier,
   validateReleasePriceInCents,
@@ -10,10 +12,7 @@ import { getServerSupabase } from "@/server/supabase/client";
 
 const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
-export function releaseProductSlug(releaseSlug: string) {
-  const base = releaseSlug.trim();
-  return base.endsWith("-digital") ? base : `${base}-digital`;
-}
+export { releaseProductSlug };
 
 export function resolveDraftPricingTier(draft: Pick<ReleaseManagementDraft, "pricingTier" | "releaseType">) {
   return draft.pricingTier ?? normalizePricingTier(draft.releaseType);
@@ -74,27 +73,19 @@ export async function upsertReleaseProduct(draft: ReleaseManagementDraft) {
 
   const slug = releaseProductSlug(draft.slug);
   const tier = resolveDraftPricingTier(draft) as PricingTier;
-  const grant = { type: "release" as const, releaseId: draft.id };
-  const productPayload = {
+  const product = await upsertCatalogProduct({
     slug,
-    name: draft.title,
-    price_cents: draft.priceInCents,
-    currency: "usd",
+    label: draft.title,
+    contentType: "release",
+    contentId: draft.id,
+    priceCents: draft.priceInCents,
+    giftingEnabled: draft.giftingEnabled,
     active: true,
-    grants: [grant]
-  };
+    grants: [{ type: "release", releaseId: draft.id }]
+  });
 
-  let write = await supabase.from("products").upsert(productPayload, { onConflict: "slug" });
-  if (write.error && /price_cents|currency/i.test(write.error.message ?? "")) {
-    write = await supabase.from("products").upsert({
-      slug: productPayload.slug,
-      name: productPayload.name,
-      active: productPayload.active,
-      grants: productPayload.grants
-    }, { onConflict: "slug" });
-  }
-  if (write.error) {
-    return { ok: false as const, message: write.error.message };
+  if (!product.ok) {
+    return product;
   }
 
   await persistDraftCommerceColumns({ ...draft, pricingTier: tier });

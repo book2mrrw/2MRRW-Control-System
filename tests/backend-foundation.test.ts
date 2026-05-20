@@ -53,6 +53,11 @@ import {
   validateTrackSplits
 } from "@/server/release-management/releaseManagementService";
 import { validateDraftCommerceFields } from "@/server/commerce/releaseCommerceService";
+import {
+  validateCollectorCardPriceInCents,
+  validateVaultCategory,
+  validateVaultItemPriceInCents
+} from "@/server/commerce/pricingValidation";
 import { validateReleasePriceInCents } from "@/server/commerce/pricingValidation";
 import { ingestFrontendReleaseEcosystem } from "@/server/release-management/frontendReleaseIngestionService";
 import {
@@ -1009,6 +1014,14 @@ function testReleaseLiveStatusEngine() {
   assert.ok(syncError.liveStatusReasons.some((reason) => reason.includes("cover")));
 }
 
+function testUniversalCommerceValidation() {
+  assert.equal(validateCollectorCardPriceInCents(8999).ok, true);
+  assert.equal(validateCollectorCardPriceInCents(null).ok, false);
+  assert.equal(validateVaultItemPriceInCents(7000).ok, true);
+  assert.equal(validateVaultCategory("Audio Diaries"), true);
+  assert.equal(validateVaultCategory("Collector Cards"), false);
+}
+
 function testReleaseCommerceValidation() {
   const singleBand = validateReleasePriceInCents(499, "single");
   assert.equal(singleBand.ok, true);
@@ -1080,6 +1093,7 @@ testAnimatedSinglePrimaryAssetsPreferVideoLoop();
 testSchedulePastDateRejectedByApiPayload();
 testReleaseScheduleUtcConversion();
 testReleaseLiveStatusEngine();
+testUniversalCommerceValidation();
 testReleaseCommerceValidation();
 testReleaseTypeFiltering();
 await testAudioVisualPublishedFiltering();

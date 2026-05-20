@@ -1,5 +1,3 @@
-import { ModulePage } from "@/components/control/ModulePage";
-
-export default function CommerceRoute() {
-  return <ModulePage module="commerce" />;
+export default function CommercePage() {
+  return null;
 }
