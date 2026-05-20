@@ -21,6 +21,12 @@ export type Release = {
   releaseCategory?: ReleaseCategory;
   published: boolean;
   coverAssetId: string;
+  priceInCents?: number | null;
+  pricingTier?: "single" | "ep" | "album" | null;
+  giftingEnabled?: boolean;
+  deluxePriceInCents?: number | null;
+  bundlePriceInCents?: number | null;
+  perTrackOverrides?: Record<string, unknown> | null;
 };
 
 export type Track = {
@@ -31,6 +37,7 @@ export type Track = {
   mediaAssetId: string;
   position: number;
   lyricsText?: string | null;
+  lyricsMode?: "static" | "timed";
 };
 
 export type Product = {

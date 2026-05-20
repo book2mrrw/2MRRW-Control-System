@@ -204,7 +204,27 @@ export function ReleaseMetadataForm({
         famousArtistReferences: String(form.get("artistReferences") || "")
           .split(",")
           .map((item) => item.trim())
-          .filter(Boolean)
+          .filter(Boolean),
+        priceInCents: (() => {
+          const raw = String(form.get("priceInCents") || "").trim();
+          if (!raw) return null;
+          const parsed = Number.parseInt(raw, 10);
+          return Number.isFinite(parsed) ? parsed : null;
+        })(),
+        pricingTier: (form.get("pricingTier") as "single" | "ep" | "album" | null) || null,
+        giftingEnabled: form.get("giftingEnabled") === "on",
+        deluxePriceInCents: (() => {
+          const raw = String(form.get("deluxePriceInCents") || "").trim();
+          if (!raw) return null;
+          const parsed = Number.parseInt(raw, 10);
+          return Number.isFinite(parsed) ? parsed : null;
+        })(),
+        bundlePriceInCents: (() => {
+          const raw = String(form.get("bundlePriceInCents") || "").trim();
+          if (!raw) return null;
+          const parsed = Number.parseInt(raw, 10);
+          return Number.isFinite(parsed) ? parsed : null;
+        })()
       })
     });
     const payload = await readPayload(response);
@@ -308,6 +328,43 @@ export function ReleaseMetadataForm({
             </label>
           </div>
         </details>
+      </fieldset>
+      <fieldset className="span-2 form-fieldset">
+        <legend>Storefront pricing</legend>
+        <p className="input-hint span-2">
+          Single: 299–799¢ · EP/Album: 799–5000¢. Syncs to catalog product on publish.
+        </p>
+        <label>
+          Price (cents)
+          <input
+            name="priceInCents"
+            type="number"
+            min={0}
+            step={1}
+            defaultValue={draft.priceInCents ?? ""}
+            placeholder="499"
+          />
+        </label>
+        <label>
+          Pricing tier
+          <select name="pricingTier" defaultValue={draft.pricingTier ?? (draft.releaseType === "single" ? "single" : draft.releaseType === "ep" ? "ep" : "album")}>
+            <option value="single">Single</option>
+            <option value="ep">EP</option>
+            <option value="album">Album</option>
+          </select>
+        </label>
+        <label className="checkbox-row span-2">
+          <input name="giftingEnabled" type="checkbox" defaultChecked={draft.giftingEnabled} />
+          Enable purchase-to-gift on storefront
+        </label>
+        <label>
+          Deluxe price (cents, optional)
+          <input name="deluxePriceInCents" type="number" min={0} defaultValue={draft.deluxePriceInCents ?? ""} />
+        </label>
+        <label>
+          Bundle price (cents, optional)
+          <input name="bundlePriceInCents" type="number" min={0} defaultValue={draft.bundlePriceInCents ?? ""} />
+        </label>
       </fieldset>
       <button className="control-button" disabled={state.busy} type="submit">
         Save & Continue

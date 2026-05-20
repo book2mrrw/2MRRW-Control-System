@@ -43,6 +43,7 @@ export type CatalogTrack = {
   audioAssetId?: string | null;
   previewAssetId?: string | null;
   lyricsText?: string | null;
+  lyricsMode?: "static" | "timed";
   audioAsset?: CatalogMediaAsset | null;
   previewAsset?: CatalogMediaAsset | null;
 };
@@ -247,7 +248,7 @@ export async function fetchDurableReleaseCatalog(): Promise<CatalogRelease[]> {
   const [tracksResult, releaseMediaPrimary, creditsResult, distributionResult] = await Promise.all([
     supabase
       .from("tracks")
-      .select("id, release_id, title, duration_seconds, position, audio_state, audio_asset_id, preview_asset_id, lyrics_text")
+      .select("id, release_id, title, duration_seconds, position, audio_state, audio_asset_id, preview_asset_id, lyrics_text, lyrics_mode")
       .in("release_id", releaseIds)
       .order("position", { ascending: true }),
     supabase.from("release_media").select(releaseMediaSelect).in("release_id", releaseIds),
@@ -279,6 +280,7 @@ export async function fetchDurableReleaseCatalog(): Promise<CatalogRelease[]> {
       audioAssetId: row.audio_asset_id as string | null,
       previewAssetId: row.preview_asset_id as string | null,
       lyricsText: (row as { lyrics_text?: string | null }).lyrics_text ?? null,
+      lyricsMode: (row as { lyrics_mode?: string }).lyrics_mode === "timed" ? "timed" : "static",
       audioAsset: row.audio_asset_id ? mediaById.get(row.audio_asset_id as string) ?? null : null,
       previewAsset: row.preview_asset_id ? mediaById.get(row.preview_asset_id as string) ?? null : null
     };

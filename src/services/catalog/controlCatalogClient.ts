@@ -2,13 +2,14 @@ export type DurableCatalogTrack = {
   id: string;
   title: string;
   position: number;
+  lyricsText?: string | null;
+  lyricsMode?: "static" | "timed";
   durationSeconds: number;
   audioState?: string | null;
   previewAssetId?: string | null;
   audioAssetId?: string | null;
   previewUrl?: string | null;
   audioUrl?: string | null;
-  lyricsText?: string | null;
 };
 
 export type DurableCatalogReleaseMedia = {

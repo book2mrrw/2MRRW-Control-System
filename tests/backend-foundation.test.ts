@@ -45,11 +45,15 @@ import {
   attachTrackContribution,
   createReleaseDraft,
   getReadinessSummary,
+  getReleaseDraft,
   listReleaseDrafts,
   updateReleaseMetadata,
   updateTrackInformation,
+  validateReleaseStructure,
   validateTrackSplits
 } from "@/server/release-management/releaseManagementService";
+import { validateDraftCommerceFields } from "@/server/commerce/releaseCommerceService";
+import { validateReleasePriceInCents } from "@/server/commerce/pricingValidation";
 import { ingestFrontendReleaseEcosystem } from "@/server/release-management/frontendReleaseIngestionService";
 import {
   createOrSelectContributor,
@@ -1005,6 +1009,26 @@ function testReleaseLiveStatusEngine() {
   assert.ok(syncError.liveStatusReasons.some((reason) => reason.includes("cover")));
 }
 
+function testReleaseCommerceValidation() {
+  const singleBand = validateReleasePriceInCents(499, "single");
+  assert.equal(singleBand.ok, true);
+  const outOfBand = validateReleasePriceInCents(150, "single");
+  assert.equal(outOfBand.ok, false);
+
+  const draft = createReleaseDraft({ releaseType: "single", title: "Priced Single" });
+  updateReleaseMetadata(draft.id, { priceInCents: 499, pricingTier: "single", giftingEnabled: true });
+  const checks = validateReleaseStructure(getReleaseDraft(draft.id)!);
+  assert.ok(checks.find((check) => check.key === "pricing")?.passed);
+
+  const giftingBlocked = validateDraftCommerceFields({
+    priceInCents: null,
+    pricingTier: "single",
+    releaseType: "single",
+    giftingEnabled: true
+  });
+  assert.equal(giftingBlocked.ok, false);
+}
+
 function testReleaseTypeFiltering() {
   const { release: singleRelease } = makeReadyRelease("Filtered Single", "single");
   const { release: albumRelease } = makeReadyRelease("Filtered Album", "album");
@@ -1056,6 +1080,7 @@ testAnimatedSinglePrimaryAssetsPreferVideoLoop();
 testSchedulePastDateRejectedByApiPayload();
 testReleaseScheduleUtcConversion();
 testReleaseLiveStatusEngine();
+testReleaseCommerceValidation();
 testReleaseTypeFiltering();
 await testAudioVisualPublishedFiltering();
 

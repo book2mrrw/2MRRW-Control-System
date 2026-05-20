@@ -558,7 +558,11 @@ function ReviewPanel({ draft }: { draft: ReleaseManagementDraft }) {
     { Checklist: "Tracks & Credits", Status: readinessByKey.get("track_information")?.passed && readinessByKey.get("splits")?.passed ? "Complete" : "Missing", Notes: "Tracks, lyrics, credits, roles, and splits must be ready." },
     { Checklist: "Artwork", Status: readinessByKey.get("cover_art")?.passed ? "Complete" : "Missing", Notes: readinessByKey.get("cover_art")?.message ?? "Upload approved release artwork." },
     { Checklist: "Distribution", Status: readiness.ready ? "Complete" : "Needs attention", Notes: "Stores and delivery state follow release readiness." },
-    { Checklist: "Pricing & Stores", Status: readiness.ready && scheduleReady ? "Ready" : "Needs attention", Notes: "Confirm shop, store, and schedule settings before publish." }
+    {
+      Checklist: "Pricing & Stores",
+      Status: readinessByKey.get("pricing")?.passed ? "Complete" : draft.priceInCents != null || draft.pricingTier ? "Needs attention" : "Missing",
+      Notes: readinessByKey.get("pricing")?.message ?? "Set storefront price and tier, or leave unset for free."
+    }
   ];
   return (
     <FormSection title="Review & publish" description="Confirm the release summary, resolve warnings, preview, publish, or schedule for later.">
@@ -602,7 +606,8 @@ function checklistLabel(key: string) {
     cover_art: "Artwork approved",
     audio: "Audio uploaded",
     track_information: "Track information",
-    splits: "Contributors balanced"
+    splits: "Contributors balanced",
+    pricing: "Storefront pricing"
   };
   return labels[key] ?? key.replaceAll("_", " ");
 }

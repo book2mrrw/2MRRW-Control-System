@@ -1,8 +1,14 @@
 import type { ScheduleParts } from "@/lib/scheduling/releaseScheduleTime";
+import {
+  normalizePricingTier,
+  validateOptionalPriceInCents,
+  validateReleasePriceInCents
+} from "@/server/commerce/pricingValidation";
 import { fetchDurableReleaseById } from "@/server/catalog/releaseCatalogService";
 import { artists } from "@/server/data/seedData";
 import { hydrateDraftFromCatalogRelease } from "@/server/release-management/releaseCatalogHydrationService";
 import { buildSchedulePayload, persistReleaseSchedule, persistReleaseUnpublish } from "@/server/releases/scheduledPublishService";
+import { validateDraftCommerceFields, persistDraftCommerceColumns } from "@/server/commerce/releaseCommerceService";
 import { emitAfterSuccessfulAction } from "@/server/events/eventedWriteService";
 import { persistSyncEvent } from "@/server/events/syncEventPersistenceService";
 import { rememberContributorFromCredit, rememberReleaseMetadata } from "@/server/release-management/contributorDirectoryService";
@@ -154,6 +160,12 @@ export type ReleaseManagementDraft = {
   relationshipType?: "single_to_album" | "deluxe_parent" | "remaster_of" | "alternate_version";
   priority?: "featured_release" | "homepage_hero" | "pinned_vault" | "featured_visual";
   lastSyncedAt?: string;
+  priceInCents?: number | null;
+  pricingTier?: "single" | "ep" | "album" | null;
+  giftingEnabled?: boolean;
+  deluxePriceInCents?: number | null;
+  bundlePriceInCents?: number | null;
+  perTrackOverrides?: Record<string, unknown> | null;
   saveState: "saving" | "saved" | "syncing" | "synced" | "publishing" | "published" | "failed";
   timezone?: string;
   createdAt: string;
@@ -472,6 +484,7 @@ export function createReleaseDraft(input: {
     coverArtState: "missing",
     audioAssetsState: "missing",
     lyricsState: "not_required",
+    giftingEnabled: false,
     tracks: Array.from({ length: input.releaseType === "single" ? 1 : trackCount }, (_, index) => makeTrack(id, index + 1)),
     previewLinks: buildFrontendPreviewLinks({ releaseId: id, slug: nextReleaseSlug(title, id) }),
     saveState: "saved",
@@ -770,6 +783,12 @@ export function updateReleaseMetadata(
       | "coverArtPath"
       | "motionArtworkPath"
       | "frontendSyncTargets"
+      | "priceInCents"
+      | "pricingTier"
+      | "giftingEnabled"
+      | "deluxePriceInCents"
+      | "bundlePriceInCents"
+      | "perTrackOverrides"
     >
   > & {
     moodStyles?: string[];
@@ -783,10 +802,30 @@ export function updateReleaseMetadata(
     audioAssetsState?: UploadReadinessState;
     lyricsState?: LyricReadinessState;
     tags?: string[];
+    priceInCents?: number | null;
+    pricingTier?: "single" | "ep" | "album" | null;
+    giftingEnabled?: boolean;
   }
 ) {
   const draft = getDraftOrThrow(id);
   normalizeTrackArrayForRelease(draft);
+  const effectivePrice = input.priceInCents !== undefined ? input.priceInCents : draft.priceInCents;
+  const effectiveTier =
+    input.pricingTier ?? draft.pricingTier ?? normalizePricingTier(draft.releaseType, null) ?? null;
+  if (effectivePrice != null) {
+    const priceCheck = validateReleasePriceInCents(effectivePrice, effectiveTier);
+    if (!priceCheck.ok) throw new Error(priceCheck.message);
+  }
+  const nextGiftingFlag = input.giftingEnabled !== undefined ? Boolean(input.giftingEnabled) : Boolean(draft.giftingEnabled);
+  if (nextGiftingFlag && effectivePrice == null) {
+    throw new Error("Gifting requires a valid storefront price.");
+  }
+  for (const check of [
+    validateOptionalPriceInCents(input.deluxePriceInCents, "deluxePriceInCents"),
+    validateOptionalPriceInCents(input.bundlePriceInCents, "bundlePriceInCents")
+  ]) {
+    if (!check.ok) throw new Error(check.message);
+  }
   draft.saveState = "saving";
   upsertCreatorSession({ releaseId: id, currentStep: "setup" });
   const before = {
@@ -804,8 +843,32 @@ export function updateReleaseMetadata(
   const nextFrontendSyncTargets = input.frontendSyncTargets
     ? [...new Set([...draft.frontendSyncTargets, ...input.frontendSyncTargets])]
     : draft.frontendSyncTargets;
+
+  if ("priceInCents" in input || "pricingTier" in input || "giftingEnabled" in input) {
+    const nextPrice = "priceInCents" in input ? input.priceInCents ?? undefined : draft.priceInCents;
+    const nextTier =
+      "pricingTier" in input
+        ? input.pricingTier ?? undefined
+        : draft.pricingTier ?? normalizePricingTier(draft.releaseType) ?? undefined;
+    const nextGifting = "giftingEnabled" in input ? Boolean(input.giftingEnabled) : Boolean(draft.giftingEnabled);
+    const commerceCheck = validateDraftCommerceFields({
+      priceInCents: nextPrice,
+      pricingTier: nextTier,
+      releaseType: draft.releaseType,
+      giftingEnabled: nextGifting
+    });
+    if (!commerceCheck.ok) {
+      throw new Error(commerceCheck.message);
+    }
+    draft.priceInCents = nextPrice;
+    draft.pricingTier = nextTier;
+    draft.giftingEnabled = nextGifting;
+    void persistDraftCommerceColumns(draft);
+  }
+
   Object.assign(draft, {
     ...input,
+    ...(input.pricingTier === undefined && input.priceInCents !== undefined ? { pricingTier: effectiveTier } : {}),
     ...(input.title ? { slug: generatedSlug } : {}),
     ...(requestedSlug ? { slug: reserveStableSlug({ desired: requestedSlug, ownerId: draft.id }), customSlug: true } : {}),
     ...(nextReferences ? { famousArtistReferences: nextReferences } : {}),
@@ -1066,6 +1129,22 @@ export function validateReleaseStructure(draft: ReleaseManagementDraft): Readine
       key: "splits",
       passed: importedPublished || normalizedTracks.every((track) => validateTrackSplits(track.id).passed),
       message: "Every track needs contributor splits totaling exactly 100%"
+    },
+    {
+      key: "pricing",
+      passed: (() => {
+        if (draft.pricingTier && draft.priceInCents == null) return false;
+        if (draft.priceInCents != null) {
+          return validateDraftCommerceFields(draft).ok;
+        }
+        if (draft.giftingEnabled) return false;
+        return true;
+      })(),
+      message: draft.giftingEnabled && draft.priceInCents == null
+        ? "Gifting requires a valid storefront price"
+        : draft.pricingTier && draft.priceInCents == null
+          ? "Pricing tier requires a price in the allowed band"
+          : "Price must match the selected tier band (or leave both unset for free)"
     }
   ];
 }

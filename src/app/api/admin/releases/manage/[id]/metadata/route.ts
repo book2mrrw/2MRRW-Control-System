@@ -1,6 +1,7 @@
 import { fail, ok, parseJson, requireAdmin } from "@/server/http";
 import { updateReleaseMetadata } from "@/server/release-management/releaseManagementService";
 import { lyricReadinessStates, releaseVisibilityStates, uploadReadinessStates } from "@/server/release-management/taxonomies";
+import { pricingTiers } from "@/server/commerce/pricingTaxonomies";
 import { z } from "zod";
 
 const genreSchema = z.object({
@@ -37,7 +38,13 @@ const metadataSchema = z.object({
   tags: z.array(z.string()).optional(),
   coverArtState: z.enum(uploadReadinessStates).optional(),
   audioAssetsState: z.enum(uploadReadinessStates).optional(),
-  lyricsState: z.enum(lyricReadinessStates).optional()
+  lyricsState: z.enum(lyricReadinessStates).optional(),
+  priceInCents: z.number().int().min(0).nullable().optional(),
+  pricingTier: z.enum(pricingTiers).nullable().optional(),
+  giftingEnabled: z.boolean().optional(),
+  deluxePriceInCents: z.number().int().min(0).nullable().optional(),
+  bundlePriceInCents: z.number().int().min(0).nullable().optional(),
+  perTrackOverrides: z.record(z.string(), z.unknown()).nullable().optional()
 });
 
 export async function PATCH(request: Request, { params }: { params: Promise<{ id: string }> }) {

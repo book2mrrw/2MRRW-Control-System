@@ -58,6 +58,7 @@ import {
   scheduleReleaseAction
 } from "@/services/catalog/releaseStudioClient";
 import { MediaLibrary, ReleaseWorkspaceSections } from "@/components/control/MediaSyncWorkspace";
+import { ReleaseGiftModal } from "@/components/control/ReleaseGiftModal";
 
 type Page = "dashboard" | "releases" | "media" | "analytics" | "shop" | "settings" | "flow" | "release-detail";
 type ReleaseTypeId = "single" | "ep" | "album" | "deluxe";
@@ -86,6 +87,12 @@ type ReleaseData = {
 };
 
 type Credits = Record<string, string>;
+
+type PricingDraft = {
+  priceInCents: number | null;
+  pricingTier: "single" | "ep" | "album";
+  giftingEnabled: boolean;
+};
 
 const RELEASE_TYPES = [
   { id: "single", icon: "♪", label: "Single", count: "1 Track", desc: "A focused, impactful release. One song, one moment." },
@@ -178,7 +185,8 @@ function Btn({
   style = {},
   disabled = false,
   type = "button",
-  className = ""
+  className = "",
+  "aria-label": ariaLabel
 }: {
   children: ReactNode;
   variant?: ButtonVariant;
@@ -188,9 +196,10 @@ function Btn({
   disabled?: boolean;
   type?: "button" | "submit";
   className?: string;
+  "aria-label"?: string;
 }) {
   return (
-    <button type={type} className={`btn btn-${variant}${size ? ` btn-${size}` : ""} ${className}`.trim()} onClick={onClick} style={style} disabled={disabled}>
+    <button type={type} className={`btn btn-${variant}${size ? ` btn-${size}` : ""} ${className}`.trim()} onClick={onClick} style={style} disabled={disabled} aria-label={ariaLabel}>
       {children}
     </button>
   );
@@ -368,6 +377,37 @@ function IG({ label, required, hint, children, style = {} }: { label?: string; r
   );
 }
 
+function MobileNav({ active, onNav }: { active: Page; onNav: (page: Page) => void }) {
+  const activeId = active === "flow" || active === "release-detail" ? "releases" : active;
+  return (
+    <nav className="mobile-nav" aria-label="Mobile navigation">
+      {NAV_ITEMS.map((item) => (
+        <button
+          key={item.id}
+          className="mobile-nav-btn"
+          data-active={activeId === item.id ? "true" : undefined}
+          onClick={() => onNav(item.id)}
+          type="button"
+          aria-label={item.label}
+        >
+          <item.icon size={20} strokeWidth={2} aria-hidden="true" />
+          {item.label}
+        </button>
+      ))}
+      <button
+        className="mobile-nav-btn"
+        data-active={active === "settings" ? "true" : undefined}
+        onClick={() => onNav("settings")}
+        type="button"
+        aria-label="Settings"
+      >
+        <Settings size={20} strokeWidth={2} aria-hidden="true" />
+        Settings
+      </button>
+    </nav>
+  );
+}
+
 function Sidebar({
   active,
   onNav,
@@ -434,12 +474,12 @@ function TopBar({ title, onNewRelease }: { title: string; onNewRelease: () => vo
       <span className="topbar-title">{title}</span>
       <div className="topbar-right">
         <div style={{ position: "relative", display: "inline-flex" }}>
-          <Btn variant="ghost" size="icon">
+          <Btn variant="ghost" size="icon" aria-label="notifications">
             <Bell size={16} />
           </Btn>
           <div className="notif-dot" />
         </div>
-        <Btn variant="ghost" size="icon">
+        <Btn variant="ghost" size="icon" aria-label="search">
           <Search size={16} />
         </Btn>
         <Btn variant="primary" onClick={onNewRelease}>
@@ -579,44 +619,55 @@ function ReleaseOverflowMenu({
     };
   }, [open]);
 
+  const close = () => setOpen(false);
+  const menuItems = (
+    <>
+      <button type="button" className="nav-item" style={{ width: "100%" }} onClick={() => { close(); onOpenRelease(releaseId); }}>
+        Manage release
+      </button>
+      {archived ? (
+        <button type="button" className="nav-item" style={{ width: "100%" }} disabled={actions.isBusy(releaseId, "recover")} onClick={() => { close(); actions.recover(releaseId); }}>
+          Recover
+        </button>
+      ) : (
+        <>
+          {canPublish ? (
+            <button type="button" className="nav-item" style={{ width: "100%" }} disabled={actions.isBusy(releaseId, "publish")} onClick={() => { close(); actions.publish(releaseId); }}>
+              Publish
+            </button>
+          ) : null}
+          {canUnpublish ? (
+            <button type="button" className="nav-item" style={{ width: "100%" }} disabled={actions.isBusy(releaseId, "unpublish")} onClick={() => { close(); actions.unpublish(releaseId); }}>
+              Unpublish
+            </button>
+          ) : null}
+          <button type="button" className="nav-item" style={{ width: "100%" }} disabled={actions.isBusy(releaseId, "archive")} onClick={() => { close(); actions.archive(releaseId); }}>
+            Archive
+          </button>
+        </>
+      )}
+      <button type="button" className="nav-item" style={{ width: "100%" }} disabled={actions.isBusy(releaseId, "duplicate")} onClick={() => { close(); actions.duplicate(releaseId); }}>
+        Duplicate
+      </button>
+      <button type="button" className="nav-item" style={{ width: "100%" }} disabled={actions.isBusy(releaseId, "sync")} onClick={() => { close(); actions.sync(releaseId); }}>
+        Sync frontend
+      </button>
+    </>
+  );
+
   return (
     <div ref={rootRef} style={{ position: "relative" }}>
       <Btn variant="ghost" size="icon" onClick={() => setOpen((value) => !value)} aria-label="Release actions">
         <MoreHorizontal size={14} />
       </Btn>
       {open ? (
-        <div className="card" style={{ position: "absolute", right: 0, top: "100%", zIndex: 20, minWidth: 168, padding: 6, marginTop: 4 }}>
-          <button type="button" className="nav-item" style={{ width: "100%" }} onClick={() => { setOpen(false); onOpenRelease(releaseId); }}>
-            Manage release
-          </button>
-          {archived ? (
-            <button type="button" className="nav-item" style={{ width: "100%" }} disabled={actions.isBusy(releaseId, "recover")} onClick={() => { setOpen(false); actions.recover(releaseId); }}>
-              Recover
-            </button>
-          ) : (
-            <>
-              {canPublish ? (
-                <button type="button" className="nav-item" style={{ width: "100%" }} disabled={actions.isBusy(releaseId, "publish")} onClick={() => { setOpen(false); actions.publish(releaseId); }}>
-                  Publish
-                </button>
-              ) : null}
-              {canUnpublish ? (
-                <button type="button" className="nav-item" style={{ width: "100%" }} disabled={actions.isBusy(releaseId, "unpublish")} onClick={() => { setOpen(false); actions.unpublish(releaseId); }}>
-                  Unpublish
-                </button>
-              ) : null}
-              <button type="button" className="nav-item" style={{ width: "100%" }} disabled={actions.isBusy(releaseId, "archive")} onClick={() => { setOpen(false); actions.archive(releaseId); }}>
-                Archive
-              </button>
-            </>
-          )}
-          <button type="button" className="nav-item" style={{ width: "100%" }} disabled={actions.isBusy(releaseId, "duplicate")} onClick={() => { setOpen(false); actions.duplicate(releaseId); }}>
-            Duplicate
-          </button>
-          <button type="button" className="nav-item" style={{ width: "100%" }} disabled={actions.isBusy(releaseId, "sync")} onClick={() => { setOpen(false); actions.sync(releaseId); }}>
-            Sync frontend
-          </button>
-        </div>
+        <>
+          <div className="card release-overflow-desktop" style={{ position: "absolute", right: 0, top: "100%", zIndex: 20, minWidth: 168, padding: 6, marginTop: 4 }}>
+            {menuItems}
+          </div>
+          <div className="release-overflow-sheet-backdrop" onClick={close} role="presentation" />
+          <div className="release-overflow-sheet">{menuItems}</div>
+        </>
       ) : null}
     </div>
   );
@@ -660,7 +711,7 @@ function Releases({
           </button>
         ))}
       </div>
-      <div className="card" style={{ padding: "6px" }}>
+      <div className="card releases-list-pad" style={{ padding: "6px" }}>
         {filtered.length === 0 ? (
           <div className="empty-state">
             <Package size={44} style={{ display: "block", margin: "0 auto 16px", color: "var(--bord3)" }} />
@@ -871,7 +922,17 @@ function StepTracks({ releaseType, tracks, onTracks, credits, onCredits }: { rel
   );
 }
 
-function StepArtwork({ stores, onStores }: { stores: string[]; onStores: (stores: string[]) => void }) {
+function StepArtwork({
+  stores,
+  onStores,
+  pricing,
+  onPricing
+}: {
+  stores: string[];
+  onStores: (stores: string[]) => void;
+  pricing: PricingDraft;
+  onPricing: (value: PricingDraft) => void;
+}) {
   const [coverFile, setCoverFile] = useState<File | null>(null);
   const [videoFile, setVideoFile] = useState<File | null>(null);
   const toggleStore = (s: string) => onStores(stores.includes(s) ? stores.filter((x) => x !== s) : [...stores, s]);
@@ -919,6 +980,46 @@ function StepArtwork({ stores, onStores }: { stores: string[]; onStores: (stores
         </div>
       </div>
       <Div margin="20px 0" />
+      <div style={{ fontSize: 14, fontWeight: 700, marginBottom: 6 }}>Pricing and Stores</div>
+      <p style={{ fontSize: 12, color: "var(--tx3)", marginBottom: 14 }}>
+        Single: 299-799 cents (single) or 799-5000 cents (EP/album). Leave price empty for free releases.
+      </p>
+      <div className="grid-2" style={{ marginBottom: 20 }}>
+        <IG label="Price (cents)">
+          <input
+            className="input"
+            type="number"
+            min={0}
+            value={pricing.priceInCents ?? ""}
+            onChange={(event) => {
+              const raw = event.target.value.trim();
+              onPricing({ ...pricing, priceInCents: raw ? Number.parseInt(raw, 10) : null });
+            }}
+            placeholder="499"
+          />
+        </IG>
+        <IG label="Pricing tier">
+          <select
+            className="select"
+            value={pricing.pricingTier}
+            onChange={(event) =>
+              onPricing({ ...pricing, pricingTier: event.target.value as PricingDraft["pricingTier"] })
+            }
+          >
+            <option value="single">Single</option>
+            <option value="ep">EP</option>
+            <option value="album">Album</option>
+          </select>
+        </IG>
+        <label style={{ display: "flex", alignItems: "center", gap: 8, gridColumn: "1 / -1" }}>
+          <input
+            type="checkbox"
+            checked={pricing.giftingEnabled}
+            onChange={(event) => onPricing({ ...pricing, giftingEnabled: event.target.checked })}
+          />
+          Enable purchase-to-gift on storefront
+        </label>
+      </div>
       <div style={{ fontSize: 14, fontWeight: 700, marginBottom: 6 }}>Distribution Stores</div>
       <p style={{ fontSize: 12, color: "var(--tx3)", marginBottom: 16 }}>
         Select where this release will be distributed. <span style={{ color: "var(--pri)", cursor: "pointer" }}>Select all</span>
@@ -940,6 +1041,7 @@ function StepReview({
   tracks,
   credits,
   stores,
+  pricing,
   releaseId,
   onPublish,
   onSchedule
@@ -948,6 +1050,7 @@ function StepReview({
   tracks: Track[];
   credits: Credits;
   stores: string[];
+  pricing: PricingDraft;
   releaseId?: string | null;
   onPublish: () => void;
   onSchedule: (value: ReleaseScheduleValue) => Promise<void>;
@@ -960,7 +1063,13 @@ function StepReview({
     { name: "Tracks & Credits", desc: `${tracks.length} tracks · ${creditCount} credits on record`, status: tracks.length ? "ok" : "missing" },
     { name: "Artwork", desc: "Upload media to begin.", status: "missing" },
     { name: "Distribution", desc: stores.length ? `${stores.length} of ${STORES.length} stores selected` : "No stores selected yet.", status: stores.length ? "ready" : "missing" },
-    { name: "Pricing & Stores", desc: "No shop data yet.", status: "missing" }
+    {
+      name: "Pricing & Stores",
+      desc: pricing.priceInCents != null
+        ? `$${(pricing.priceInCents / 100).toFixed(2)} · ${pricing.pricingTier}${pricing.giftingEnabled ? " · gifting on" : ""}`
+        : "No shop price set (free/unpriced)",
+      status: pricing.giftingEnabled && pricing.priceInCents == null ? "missing" : pricing.priceInCents != null ? "ok" : "ready"
+    }
   ];
   const publishReady = checks.every((check) => check.status !== "missing");
   return (
@@ -1054,7 +1163,16 @@ function ReleaseFlow({ onBack, onDone, onRefresh }: { onBack: () => void; onDone
   const [tracks, setTracks] = useState<Track[]>(INITIAL_TRACKS);
   const [credits, setCredits] = useState<Credits>({ producer: "", mixer: "", masterer: "", exec: "", songwriter: "", feature: "" });
   const [stores, setStores] = useState<string[]>([]);
+  const [pricing, setPricing] = useState<PricingDraft>({
+    priceInCents: null,
+    pricingTier: "single",
+    giftingEnabled: false
+  });
   const selectType = (type: ReleaseTypeId) => {
+    setPricing((current) => ({
+      ...current,
+      pricingTier: type === "single" ? "single" : type === "ep" ? "ep" : "album"
+    }));
     setSelectedType(type);
     setTracks(type === "single" ? INITIAL_TRACKS : []);
   };
@@ -1107,6 +1225,17 @@ function ReleaseFlow({ onBack, onDone, onRefresh }: { onBack: () => void; onDone
           setError(result.error);
           return false;
         }
+      }
+    }
+    if (targetStep === 4 && releaseId) {
+      const priceMeta = await patchReleaseMetadata(releaseId, {
+        priceInCents: pricing.priceInCents,
+        pricingTier: pricing.pricingTier,
+        giftingEnabled: pricing.giftingEnabled
+      });
+      if (!priceMeta.ok) {
+        setError(priceMeta.error);
+        return false;
       }
     }
     if (targetStep === 5 && releaseId) {
@@ -1182,13 +1311,14 @@ function ReleaseFlow({ onBack, onDone, onRefresh }: { onBack: () => void; onDone
         {step === 0 ? <StepChooseType selected={selectedType} onSelect={selectType} /> : null}
         {step === 1 ? <StepReleaseDetails data={releaseData} onChange={setReleaseData} /> : null}
         {step === 2 ? <StepTracks releaseType={selectedType} tracks={tracks} onTracks={setTracks} credits={credits} onCredits={setCredits} /> : null}
-        {step === 3 ? <StepArtwork stores={stores} onStores={setStores} /> : null}
+        {step === 3 ? <StepArtwork stores={stores} onStores={setStores} pricing={pricing} onPricing={setPricing} /> : null}
         {step === 4 ? (
           <StepReview
             releaseData={releaseData}
             tracks={tracks}
             credits={credits}
             stores={stores}
+            pricing={pricing}
             releaseId={releaseId}
             onPublish={next}
             onSchedule={async (value) => {
@@ -1205,23 +1335,25 @@ function ReleaseFlow({ onBack, onDone, onRefresh }: { onBack: () => void; onDone
             }}
           />
         ) : null}
-        <div className="row gap-10" style={{ marginTop: 20 }}>
-          {step > 0 ? (
-            <Btn variant="ghost" onClick={back}>
-              <ArrowLeft size={14} /> Back
+        <div className="release-flow-nav">
+          <div className="row gap-10">
+            {step > 0 ? (
+              <Btn variant="ghost" onClick={back}>
+                <ArrowLeft size={14} /> Back
+              </Btn>
+            ) : null}
+            <Btn variant={step === 4 ? "success" : "primary"} style={{ flex: 1 }} onClick={() => void next()} disabled={!canAdvance || saving}>
+              {step === 4 ? (
+                <>
+                  <Rocket size={15} /> Publish Release
+                </>
+              ) : (
+                <>
+                  Save & Continue <ArrowRight size={14} />
+                </>
+              )}
             </Btn>
-          ) : null}
-          <Btn variant={step === 4 ? "success" : "primary"} style={{ flex: 1 }} onClick={() => void next()} disabled={!canAdvance || saving}>
-            {step === 4 ? (
-              <>
-                <Rocket size={15} /> Publish Release
-              </>
-            ) : (
-              <>
-                Save & Continue <ArrowRight size={14} />
-              </>
-            )}
-          </Btn>
+          </div>
         </div>
         {!canAdvance && step < 4 ? (
           <p style={{ fontSize: 12, color: "var(--warn)", textAlign: "center", marginTop: 10 }}>
@@ -1253,6 +1385,21 @@ function ReleaseDetailView({
   onOpenRelease: (releaseId: string) => void;
   actions: ReleaseStudioActions;
 }) {
+  const [giftOpen, setGiftOpen] = useState(false);
+  const [giftingEnabled, setGiftingEnabled] = useState(false);
+
+  const openGift = async () => {
+    const response = await fetch(`/api/admin/releases/manage/${release.id}`, {
+      headers: { "x-admin": "true" },
+      cache: "no-store"
+    });
+    const payload = (await response.json().catch(() => ({}))) as {
+      data?: { giftingEnabled?: boolean };
+    };
+    setGiftingEnabled(Boolean(payload.data?.giftingEnabled));
+    setGiftOpen(true);
+  };
+
   return (
     <div className="release-detail-workspace media-sync-workspace">
       <div className="row-between mb-20">
@@ -1268,11 +1415,24 @@ function ReleaseDetailView({
             </p>
           </div>
         </div>
-        <Btn variant="ghost" onClick={onRefresh}>
-          Refresh catalog
-        </Btn>
+        <div className="row gap-8">
+          <Btn variant="ghost" onClick={() => void openGift()}>
+            Send as Gift
+          </Btn>
+          <Btn variant="ghost" onClick={onRefresh}>
+            Refresh catalog
+          </Btn>
+        </div>
       </div>
       <ReleaseWorkspaceSections release={release} ui={ui} onOpenRelease={onOpenRelease} actions={actions} onUploadComplete={onRefresh} />
+      {giftOpen ? (
+        <ReleaseGiftModal
+          releaseId={release.id}
+          releaseTitle={ui.title}
+          giftingEnabled={giftingEnabled}
+          onClose={() => setGiftOpen(false)}
+        />
+      ) : null}
     </div>
   );
 }
@@ -1465,6 +1625,14 @@ function SettingsPage() {
   );
 }
 
+function FabNewRelease({ onClick }: { onClick: () => void }) {
+  return (
+    <button className="fab-new-release" onClick={onClick} type="button" aria-label="New Release">
+      <Plus size={24} strokeWidth={2.5} />
+    </button>
+  );
+}
+
 function isStudioRoute(pathname: string | null) {
   if (!pathname) return false;
   return pathname === "/dashboard" || pathname.startsWith("/releases") || pathname.startsWith("/media");
@@ -1546,9 +1714,11 @@ export function CreatorReleaseSystem({ initialCatalog = [] }: { initialCatalog?:
         <div className={`page active${page === "media" || page === "release-detail" ? " page-scroll" : ""}`} key={page}>
           <StudioToastBanner toast={toast} />
           {catalogLoading && catalog.length === 0 ? (
-            <p className="catalog-loading-hint" style={{ padding: "12px 20px", fontSize: 13, color: "var(--tx3)" }}>
-              Loading release catalog…
-            </p>
+            <div style={{ padding: "20px 28px", display: "flex", flexDirection: "column", gap: 12 }}>
+              {[1, 2, 3].map((i) => (
+                <div key={i} className="skeleton" style={{ height: 68, borderRadius: "var(--r-lg)" }} />
+              ))}
+            </div>
           ) : null}
           {page === "dashboard" ? <Dashboard onNewRelease={() => navigate("flow")} onNav={navigate} releases={releases} /> : null}
           {page === "releases" ? <Releases onNewRelease={() => navigate("flow")} releases={releases} onOpenRelease={openRelease} actions={releaseActions} /> : null}
@@ -1562,6 +1732,8 @@ export function CreatorReleaseSystem({ initialCatalog = [] }: { initialCatalog?:
           {page === "flow" ? <ReleaseFlow onBack={() => navigate("releases")} onDone={() => navigate("releases")} onRefresh={refreshCatalog} /> : null}
         </div>
       </div>
+      <FabNewRelease onClick={() => navigate("flow")} />
+      <MobileNav active={page} onNav={navigate} />
     </div>
   );
 }

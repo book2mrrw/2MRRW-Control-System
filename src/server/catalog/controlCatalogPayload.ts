@@ -180,7 +180,8 @@ export async function buildControlCatalogPayload(): Promise<DurableCatalogReleas
         audioAssetId: track.audioAsset?.id ?? track.audioAssetId,
         previewUrl: null,
         audioUrl: null,
-        lyricsText: track.lyricsText ?? null
+        lyricsText: track.lyricsText ?? null,
+        lyricsMode: track.lyricsMode ?? "static"
       })),
       releaseMedia: release.releaseMedia.map((link) => ({
         id: link.id,

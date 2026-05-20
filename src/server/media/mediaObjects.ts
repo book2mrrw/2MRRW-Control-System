@@ -37,6 +37,7 @@ export type TrackMediaObject = {
   fullAssetId?: string;
   lyricsAssetId?: string;
   lyricsText?: string | null;
+  lyricsMode?: "static" | "timed";
   loopAssetId?: string;
   assets: {
     preview?: MediaAssetContract;
@@ -80,6 +81,10 @@ export type ReleaseMediaObject = {
   priceCents?: number | null;
   priceLabel?: string | null;
   productSlug?: string | null;
+  pricingTier?: "single" | "ep" | "album" | null;
+  giftingEnabled?: boolean;
+  deluxePriceInCents?: number | null;
+  bundlePriceInCents?: number | null;
   tracks: TrackMediaObject[];
   entitlement: EntitlementSummary;
   playback: {
@@ -211,6 +216,7 @@ export function buildTrackMediaObject(
     fullAssetId: full?.assetId,
     lyricsAssetId: lyrics?.assetId,
     lyricsText: track.lyricsText ?? null,
+    lyricsMode: track.lyricsMode ?? "static",
     loopAssetId: loop?.assetId,
     assets: {
       preview,
@@ -247,7 +253,11 @@ export function buildReleaseMediaObject(input: MediaObjectInput): ReleaseMediaOb
   const canStream = trackEntitlements.some((entitlement) => entitlement.canStream);
   const canDownload = trackEntitlements.some((entitlement) => entitlement.canDownload);
   const firstPricedProduct = input.products?.find((product) => typeof product.priceCents === "number" && product.priceCents >= 0);
-  const priceCents = firstPricedProduct?.priceCents ?? null;
+  const releasePriceCents =
+    typeof input.release.priceInCents === "number" && input.release.priceInCents >= 0
+      ? input.release.priceInCents
+      : null;
+  const priceCents = firstPricedProduct?.priceCents ?? releasePriceCents;
   const currency = firstPricedProduct?.currency ?? "usd";
   const priceLabel = formatPriceLabel(priceCents, currency);
 
@@ -266,10 +276,14 @@ export function buildReleaseMediaObject(input: MediaObjectInput): ReleaseMediaOb
     artwork: artwork ? toMediaAssetContract(artwork) : undefined,
     motionArtwork: motionArtwork ? toMediaAssetContract(motionArtwork) : undefined,
     products: input.products,
-    productSlug: firstPricedProduct?.productSlug ?? firstPricedProduct?.slug ?? null,
+    productSlug: firstPricedProduct?.productSlug ?? firstPricedProduct?.slug ?? (priceCents != null ? `${input.release.slug}-digital` : null),
     price: typeof priceCents === "number" ? priceCents / 100 : undefined,
     priceCents,
     priceLabel,
+    pricingTier: input.release.pricingTier ?? null,
+    giftingEnabled: input.release.giftingEnabled ?? false,
+    deluxePriceInCents: input.release.deluxePriceInCents ?? null,
+    bundlePriceInCents: input.release.bundlePriceInCents ?? null,
     tracks,
     entitlement: {
       canStream,

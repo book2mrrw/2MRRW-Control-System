@@ -15,7 +15,10 @@ import {
 } from "@/server/release-management/releaseManagementService";
 import { emitAfterSuccessfulAction } from "@/server/events/eventedWriteService";
 import { recordReleaseActivity, recordReleaseRevision } from "@/server/release-management/releaseLifecycleService";
+import { upsertReleaseProduct as upsertReleaseProductFromDraft } from "@/server/commerce/releaseCommerceService";
+import { markSyncDirty } from "@/server/sync/syncStateService";
 import { getServerSupabase } from "@/server/supabase/client";
+import { normalizePricingTier } from "@/server/commerce/pricingValidation";
 import { listConfirmedMediaAssets } from "@/server/media/uploadIntentService";
 import type { Release, Track } from "@/server/types";
 
@@ -181,6 +184,12 @@ function normalizePersistedRelease(row: {
   status: string;
   scheduled_publish_at?: string | null;
   published_at?: string | null;
+  price_in_cents?: number | null;
+  pricing_tier?: "single" | "ep" | "album" | null;
+  gifting_enabled?: boolean | null;
+  deluxe_price_in_cents?: number | null;
+  bundle_price_in_cents?: number | null;
+  per_track_overrides?: Record<string, unknown> | null;
 }, mediaRows: CatalogMediaAsset[]): PublishedCatalogRelease {
   const releaseOwned = mediaRows.filter((asset) => asset.ownerType === "release" && asset.ownerId === row.id);
   const artwork =
@@ -197,7 +206,13 @@ function normalizePersistedRelease(row: {
     published: row.status === "published",
     coverAssetId: artwork?.id ?? "",
     status: row.status === "scheduled" ? "scheduled" : "published",
-    scheduledPublishAt: row.scheduled_publish_at ?? undefined
+    scheduledPublishAt: row.scheduled_publish_at ?? undefined,
+    priceInCents: row.price_in_cents ?? null,
+    pricingTier: row.pricing_tier ?? normalizePricingTier(row.release_type, null),
+    giftingEnabled: Boolean(row.gifting_enabled),
+    deluxePriceInCents: row.deluxe_price_in_cents ?? null,
+    bundlePriceInCents: row.bundle_price_in_cents ?? null,
+    perTrackOverrides: row.per_track_overrides ?? null
   };
 }
 
@@ -261,7 +276,8 @@ async function getPersistedCatalogRows({ includeUnpublished = false } = {}): Pro
   const supabase = getServerSupabase();
   if (!supabase) return null;
 
-  const releaseColumns = "id, artist_id, slug, title, release_date, release_type, release_category, status, scheduled_publish_at, published_at";
+  const releaseColumns =
+    "id, artist_id, slug, title, release_date, release_type, release_category, status, scheduled_publish_at, published_at, price_in_cents, pricing_tier, gifting_enabled, deluxe_price_in_cents, bundle_price_in_cents, per_track_overrides";
   const legacyReleaseColumns = "id, artist_id, slug, title, release_date, release_type, status, scheduled_publish_at, published_at";
   let releaseQuery = supabase
     .from("releases")
@@ -273,20 +289,19 @@ async function getPersistedCatalogRows({ includeUnpublished = false } = {}): Pro
   }
 
   let releaseResult: {
-    data: Array<{
-      id: string;
-      artist_id: string;
-      slug: string;
-      title: string;
-      release_date: string | null;
-      release_type?: PublicReleaseType | null;
-      release_category?: PublicReleaseCategory | null;
-      status: string;
-      scheduled_publish_at?: string | null;
-      published_at?: string | null;
-    }> | null;
+    data: Array<Record<string, unknown>> | null;
     error: { message?: string } | null;
   } = await releaseQuery;
+  if (releaseResult.error && /price_in_cents|pricing_tier|gifting_enabled/i.test(releaseResult.error.message ?? "")) {
+    let commerceFallbackQuery = supabase
+      .from("releases")
+      .select(legacyReleaseColumns)
+      .order("release_date", { ascending: false, nullsFirst: false });
+    if (!includeUnpublished) {
+      commerceFallbackQuery = commerceFallbackQuery.in("status", ["published", "scheduled"]);
+    }
+    releaseResult = await commerceFallbackQuery;
+  }
   if (releaseResult.error && /release_category/i.test(releaseResult.error.message ?? "")) {
     let legacyReleaseQuery = supabase
       .from("releases")
@@ -379,7 +394,10 @@ async function getPersistedCatalogRows({ includeUnpublished = false } = {}): Pro
         releaseLinks.find((link) => link.is_primary && (link.asset_role === "cover_art" || link.asset_role === "background_loop")) ??
         releaseLinks.find((link) => link.asset_role === "cover_art" || link.asset_role === "background_loop");
       const releaseMedia = media.filter((asset) => asset.ownerId === row.id || (asset.ownerType === "track" && (trackRows ?? []).some((track) => track.release_id === row.id && track.id === asset.ownerId)));
-      const release = normalizePersistedRelease(row, releaseMedia);
+      const release = normalizePersistedRelease(
+        row as Parameters<typeof normalizePersistedRelease>[0],
+        releaseMedia
+      );
       if (primaryCoverLink?.media_asset_id) {
         release.coverAssetId = primaryCoverLink.media_asset_id;
       }
@@ -394,11 +412,12 @@ async function getPersistedCatalogRows({ includeUnpublished = false } = {}): Pro
             durationSeconds: track.duration_seconds,
             mediaAssetId: releaseMedia.find((asset) => asset.ownerType === "track" && asset.ownerId === track.id && asset.path.startsWith("masters/"))?.id ?? "",
             position: track.position,
-            lyricsText: (track as { lyrics_text?: string | null }).lyrics_text ?? null
+            lyricsText: (track as { lyrics_text?: string | null }).lyrics_text ?? null,
+            lyricsMode: ((track as { lyrics_mode?: string }).lyrics_mode === "timed" ? "timed" : "static") as "static" | "timed"
           })),
         mediaAssets: releaseMedia,
         artist: (artistRows ?? []).find((artist) => artist.id === row.artist_id) ?? null,
-        products: (productRows ?? []).filter((product) => productGrantsRelease(product.grants, row.id)).map(normalizeProduct)
+        products: (productRows ?? []).filter((product) => productGrantsRelease(product.grants, String(row.id))).map(normalizeProduct)
       } satisfies CatalogRow;
     })
     .filter((row) => includeUnpublished || isVisibleRelease(row.release));
@@ -442,7 +461,13 @@ function draftToCatalog(draft: ReleaseManagementDraft, status: "published" | "sc
       published: status === "published",
       coverAssetId: coverAsset?.id ?? "",
       status,
-      scheduledPublishAt: draft.scheduledPublishAt
+      scheduledPublishAt: draft.scheduledPublishAt,
+      priceInCents: draft.priceInCents ?? null,
+      pricingTier: draft.pricingTier ?? normalizePricingTier(draft.releaseType, null),
+      giftingEnabled: draft.giftingEnabled ?? false,
+      deluxePriceInCents: draft.deluxePriceInCents ?? null,
+      bundlePriceInCents: draft.bundlePriceInCents ?? null,
+      perTrackOverrides: draft.perTrackOverrides ?? null
     },
     tracks: catalogTracks,
     mediaAssets: catalogMediaAssets,
@@ -803,11 +828,29 @@ async function persistPublishedDraft(record: PublishedDraftRecord) {
     release_category: record.release.releaseCategory ?? (record.release.releaseType === "feature" ? "feature" : record.release.releaseType === "single" ? "single" : "album"),
     status: record.release.status,
     scheduled_publish_at: record.release.scheduledPublishAt ?? null,
-    published_at: record.release.status === "published" ? record.publishedAt : null
+    published_at: record.release.status === "published" ? record.publishedAt : null,
+    price_in_cents: record.release.priceInCents ?? null,
+    pricing_tier: record.release.pricingTier ?? null,
+    gifting_enabled: record.release.giftingEnabled ?? false,
+    deluxe_price_in_cents: record.release.deluxePriceInCents ?? null,
+    bundle_price_in_cents: record.release.bundlePriceInCents ?? null,
+    per_track_overrides: record.release.perTrackOverrides ?? null
   };
   let releaseWrite = await supabase.from("releases").upsert(releasePayload);
+  if (releaseWrite.error && /price_in_cents|pricing_tier|gifting_enabled/i.test(releaseWrite.error.message ?? "")) {
+    const {
+      price_in_cents: _price,
+      pricing_tier: _tier,
+      gifting_enabled: _gift,
+      deluxe_price_in_cents: _deluxe,
+      bundle_price_in_cents: _bundle,
+      per_track_overrides: _overrides,
+      ...releaseWithoutCommerce
+    } = releasePayload;
+    releaseWrite = await supabase.from("releases").upsert(releaseWithoutCommerce);
+  }
   if (releaseWrite.error && /release_category/i.test(releaseWrite.error.message ?? "")) {
-    const legacyPayload: Omit<typeof releasePayload, "release_category"> = {
+    releaseWrite = await supabase.from("releases").upsert({
       id: releasePayload.id,
       artist_id: releasePayload.artist_id,
       slug: releasePayload.slug,
@@ -817,22 +860,34 @@ async function persistPublishedDraft(record: PublishedDraftRecord) {
       status: releasePayload.status,
       scheduled_publish_at: releasePayload.scheduled_publish_at,
       published_at: releasePayload.published_at
-    };
-    releaseWrite = await supabase.from("releases").upsert(legacyPayload);
+    });
   }
   const releaseError = releaseWrite.error;
   if (releaseError) return false;
 
-  const { error: tracksError } = await supabase.from("tracks").upsert(
-    record.tracks.map((track) => ({
-      id: track.id,
-      release_id: track.releaseId,
-      title: track.title,
-      duration_seconds: track.durationSeconds,
-      position: track.position
-    }))
-  );
-  if (tracksError) return false;
+  const trackRows = record.tracks.map((track) => ({
+    id: track.id,
+    release_id: track.releaseId,
+    title: track.title,
+    duration_seconds: track.durationSeconds,
+    position: track.position,
+    lyrics_text: track.lyricsText ?? null,
+    lyrics_mode: track.lyricsMode ?? "static"
+  }));
+  let tracksWrite = await supabase.from("tracks").upsert(trackRows);
+  if (tracksWrite.error && /lyrics_mode/i.test(tracksWrite.error.message ?? "")) {
+    tracksWrite = await supabase.from("tracks").upsert(
+      record.tracks.map((track) => ({
+        id: track.id,
+        release_id: track.releaseId,
+        title: track.title,
+        duration_seconds: track.durationSeconds,
+        position: track.position,
+        lyrics_text: track.lyricsText ?? null
+      }))
+    );
+  }
+  if (tracksWrite.error) return false;
 
   const { error: mediaError } = await supabase.from("media_assets").upsert(
     record.mediaAssets.map((asset) => ({
@@ -845,7 +900,12 @@ async function persistPublishedDraft(record: PublishedDraftRecord) {
     }))
   );
 
-  return !mediaError;
+  if (mediaError) return false;
+
+  const draft = getReleaseDraft(record.release.id);
+  if (!draft) return true;
+  const productResult = await upsertReleaseProductFromDraft(draft);
+  return productResult.ok;
 }
 
 export async function publishReleaseDurable(id: string): Promise<PublishReleaseResult | null> {
@@ -861,7 +921,17 @@ export async function publishReleaseDurable(id: string): Promise<PublishReleaseR
 
   const record = publishedDrafts.get(id);
   if (record) {
-    await persistPublishedDraft(record);
+    const persisted = await persistPublishedDraft(record);
+    if (!persisted) {
+      return {
+        ok: false,
+        releaseId: id,
+        message: "Could not persist release to database",
+        checks: getReadinessSummary(id).checks
+      };
+    }
+    await markSyncDirty(`release:${id}`, { releaseId: id, reason: "release.published" });
+    await markSyncDirty("catalog", { releaseId: id, reason: "release.published" });
   }
 
   return result;
