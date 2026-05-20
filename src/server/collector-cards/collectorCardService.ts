@@ -5,6 +5,7 @@ import { collectorCardProductSlug } from "@/server/commerce/pricingTaxonomies";
 import { validateCollectorCardPriceInCents } from "@/server/commerce/pricingValidation";
 import { upsertCatalogProduct } from "@/server/commerce/productCommerceService";
 import { markSyncDirty } from "@/server/sync/syncStateService";
+import { queueStorefrontCatalogSync } from "@/server/sync/frontendCatalogSyncService";
 import { getServerSupabase } from "@/server/supabase/client";
 
 export type CollectorCardVisibility = "draft" | "published" | "archived";
@@ -252,6 +253,8 @@ export async function publishCollectorCard(id: string) {
 
   await markSyncDirty("catalog", { collectorCardId: published.id, reason: "collector_card.published" });
   await markSyncDirty(`collector_card:${published.id}`, { collectorCardId: published.id, reason: "collector_card.published" });
+
+  queueStorefrontCatalogSync({ collectorCardIds: [published.id], reason: "collector_card.published" });
 
   return { ok: true as const, card: published, productSlug };
 }

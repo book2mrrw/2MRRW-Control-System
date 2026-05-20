@@ -58,6 +58,8 @@ import {
   validateVaultCategory,
   validateVaultItemPriceInCents
 } from "@/server/commerce/pricingValidation";
+import { resolveAudioQualityBadge } from "@/lib/media/audioQualityBadge";
+import { mapVaultItemToStorefrontContent } from "@/server/sync/frontendCatalogSyncService";
 import { validateReleasePriceInCents } from "@/server/commerce/pricingValidation";
 import { ingestFrontendReleaseEcosystem } from "@/server/release-management/frontendReleaseIngestionService";
 import {
@@ -1060,7 +1062,39 @@ function testReleaseTypeFiltering() {
   assert.ok(features.some((item) => item.slug === "i-dont-believe-you"));
 }
 
+function testPhase2CatalogSyncMapping() {
+  const mapped = mapVaultItemToStorefrontContent({
+    id: "vault-1",
+    slug: "test-diaries",
+    category: "Audio Diaries",
+    title: "Test Diary",
+    description: "desc",
+    accessTier: "inner_circle",
+    mediaType: "audio",
+    shelfUrl: "/shelf.jpg",
+    contentUrl: "/audio.wav",
+    priceInCents: null,
+    giftingEnabled: false,
+    sortOrder: 10,
+    featured: true,
+    visibility: "published",
+    isDropItem: false,
+    tierVisibility: [],
+    claimCount: 0,
+    notificationSent: false,
+    glowEffect: false,
+    metadata: { audioQuality: { format: "wav", bitDepth: 24, sampleRateHz: 48000 } },
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString()
+  });
+  assert.equal(mapped.slug, "test-diaries");
+  assert.equal(mapped.thumbnail_url, "/shelf.jpg");
+  assert.equal(mapped.metadata.audioQualityBadge, "premium");
+  assert.equal(resolveAudioQualityBadge({ format: "mp3" }), "mp3");
+}
+
 await testAccountState();
+testPhase2CatalogSyncMapping();
 testEntitlementResolution();
 await testWebhookIdempotency();
 await testSignedMediaAccess();

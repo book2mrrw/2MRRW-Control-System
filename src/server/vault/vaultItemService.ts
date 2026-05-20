@@ -5,6 +5,8 @@ import { vaultItemProductSlug, type VaultCategory } from "@/server/commerce/pric
 import { validateVaultCategory, validateVaultItemPriceInCents } from "@/server/commerce/pricingValidation";
 import { upsertCatalogProduct } from "@/server/commerce/productCommerceService";
 import { markSyncDirty } from "@/server/sync/syncStateService";
+import { queueStorefrontCatalogSync } from "@/server/sync/frontendCatalogSyncService";
+import { maybeSendDropNotification } from "@/server/sync/dropNotificationService";
 import { getServerSupabase } from "@/server/supabase/client";
 
 export type VaultItemVisibility = "draft" | "scheduled" | "published" | "archived";
@@ -19,6 +21,8 @@ export type VaultMediaType =
   | "archive"
   | "commentary";
 
+export type VaultDropType = "surprise" | "promo" | "limited";
+
 export type VaultItemRecord = {
   id: string;
   slug: string;
@@ -32,6 +36,10 @@ export type VaultItemRecord = {
   coverUrl?: string | null;
   previewStoragePath?: string | null;
   mediaStoragePath?: string | null;
+  shelfStoragePath?: string | null;
+  shelfUrl?: string | null;
+  contentStoragePath?: string | null;
+  contentUrl?: string | null;
   priceInCents?: number | null;
   giftingEnabled: boolean;
   durationSeconds?: number | null;
@@ -39,6 +47,16 @@ export type VaultItemRecord = {
   featured: boolean;
   visibility: VaultItemVisibility;
   publishedAt?: string | null;
+  isDropItem: boolean;
+  dropType?: VaultDropType | null;
+  expiresAt?: string | null;
+  tierVisibility: string[];
+  claimLimit?: number | null;
+  claimCount: number;
+  notificationSent: boolean;
+  glowEffect: boolean;
+  promoCode?: string | null;
+  promoCodeHash?: string | null;
   metadata: Record<string, unknown>;
   createdAt: string;
   updatedAt: string;
@@ -56,12 +74,23 @@ export type VaultItemWriteInput = {
   coverUrl?: string | null;
   previewStoragePath?: string | null;
   mediaStoragePath?: string | null;
+  shelfStoragePath?: string | null;
+  shelfUrl?: string | null;
+  contentStoragePath?: string | null;
+  contentUrl?: string | null;
   priceInCents?: number | null;
   giftingEnabled?: boolean;
   durationSeconds?: number | null;
   sortOrder?: number;
   featured?: boolean;
   visibility?: VaultItemVisibility;
+  isDropItem?: boolean;
+  dropType?: VaultDropType | null;
+  expiresAt?: string | null;
+  tierVisibility?: string[];
+  claimLimit?: number | null;
+  glowEffect?: boolean;
+  promoCode?: string | null;
   metadata?: Record<string, unknown>;
 };
 
@@ -85,6 +114,20 @@ type VaultItemRow = {
   featured: boolean;
   visibility: VaultItemVisibility;
   published_at: string | null;
+  shelf_storage_path?: string | null;
+  shelf_url?: string | null;
+  content_storage_path?: string | null;
+  content_url?: string | null;
+  is_drop_item?: boolean | null;
+  drop_type?: VaultDropType | null;
+  expires_at?: string | null;
+  tier_visibility?: string[] | null;
+  claim_limit?: number | null;
+  claim_count?: number | null;
+  notification_sent?: boolean | null;
+  glow_effect?: boolean | null;
+  promo_code?: string | null;
+  promo_code_hash?: string | null;
   metadata: Record<string, unknown> | null;
   created_at: string;
   updated_at: string;
@@ -137,6 +180,20 @@ function fromRow(row: VaultItemRow): VaultItemRecord {
     featured: row.featured,
     visibility: row.visibility,
     publishedAt: row.published_at,
+    shelfStoragePath: row.shelf_storage_path ?? null,
+    shelfUrl: row.shelf_url ?? null,
+    contentStoragePath: row.content_storage_path ?? null,
+    contentUrl: row.content_url ?? null,
+    isDropItem: Boolean(row.is_drop_item),
+    dropType: row.drop_type ?? null,
+    expiresAt: row.expires_at ?? null,
+    tierVisibility: row.tier_visibility ?? [],
+    claimLimit: row.claim_limit ?? null,
+    claimCount: row.claim_count ?? 0,
+    notificationSent: Boolean(row.notification_sent),
+    glowEffect: Boolean(row.glow_effect),
+    promoCode: row.promo_code ?? null,
+    promoCodeHash: row.promo_code_hash ?? null,
     metadata: row.metadata ?? {},
     createdAt: row.created_at,
     updatedAt: row.updated_at
@@ -164,10 +221,33 @@ function toRow(item: VaultItemRecord): VaultItemRow {
     featured: item.featured,
     visibility: item.visibility,
     published_at: item.publishedAt ?? null,
+    shelf_storage_path: item.shelfStoragePath ?? null,
+    shelf_url: item.shelfUrl ?? null,
+    content_storage_path: item.contentStoragePath ?? null,
+    content_url: item.contentUrl ?? null,
+    is_drop_item: item.isDropItem,
+    drop_type: item.dropType ?? null,
+    expires_at: item.expiresAt ?? null,
+    tier_visibility: item.tierVisibility,
+    claim_limit: item.claimLimit ?? null,
+    claim_count: item.claimCount,
+    notification_sent: item.notificationSent,
+    glow_effect: item.glowEffect,
+    promo_code: item.promoCode ?? null,
+    promo_code_hash: item.promoCodeHash ?? null,
     metadata: item.metadata,
     created_at: item.createdAt,
     updated_at: item.updatedAt
   };
+}
+
+function hashPromoCode(value: string) {
+  return crypto.createHash("sha256").update(value.trim().toUpperCase()).digest("hex");
+}
+
+export function generatePromoCode(prefix = "DROP") {
+  const token = crypto.randomBytes(4).toString("hex").toUpperCase();
+  return `${prefix}-${token}`;
 }
 
 function buildRecord(input: VaultItemWriteInput, existing?: VaultItemRecord): VaultItemRecord {
@@ -181,6 +261,11 @@ function buildRecord(input: VaultItemWriteInput, existing?: VaultItemRecord): Va
 
   const timestamp = nowIso();
   const visibility = input.visibility ?? existing?.visibility ?? "draft";
+  const isDropItem = input.isDropItem ?? existing?.isDropItem ?? false;
+  const promoCode =
+    input.promoCode !== undefined
+      ? input.promoCode
+      : existing?.promoCode ?? (isDropItem && !existing ? generatePromoCode() : null);
 
   return {
     id: existing?.id ?? crypto.randomUUID(),
@@ -205,6 +290,22 @@ function buildRecord(input: VaultItemWriteInput, existing?: VaultItemRecord): Va
     featured: input.featured ?? existing?.featured ?? false,
     visibility,
     publishedAt: visibility === "published" ? existing?.publishedAt ?? timestamp : existing?.publishedAt ?? null,
+    shelfStoragePath:
+      input.shelfStoragePath !== undefined ? input.shelfStoragePath : existing?.shelfStoragePath ?? null,
+    shelfUrl: input.shelfUrl !== undefined ? input.shelfUrl : existing?.shelfUrl ?? null,
+    contentStoragePath:
+      input.contentStoragePath !== undefined ? input.contentStoragePath : existing?.contentStoragePath ?? null,
+    contentUrl: input.contentUrl !== undefined ? input.contentUrl : existing?.contentUrl ?? null,
+    isDropItem,
+    dropType: input.dropType !== undefined ? input.dropType : existing?.dropType ?? null,
+    expiresAt: input.expiresAt !== undefined ? input.expiresAt : existing?.expiresAt ?? null,
+    tierVisibility: input.tierVisibility ?? existing?.tierVisibility ?? [],
+    claimLimit: input.claimLimit !== undefined ? input.claimLimit : existing?.claimLimit ?? null,
+    claimCount: existing?.claimCount ?? 0,
+    notificationSent: existing?.notificationSent ?? false,
+    glowEffect: input.glowEffect ?? existing?.glowEffect ?? false,
+    promoCode,
+    promoCodeHash: promoCode ? hashPromoCode(promoCode) : null,
     metadata: { ...(existing?.metadata ?? {}), ...(input.metadata ?? {}) },
     createdAt: existing?.createdAt ?? timestamp,
     updatedAt: timestamp
@@ -311,5 +412,15 @@ export async function publishVaultItem(id: string) {
   await markSyncDirty("vault", { vaultItemId: published.id, reason: "vault_item.published" });
   await markSyncDirty("catalog", { vaultItemId: published.id, reason: "vault_item.published" });
 
+  queueStorefrontCatalogSync({ vaultItemIds: [published.id], reason: "vault_item.published" });
+  void maybeSendDropNotification(published).catch((error) => {
+    console.warn("[vault-drop] notification failed", error);
+  });
+
   return { ok: true as const, item: published };
+}
+
+export async function listDropVaultItems() {
+  const items = await listVaultItems();
+  return items.filter((item) => item.isDropItem);
 }

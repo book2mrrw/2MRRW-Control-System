@@ -4,6 +4,7 @@ import { Plus, RefreshCw, Rocket, Save } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState, type FormEvent } from "react";
 import { vaultCategories } from "@/lib/commerce/vaultCategories";
 import { MediaUploadPanel } from "@/components/control/MediaUploadPanel";
+import { audioQualityBadgeLabel } from "@/lib/media/audioQualityBadge";
 import { formatWhen } from "@/lib/formatWhen";
 
 type VaultItem = {
@@ -15,10 +16,17 @@ type VaultItem = {
   accessTier: "public" | "inner_circle" | "vault_pass";
   mediaType: string;
   coverUrl?: string | null;
+  shelfUrl?: string | null;
+  contentUrl?: string | null;
   priceInCents?: number | null;
   giftingEnabled: boolean;
   visibility: string;
   sortOrder: number;
+  isDropItem?: boolean;
+  dropType?: string | null;
+  expiresAt?: string | null;
+  glowEffect?: boolean;
+  metadata?: Record<string, unknown>;
   updatedAt: string;
 };
 
@@ -28,11 +36,17 @@ type Draft = {
   slug: string;
   description: string;
   coverUrl: string;
+  shelfUrl: string;
+  contentUrl: string;
   accessTier: VaultItem["accessTier"];
   mediaType: string;
   priceInCents: string;
   giftingEnabled: boolean;
   sortOrder: string;
+  isDropItem: boolean;
+  dropType: string;
+  expiresAt: string;
+  glowEffect: boolean;
 };
 
 const emptyDraft = (category: string): Draft => ({
@@ -41,11 +55,17 @@ const emptyDraft = (category: string): Draft => ({
   slug: "",
   description: "",
   coverUrl: "",
+  shelfUrl: "",
+  contentUrl: "",
   accessTier: "inner_circle",
   mediaType: "text",
   priceInCents: "",
   giftingEnabled: false,
-  sortOrder: "100"
+  sortOrder: "100",
+  isDropItem: false,
+  dropType: "surprise",
+  expiresAt: "",
+  glowEffect: false
 });
 
 function parseItems(payload: unknown): VaultItem[] {
@@ -54,6 +74,7 @@ function parseItems(payload: unknown): VaultItem[] {
 
 export function VaultControlPanel() {
   const [activeCategory, setActiveCategory] = useState<string>(vaultCategories[0]);
+  const [showDrops, setShowDrops] = useState(false);
   const [items, setItems] = useState<VaultItem[]>([]);
   const [draft, setDraft] = useState(emptyDraft(vaultCategories[0]));
   const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -61,9 +82,11 @@ export function VaultControlPanel() {
   const [loading, setLoading] = useState(false);
 
   const categoryItems = useMemo(
-    () => items.filter((item) => item.category === activeCategory),
+    () => items.filter((item) => item.category === activeCategory && !item.isDropItem),
     [items, activeCategory]
   );
+
+  const dropItems = useMemo(() => items.filter((item) => item.isDropItem), [items]);
 
   const refresh = useCallback(async () => {
     setLoading(true);
@@ -92,11 +115,17 @@ export function VaultControlPanel() {
       slug: item.slug,
       description: item.description,
       coverUrl: item.coverUrl ?? "",
+      shelfUrl: item.shelfUrl ?? item.coverUrl ?? "",
+      contentUrl: item.contentUrl ?? "",
       accessTier: item.accessTier,
       mediaType: item.mediaType,
       priceInCents: item.priceInCents != null ? String(item.priceInCents) : "",
       giftingEnabled: item.giftingEnabled,
-      sortOrder: String(item.sortOrder)
+      sortOrder: String(item.sortOrder),
+      isDropItem: Boolean(item.isDropItem),
+      dropType: item.dropType || "surprise",
+      expiresAt: item.expiresAt ? item.expiresAt.slice(0, 16) : "",
+      glowEffect: Boolean(item.glowEffect)
     });
   };
 
@@ -108,12 +137,18 @@ export function VaultControlPanel() {
       title: draft.title.trim(),
       slug: draft.slug.trim() || undefined,
       description: draft.description.trim(),
-      coverUrl: draft.coverUrl.trim() || null,
+      coverUrl: draft.coverUrl.trim() || draft.shelfUrl.trim() || null,
+      shelfUrl: draft.shelfUrl.trim() || null,
+      contentUrl: draft.contentUrl.trim() || null,
       accessTier: draft.accessTier,
       mediaType: draft.mediaType,
       priceInCents: draft.priceInCents ? Number.parseInt(draft.priceInCents, 10) : null,
       giftingEnabled: draft.giftingEnabled,
-      sortOrder: Number.parseInt(draft.sortOrder, 10) || 100
+      sortOrder: Number.parseInt(draft.sortOrder, 10) || 100,
+      isDropItem: draft.isDropItem,
+      dropType: draft.isDropItem ? draft.dropType : null,
+      expiresAt: draft.isDropItem && draft.expiresAt ? new Date(draft.expiresAt).toISOString() : null,
+      glowEffect: draft.glowEffect
     };
 
     const response = await fetch(selectedId ? `/api/admin/vault/${selectedId}` : "/api/admin/vault", {
@@ -229,9 +264,19 @@ export function VaultControlPanel() {
               <textarea className="input" rows={3} value={draft.description} onChange={(e) => setDraft({ ...draft, description: e.target.value })} />
             </label>
             <label className="input-group">
-              <span className="input-label">Cover URL</span>
-              <input className="input" value={draft.coverUrl} onChange={(e) => setDraft({ ...draft, coverUrl: e.target.value })} />
+              <span className="input-label">Shelf asset URL (jpg/png/mp4/mov/gif)</span>
+              <input className="input" value={draft.shelfUrl} onChange={(e) => setDraft({ ...draft, shelfUrl: e.target.value, coverUrl: e.target.value })} />
             </label>
+            <label className="input-group">
+              <span className="input-label">Content payload URL (audio/video/text/promo)</span>
+              <input className="input" value={draft.contentUrl} onChange={(e) => setDraft({ ...draft, contentUrl: e.target.value })} />
+            </label>
+            {selectedId && (() => {
+              const item = items.find((row) => row.id === selectedId);
+              const badge = item?.metadata?.audioQualityBadge as string | undefined;
+              const label = badge ? audioQualityBadgeLabel(badge as "premium" | "standard" | "mp3") : null;
+              return label ? <p className="input-hint">Audio quality: {label}</p> : null;
+            })()}
             <label className="input-group">
               <span className="input-label">Access tier</span>
               <select className="input" value={draft.accessTier} onChange={(e) => setDraft({ ...draft, accessTier: e.target.value as Draft["accessTier"] })}>
@@ -276,10 +321,53 @@ export function VaultControlPanel() {
           </form>
           {selectedId ? (
             <div style={{ marginTop: 24 }}>
-              <p className="meta-label">Vault media</p>
+              <p className="meta-label">Vault media uploads</p>
               <MediaUploadPanel draft={{ id: selectedId, title: draft.title, tracks: [] }} mode="vault" compact />
             </div>
           ) : null}
+
+          <div style={{ marginTop: 28, paddingTop: 20, borderTop: "1px solid var(--bord)" }}>
+            <button type="button" className="btn btn-ghost btn-sm" onClick={() => setShowDrops((value) => !value)}>
+              {showDrops ? "Hide" : "Show"} surprise drops panel
+            </button>
+            {showDrops ? (
+              <div style={{ marginTop: 16 }}>
+                <p className="meta-label">Surprise drops</p>
+                <div className="media-sync-recent-list">
+                  {dropItems.map((item) => (
+                    <button key={item.id} type="button" className="media-sync-recent-row" onClick={() => selectItem(item)}>
+                      <strong>{item.title}</strong>
+                      <span>{item.dropType || "surprise"} · glow {item.glowEffect ? "on" : "off"}</span>
+                    </button>
+                  ))}
+                </div>
+                <label className="input-group" style={{ flexDirection: "row", alignItems: "center", gap: 10, marginTop: 12 }}>
+                  <input type="checkbox" checked={draft.isDropItem} onChange={(e) => setDraft({ ...draft, isDropItem: e.target.checked })} />
+                  <span className="input-label" style={{ margin: 0 }}>Surprise drop item</span>
+                </label>
+                {draft.isDropItem ? (
+                  <>
+                    <label className="input-group">
+                      <span className="input-label">Drop type</span>
+                      <select className="input" value={draft.dropType} onChange={(e) => setDraft({ ...draft, dropType: e.target.value })}>
+                        <option value="surprise">surprise</option>
+                        <option value="promo">promo</option>
+                        <option value="limited">limited</option>
+                      </select>
+                    </label>
+                    <label className="input-group">
+                      <span className="input-label">Expires at</span>
+                      <input className="input" type="datetime-local" value={draft.expiresAt} onChange={(e) => setDraft({ ...draft, expiresAt: e.target.value })} />
+                    </label>
+                    <label className="input-group" style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
+                      <input type="checkbox" checked={draft.glowEffect} onChange={(e) => setDraft({ ...draft, glowEffect: e.target.checked })} />
+                      <span className="input-label" style={{ margin: 0 }}>Glow on shelf</span>
+                    </label>
+                  </>
+                ) : null}
+              </div>
+            ) : null}
+          </div>
         </section>
       </div>
     </div>

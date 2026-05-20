@@ -1,4 +1,5 @@
 import { corsPreflight, getUserId, ok, withCors } from "@/server/http";
+import { listPublishedVaultApiSections } from "@/server/vault/vaultPublicApi";
 import { listVaultContent } from "@/server/vault/vaultService";
 
 export function OPTIONS(request: Request) {
@@ -6,5 +7,14 @@ export function OPTIONS(request: Request) {
 }
 
 export async function GET(request: Request) {
-  return withCors(ok(listVaultContent(getUserId(request))), request);
+  const published = await listPublishedVaultApiSections();
+  const sections = published.length ? published : listVaultContent(getUserId(request));
+  return withCors(
+    ok({
+      sections,
+      vaultAccess: { tier: "public", hasInnerCircleAccess: false, hasVaultPass: false },
+      syncedAt: new Date().toISOString()
+    }),
+    request
+  );
 }

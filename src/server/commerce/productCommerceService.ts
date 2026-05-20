@@ -54,3 +54,38 @@ export async function upsertCatalogProduct(input: ProductUpsertInput) {
 
   return { ok: true as const, productSlug: input.slug };
 }
+
+export async function patchCatalogProductByContent(input: {
+  contentType: CommerceContentType;
+  contentId: string;
+  priceCents?: number | null;
+  giftingEnabled?: boolean;
+  active?: boolean;
+}) {
+  const supabase = getServerSupabase();
+  if (!supabase) {
+    return { ok: false as const, message: "Supabase required to patch products." };
+  }
+
+  const patch: Record<string, unknown> = { updated_at: new Date().toISOString() };
+  if (input.priceCents !== undefined) patch.price_cents = input.priceCents;
+  if (input.giftingEnabled !== undefined) patch.gifting_enabled = input.giftingEnabled;
+  if (input.active !== undefined) patch.active = input.active;
+
+  let query = supabase.from("products").update(patch).eq("content_type", input.contentType).eq("content_id", input.contentId);
+  let { error } = await query;
+
+  if (error && /content_type|content_id|gifting_enabled/i.test(error.message ?? "")) {
+    const fallback = await supabase.from("products").select("slug, grants").eq("content_id", input.contentId).maybeSingle();
+    if (fallback.data?.slug) {
+      const retry = await supabase.from("products").update(patch).eq("slug", fallback.data.slug);
+      error = retry.error;
+    }
+  }
+
+  if (error) {
+    return { ok: false as const, message: error.message };
+  }
+
+  return { ok: true as const };
+}
