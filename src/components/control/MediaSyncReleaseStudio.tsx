@@ -18,7 +18,6 @@ import {
   saveReleaseLyricsSession
 } from "@/services/catalog/releaseStudioClient";
 import { resolveMediaSyncRoute } from "@/services/sync/mediaSyncContract";
-import { useMediaSync } from "@/hooks/sync/useMediaSync";
 import { coverArtHints, detectMediaKind } from "@/lib/media/mediaVisual";
 import { ReleaseMediaCard } from "@/components/media/ReleaseMediaCard";
 import { ReleaseVideoPreview } from "@/components/media/ReleaseVideoPreview";
@@ -667,6 +666,7 @@ export function ReleaseManagementSection({
   releases,
   filter,
   syncRows,
+  syncConnected,
   onEdit,
   onOpenRelease,
   onUploadComplete,
@@ -677,12 +677,13 @@ export function ReleaseManagementSection({
   releases: ControlUiRelease[];
   filter: (release: DurableCatalogRelease) => boolean;
   syncRows: SyncStateRow[];
+  syncConnected: boolean;
   onEdit: (id: string) => void;
   onOpenRelease: (id: string) => void;
   onUploadComplete?: () => void;
   actions: ReleaseStudioActions;
 }) {
-  const { connected } = useMediaSync(() => onUploadComplete?.());
+  const connected = syncConnected;
   const rows = useMemo(() => {
     const byId = new Map(catalog.map((release) => [release.id, release]));
     return releases.map((ui) => { const release = byId.get(ui.id); return release && filter(release) ? { ui, release } : null; }).filter(Boolean) as StudioRow[];
