@@ -142,7 +142,12 @@ export async function runFrontendIngestionPipeline(
   options: IngestionPipelineOptions = {}
 ): Promise<IngestionPipelineReport> {
   const ingestionRef = options.ingestionRef ?? ingestionRefValue();
-  const reportDir = options.reportDir ?? path.join(process.cwd(), "ingestion-reports");
+  const cwd = process.cwd();
+  const reportDir = (() => {
+    const custom =
+      typeof options.reportDir === "string" ? options.reportDir.trim() : "";
+    return custom.length > 0 ? custom : path.join(cwd, "ingestion-reports");
+  })();
   const phases: IngestionPipelineReport["phases"] = {
     scanner: { status: "pending" },
     normalizer: { status: "pending" },

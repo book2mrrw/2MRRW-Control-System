@@ -16,7 +16,9 @@ function parseEnvLine(line: string) {
 }
 
 export function loadEnvLocal(cwd = process.cwd()) {
-  const envPath = path.join(cwd, ".env.local");
+  const root =
+    typeof cwd === "string" && cwd.trim().length > 0 ? cwd.trim() : process.cwd();
+  const envPath = path.join(root, ".env.local");
   if (!existsSync(envPath)) return { loaded: false, path: envPath };
 
   const contents = readFileSync(envPath, "utf8");

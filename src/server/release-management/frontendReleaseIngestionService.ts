@@ -93,12 +93,16 @@ export type FrontendReleaseIngestionResult = {
   messages: string[];
 };
 
+function nonEmptyPath(value: string | undefined): value is string {
+  return typeof value === "string" && value.trim().length > 0;
+}
+
 const candidateFrontendPaths = [
   process.env.FRONTEND_REPO_PATH,
   "/Users/recharge/2mrrw-Official",
   "/Users/recharge/2mrrw-frontend",
   "/Users/recharge/artist-platform"
-].filter(Boolean) as string[];
+].filter(nonEmptyPath);
 
 let importOncePromise: Promise<FrontendReleaseIngestionResult> | null = null;
 
@@ -153,7 +157,9 @@ async function pathExists(candidate: string) {
 
 async function resolveFrontendPath() {
   for (const candidate of candidateFrontendPaths) {
-    if (await pathExists(path.join(candidate, "package.json"))) return candidate;
+    if (!nonEmptyPath(candidate)) continue;
+    const marker = path.join(candidate, "package.json");
+    if (await pathExists(marker)) return candidate;
   }
   return null;
 }
