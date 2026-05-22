@@ -83,13 +83,21 @@ async function applyAuthGuard(request: NextRequest) {
   } = await supabase.auth.getSession();
 
   const isLoginPage = request.nextUrl.pathname === "/login";
+  const isPublicPage = isLoginPage || request.nextUrl.pathname === "/api/revalidate";
 
-  if (!session && !isLoginPage) {
-    return NextResponse.redirect(new URL("/login", request.url));
+  if (!session && !isPublicPage) {
+    const loginUrl = new URL("/login", request.url);
+    const returnTo = `${request.nextUrl.pathname}${request.nextUrl.search}`;
+    if (returnTo && returnTo !== "/") {
+      loginUrl.searchParams.set("returnTo", returnTo);
+    }
+    return NextResponse.redirect(loginUrl);
   }
 
   if (session && isLoginPage) {
-    return NextResponse.redirect(new URL("/dashboard", request.url));
+    const returnTo = request.nextUrl.searchParams.get("returnTo");
+    const destination = returnTo && returnTo.startsWith("/") && !returnTo.startsWith("//") ? returnTo : "/dashboard";
+    return NextResponse.redirect(new URL(destination, request.url));
   }
 
   return response;

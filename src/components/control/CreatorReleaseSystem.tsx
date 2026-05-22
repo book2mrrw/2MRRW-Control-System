@@ -605,6 +605,10 @@ function Dashboard({
   releases: Release[];
 }) {
   const nextRelease = releases[0];
+  const publishedCount = releases.filter((r) => r.status === "Released").length;
+  const draftCount = releases.filter((r) => r.status === "Draft").length;
+  const scheduledCount = releases.filter((r) => r.status === "Scheduled").length;
+  const trackCount = releases.reduce((sum, r) => sum + (r.tracks || 0), 0);
   return (
     <div className="content">
       <div className="mb-20">
@@ -637,10 +641,10 @@ function Dashboard({
       </div>
       <div className="grid-4 mb-16">
         {[
-          { label: "Total Streams", val: "0", change: "No analytics yet", up: null, color: "var(--pri)" },
-          { label: "Monthly Listeners", val: "0", change: "No listeners yet", up: null, color: "var(--tx)" },
-          { label: "Total Releases", val: String(releases.length), change: "All time", up: null, color: "var(--tx)" },
-          { label: "Countries", val: "0", change: "No country data yet", up: null, color: "var(--tx)" }
+          { label: "Published", val: String(publishedCount), change: "Live on storefront", up: null, color: "var(--ok)" },
+          { label: "Drafts", val: String(draftCount), change: "In progress", up: null, color: "var(--tx)" },
+          { label: "Scheduled", val: String(scheduledCount), change: "Upcoming drops", up: null, color: "var(--pri)" },
+          { label: "Total Tracks", val: String(trackCount), change: `${releases.length} releases`, up: null, color: "var(--tx)" }
         ].map((s, i) => (
           <div className="card" style={{ padding: "16px 18px" }} key={i}>
             <div className="stat-label">{s.label}</div>
@@ -1872,7 +1876,9 @@ export function CreatorReleaseSystem({ initialCatalog = [] }: { initialCatalog?:
           {page === "flow" ? <ReleaseFlow onBack={() => navigate("releases")} onDone={() => navigate("releases")} onRefresh={refreshCatalog} /> : null}
         </div>
       </div>
-      <FabNewRelease onClick={() => navigate("flow")} />
+      {page !== "flow" && page !== "release-detail" && page !== "settings" ? (
+        <FabNewRelease onClick={() => navigate("flow")} />
+      ) : null}
       <MobileNav active={page} onNav={navigate} />
     </div>
   );
