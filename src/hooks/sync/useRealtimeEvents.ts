@@ -30,6 +30,7 @@ const storeListeners = new Set<() => void>();
 
 type RealtimeSnapshot = { events: EventPayload[]; connected: boolean };
 let cachedSnapshot: RealtimeSnapshot | null = null;
+const SERVER_SNAPSHOT: RealtimeSnapshot = { events: [], connected: false };
 
 function notifyStore() {
   storeListeners.forEach((listener) => listener());
@@ -42,8 +43,8 @@ function getSnapshot(): RealtimeSnapshot {
   return cachedSnapshot;
 }
 
-function getServerSnapshot() {
-  return { events: [] as EventPayload[], connected: false };
+function getServerSnapshot(): RealtimeSnapshot {
+  return SERVER_SNAPSHOT;
 }
 
 function subscribe(listener: () => void) {
