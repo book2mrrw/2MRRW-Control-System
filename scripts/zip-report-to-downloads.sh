@@ -125,10 +125,10 @@ while [[ $# -gt 0 && "$1" == --desc ]]; do
   shift 2
 done
 
-extras=("$@")
+extras=(); [[ $# -gt 0 ]] && extras=("$@")
 [[ -z "$REPORT_TYPE" ]] && REPORT_TYPE="$(report_type_from_basename "$(basename "$REPORT")")"
 [[ -z "$DESC" ]] && DESC="$(readme_from_report "$REPORT")"
 
 OUT="$HOME/Downloads/2MRRW-${REPORT_TYPE}-${TS}.zip"
-paths=("$REPORT" "${extras[@]}")
+paths=("$REPORT"); (( ${#extras[@]} > 0 )) && paths+=("${extras[@]}")
 zip_staging "$OUT" "$DESC" "${paths[@]}"

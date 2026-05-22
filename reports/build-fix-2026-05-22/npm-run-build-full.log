@@ -1,0 +1,149 @@
+npm warn Unknown env config "devdir". This will stop working in the next major version of npm. See `npm help npmrc` for supported config options.
+
+> 2mrrw-control-system@0.1.0 build
+> next build
+
+▲ Next.js 16.2.6 (Turbopack)
+- Environments: .env.production.local, .env.local
+
+  Creating an optimized production build ...
+✓ Compiled successfully in 5.7s
+  Running TypeScript ...
+  Finished TypeScript in 7.4s ...
+  Collecting page data using 7 workers ...
+  Generating static pages using 7 workers (0/93) ...
+  Generating static pages using 7 workers (23/93) 
+  Generating static pages using 7 workers (46/93) 
+  Generating static pages using 7 workers (69/93) 
+✓ Generating static pages using 7 workers (93/93) in 387ms
+  Finalizing page optimization ...
+
+Route (app)
+┌ ○ /
+├ ○ /_not-found
+├ ○ /analytics
+├ ƒ /api/account/state
+├ ƒ /api/admin/audio-visuals
+├ ƒ /api/admin/audio-visuals/[id]
+├ ƒ /api/admin/audio-visuals/[id]/publish
+├ ƒ /api/admin/catalog
+├ ƒ /api/admin/circle/events
+├ ƒ /api/admin/collector-cards
+├ ƒ /api/admin/collector-cards/[id]
+├ ƒ /api/admin/collector-cards/[id]/publish
+├ ƒ /api/admin/commerce/products
+├ ƒ /api/admin/diagnostics/ingestion
+├ ƒ /api/admin/gifts
+├ ƒ /api/admin/hero-config
+├ ƒ /api/admin/media/[assetId]/relationships
+├ ƒ /api/admin/media/upload-complete
+├ ƒ /api/admin/media/upload-intent
+├ ƒ /api/admin/ops/backfill-covers
+├ ƒ /api/admin/releases
+├ ƒ /api/admin/releases/[id]/publish
+├ ƒ /api/admin/releases/import-frontend
+├ ƒ /api/admin/releases/manage
+├ ƒ /api/admin/releases/manage/[id]
+├ ƒ /api/admin/releases/manage/[id]/actions
+├ ƒ /api/admin/releases/manage/[id]/contributions
+├ ƒ /api/admin/releases/manage/[id]/metadata
+├ ƒ /api/admin/releases/manage/[id]/readiness
+├ ƒ /api/admin/releases/manage/[id]/schedule
+├ ƒ /api/admin/releases/manage/[id]/session
+├ ƒ /api/admin/releases/manage/[id]/songwriters
+├ ƒ /api/admin/releases/manage/[id]/sync
+├ ƒ /api/admin/releases/manage/[id]/tracks
+├ ƒ /api/admin/releases/manage/[id]/tracks/[trackId]
+├ ƒ /api/admin/releases/manage/[id]/tracks/reorder
+├ ƒ /api/admin/releases/manage/bulk
+├ ƒ /api/admin/releases/manage/taxonomies
+├ ƒ /api/admin/search
+├ ƒ /api/admin/sync-state
+├ ƒ /api/admin/sync/catalog
+├ ƒ /api/admin/vault
+├ ƒ /api/admin/vault/[id]
+├ ƒ /api/admin/vault/[id]/publish
+├ ƒ /api/analytics/events
+├ ƒ /api/audio-visuals
+├ ƒ /api/audio-visuals/[slug]
+├ ƒ /api/auth/guest-session
+├ ƒ /api/auth/session
+├ ƒ /api/checkout
+├ ƒ /api/circle/events
+├ ƒ /api/cron/scheduled-releases
+├ ƒ /api/health
+├ ƒ /api/health/basic
+├ ƒ /api/health/db
+├ ƒ /api/health/storage
+├ ƒ /api/hero
+├ ƒ /api/library
+├ ƒ /api/media/[assetId]/signed-url
+├ ƒ /api/memberships
+├ ƒ /api/notifications/inbox
+├ ƒ /api/notifications/preferences
+├ ƒ /api/playback/events
+├ ƒ /api/playback/player-state
+├ ƒ /api/playback/progress
+├ ƒ /api/public/audio-visuals
+├ ƒ /api/public/hero
+├ ƒ /api/public/releases
+├ ƒ /api/radio/feed
+├ ƒ /api/radio/interactions
+├ ƒ /api/radio/session
+├ ƒ /api/release-management/health
+├ ƒ /api/releases
+├ ƒ /api/releases/[slug]
+├ ƒ /api/releases/[slug]/media
+├ ƒ /api/signal/active
+├ ƒ /api/signal/state
+├ ƒ /api/stripe/webhook
+├ ƒ /api/sync/replay
+├ ƒ /api/sync/stream
+├ ƒ /api/vault/content
+├ ƒ /api/vault/content/[id]/media
+├ ƒ /api/vault/progress
+├ ○ /audit
+├ ○ /circle
+├ ○ /collectors
+├ ○ /commerce
+├ ƒ /dashboard
+├ ○ /diagnostics
+├ ○ /identity
+├ ○ /media
+├ ○ /media/artwork
+├ ○ /media/audio
+├ ○ /media/loops
+├ ○ /media/videos
+├ ○ /notify
+├ ƒ /releases
+├ ƒ /releases/[releaseId]
+├ ○ /releases/archived
+├ ○ /releases/drafts
+├ ○ /releases/new
+├ ○ /releases/new/audio
+├ ○ /releases/new/cover-art
+├ ○ /releases/new/details
+├ ○ /releases/new/isrc
+├ ○ /releases/new/lyrics
+├ ○ /releases/new/review
+├ ○ /releases/new/scheduler
+├ ○ /releases/new/songwriters
+├ ○ /releases/new/tracks
+├ ○ /releases/new/uploads
+├ ○ /releases/published
+├ ○ /releases/scheduled
+├ ○ /revenue
+├ ○ /settings
+├ ○ /shop
+├ ○ /signal
+├ ƒ /tracks/[trackId]
+├ ƒ /tracks/[trackId]/information
+├ ○ /vault
+└ ○ /visuals
+
+
+ƒ Proxy (Middleware)
+
+○  (Static)   prerendered as static content
+ƒ  (Dynamic)  server-rendered on demand
+
