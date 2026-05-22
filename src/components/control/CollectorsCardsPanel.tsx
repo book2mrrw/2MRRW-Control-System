@@ -1,7 +1,8 @@
 "use client";
 
-import { Plus, RefreshCw, Rocket, Save } from "lucide-react";
+import { Gift, Plus, RefreshCw, Rocket, Save } from "lucide-react";
 import { useCallback, useEffect, useState, type FormEvent } from "react";
+import { AdminGiftSendModal } from "@/components/control/AdminGiftSendModal";
 import { MediaUploadPanel } from "@/components/control/MediaUploadPanel";
 import { formatWhen } from "@/lib/formatWhen";
 
@@ -55,6 +56,7 @@ export function CollectorsCardsPanel() {
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [status, setStatus] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const [giftCard, setGiftCard] = useState<CollectorCard | null>(null);
 
   const refresh = useCallback(async () => {
     setLoading(true);
@@ -166,21 +168,21 @@ export function CollectorsCardsPanel() {
           <div className="media-sync-recent-list">
             {cards.length ? (
               cards.map((card) => (
-                <button
-                  key={card.id}
-                  type="button"
-                  className={`media-sync-recent-row${selectedId === card.id ? " active" : ""}`}
-                  onClick={() => selectCard(card)}
-                >
-                  <div>
-                    <strong>{card.title}</strong>
-                    <span>
-                      {card.visibility} · ${((card.priceInCents ?? 0) / 100).toFixed(2)}
-                      {card.editionLabel ? ` · ${card.editionLabel}` : ""}
-                    </span>
-                  </div>
-                  <span className="release-meta">{formatWhen(card.updatedAt)}</span>
-                </button>
+                <div key={card.id} className={`media-sync-recent-row${selectedId === card.id ? " active" : ""}`} style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                  <button type="button" style={{ flex: 1, background: "none", border: "none", color: "inherit", textAlign: "left", cursor: "pointer", padding: 0 }} onClick={() => selectCard(card)}>
+                    <div>
+                      <strong>{card.title}</strong>
+                      <span>
+                        {card.visibility} · ${((card.priceInCents ?? 0) / 100).toFixed(2)}
+                        {card.editionLabel ? ` · ${card.editionLabel}` : ""}
+                      </span>
+                    </div>
+                    <span className="release-meta">{formatWhen(card.updatedAt)}</span>
+                  </button>
+                  <button type="button" className="btn btn-ghost btn-sm" onClick={() => setGiftCard(card)}>
+                    <Gift size={12} /> Gift
+                  </button>
+                </div>
               ))
             ) : (
               <p className="input-hint">No collector cards yet. Create the first drop.</p>
@@ -248,6 +250,15 @@ export function CollectorsCardsPanel() {
           ) : null}
         </section>
       </div>
+      {giftCard ? (
+        <AdminGiftSendModal
+          itemType="collector_card"
+          itemId={giftCard.id}
+          itemTitle={giftCard.title}
+          coverUrl={giftCard.coverUrl}
+          onClose={() => setGiftCard(null)}
+        />
+      ) : null}
     </div>
   );
 }

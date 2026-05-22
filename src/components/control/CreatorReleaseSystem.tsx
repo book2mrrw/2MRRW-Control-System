@@ -12,6 +12,7 @@ import {
   ChevronLeft,
   ChevronRight,
   ExternalLink,
+  Gift,
   MoreHorizontal,
   CircleAlert,
   CloudUpload,
@@ -61,6 +62,7 @@ import {
   scheduleReleaseAction
 } from "@/services/catalog/releaseStudioClient";
 import { MediaLibrary, ReleaseWorkspaceSections } from "@/components/control/MediaSyncWorkspace";
+import { AdminGiftsPanel } from "@/components/control/AdminGiftsPanel";
 import { ReleaseGiftModal } from "@/components/control/ReleaseGiftModal";
 import { CollectorsCardsPanel } from "@/components/control/CollectorsCardsPanel";
 import { VaultControlPanel } from "@/components/control/VaultControlPanel";
@@ -75,6 +77,7 @@ type Page =
   | "commerce"
   | "analytics"
   | "shop"
+  | "gifts"
   | "settings"
   | "flow"
   | "release-detail";
@@ -147,6 +150,7 @@ type SidebarNavItem = {
 
 const SIDEBAR_NAV_ITEMS: SidebarNavItem[] = [
   ...NAV_ITEMS,
+  { id: "gifts", icon: Gift, label: "Gifts" },
   { id: "collectors", icon: Gem, label: "Collector's Cards" },
   { id: "vault", icon: Lock, label: "Vault" },
   { id: "analytics", icon: BarChart3, label: "Analytics" },
@@ -179,6 +183,7 @@ const PAGE_TITLES: Record<Page, string> = {
   commerce: "Commerce",
   analytics: "Analytics",
   shop: "Shop",
+  gifts: "Gifts",
   settings: "Settings",
   flow: "New Release",
   "release-detail": "Release"
@@ -193,6 +198,7 @@ const PAGE_ROUTES: Partial<Record<Page, string>> = {
   commerce: "/commerce",
   analytics: "/analytics",
   shop: "/shop",
+  gifts: "/gifts",
   settings: "/settings",
   flow: "/releases/new"
 };
@@ -222,6 +228,7 @@ function pageFromPathname(pathname: string): Page {
   if (pathname.startsWith("/collectors")) return "collectors";
   if (pathname.startsWith("/vault")) return "vault";
   if (pathname.startsWith("/commerce")) return "commerce";
+  if (pathname.startsWith("/gifts")) return "gifts";
   if (pathname.startsWith("/analytics")) return "analytics";
   if (pathname.startsWith("/shop")) return "shop";
   if (pathname.startsWith("/settings")) return "settings";
@@ -794,6 +801,7 @@ function Releases({
   actions: ReleaseStudioActions;
 }) {
   const [tab, setTab] = useState("All");
+  const [giftTarget, setGiftTarget] = useState<Release | null>(null);
   const tabs = ["All", "Albums & EPs", "Singles", "Features", "Drafts"];
   const filtered = useMemo(() => {
     if (tab === "All") return releases;
@@ -854,6 +862,9 @@ function Releases({
               </div>
               <div className="row gap-8" onClick={(e) => e.stopPropagation()}>
                 <StatusBadge status={r.status} />
+                <Btn variant="ghost" size="sm" onClick={() => setGiftTarget(r)}>
+                  <Gift size={12} /> Gift
+                </Btn>
                 <Btn variant="ghost" size="sm" onClick={() => onOpenRelease(r.id)}>
                   <Pencil size={12} /> Edit
                 </Btn>
@@ -863,6 +874,15 @@ function Releases({
           ))
         )}
       </div>
+      {giftTarget ? (
+        <ReleaseGiftModal
+          releaseId={giftTarget.id}
+          releaseTitle={giftTarget.title}
+          releaseType={giftTarget.type}
+          coverUrl={giftTarget.coverUrl}
+          onClose={() => setGiftTarget(null)}
+        />
+      ) : null}
     </div>
   );
 }
@@ -1511,19 +1531,6 @@ function ReleaseDetailView({
   actions: ReleaseStudioActions;
 }) {
   const [giftOpen, setGiftOpen] = useState(false);
-  const [giftingEnabled, setGiftingEnabled] = useState(false);
-
-  const openGift = async () => {
-    const response = await fetch(`/api/admin/releases/manage/${release.id}`, {
-      headers: { "x-admin": "true" },
-      cache: "no-store"
-    });
-    const payload = (await response.json().catch(() => ({}))) as {
-      data?: { giftingEnabled?: boolean };
-    };
-    setGiftingEnabled(Boolean(payload.data?.giftingEnabled));
-    setGiftOpen(true);
-  };
 
   return (
     <div className="release-detail-workspace media-sync-workspace">
@@ -1541,8 +1548,8 @@ function ReleaseDetailView({
           </div>
         </div>
         <div className="row gap-8">
-          <Btn variant="ghost" onClick={() => void openGift()}>
-            Send as Gift
+          <Btn variant="ghost" onClick={() => setGiftOpen(true)}>
+            Gift
           </Btn>
           <Btn variant="ghost" onClick={onRefresh}>
             Refresh catalog
@@ -1554,7 +1561,8 @@ function ReleaseDetailView({
         <ReleaseGiftModal
           releaseId={release.id}
           releaseTitle={ui.title}
-          giftingEnabled={giftingEnabled}
+          releaseType={ui.type}
+          coverUrl={ui.coverUrl}
           onClose={() => setGiftOpen(false)}
         />
       ) : null}
@@ -1868,6 +1876,7 @@ export function CreatorReleaseSystem({ initialCatalog = [] }: { initialCatalog?:
           {page === "collectors" ? <CollectorsCardsPanel /> : null}
           {page === "vault" ? <VaultControlPanel /> : null}
           {page === "commerce" ? <CommerceControlPanel /> : null}
+          {page === "gifts" ? <AdminGiftsPanel /> : null}
           {page === "release-detail" && activeRelease && activeUi ? (
             <ReleaseDetailView release={activeRelease} ui={activeUi} onBack={() => router.push("/releases")} onRefresh={refreshCatalog} onOpenRelease={openRelease} actions={releaseActions} />
           ) : null}
