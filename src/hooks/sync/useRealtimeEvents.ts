@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useSyncExternalStore } from "react";
+import { useEffect, useSyncExternalStore } from "react";
 import type { EventPayload } from "@/lib/events/eventBus";
 
 const EVENT_TYPES = [
@@ -52,52 +52,43 @@ function handleMessage(message: MessageEvent<string>) {
   notifyStore();
 }
 
-function getSharedSource(): EventSource {
-  if (!sharedSource || sharedSource.readyState === EventSource.CLOSED) {
-    sharedSource = new EventSource("/api/sync/stream");
-    sharedSource.addEventListener("connected", () => {
-      connected = true;
-      notifyStore();
-    });
-    sharedSource.addEventListener("heartbeat", () => {
-      connected = true;
-      notifyStore();
-    });
-    sharedSource.onmessage = handleMessage;
-    EVENT_TYPES.forEach((type) => {
-      sharedSource!.addEventListener(type, handleMessage);
-    });
-    sharedSource.onerror = () => {
-      connected = false;
-      notifyStore();
-    };
-  }
-  return sharedSource;
-}
-
-function releaseSharedSource() {
-  if (refCount <= 0 && sharedSource) {
-    sharedSource.close();
-    sharedSource = null;
-    refCount = 0;
+function connectSharedSource() {
+  if (sharedSource && sharedSource.readyState !== EventSource.CLOSED) return;
+  sharedSource = new EventSource("/api/sync/stream");
+  sharedSource.addEventListener("connected", () => {
+    connected = true;
+    notifyStore();
+  });
+  sharedSource.addEventListener("heartbeat", () => {
+    connected = true;
+    notifyStore();
+  });
+  sharedSource.onmessage = handleMessage;
+  EVENT_TYPES.forEach((type) => {
+    sharedSource!.addEventListener(type, handleMessage);
+  });
+  sharedSource.onerror = () => {
     connected = false;
     notifyStore();
-  }
+  };
+}
+
+function disconnectSharedSource() {
+  sharedSource?.close();
+  sharedSource = null;
+  connected = false;
+  notifyStore();
 }
 
 export function useRealtimeEvents() {
   const snapshot = useSyncExternalStore(subscribe, getSnapshot, getServerSnapshot);
-  const [, setTick] = useState(0);
 
   useEffect(() => {
     refCount += 1;
-    getSharedSource();
-    const listener = () => setTick((value) => value + 1);
-    storeListeners.add(listener);
+    connectSharedSource();
     return () => {
-      storeListeners.delete(listener);
       refCount = Math.max(0, refCount - 1);
-      releaseSharedSource();
+      if (refCount === 0) disconnectSharedSource();
     };
   }, []);
 

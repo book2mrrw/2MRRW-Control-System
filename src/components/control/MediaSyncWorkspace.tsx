@@ -17,7 +17,6 @@ import {
   type ControlRoomSectionId,
   type MediaSectionId
 } from "@/services/sync/mediaSyncContract";
-import { useMediaSync } from "@/hooks/sync/useMediaSync";
 import { useUploadQueue } from "@/hooks/sync/useUploadQueue";
 import { coverArtHints, detectMediaKind } from "@/lib/media/mediaVisual";
 import { ReleaseMediaCard } from "@/components/media/ReleaseMediaCard";
@@ -678,10 +677,10 @@ export function MediaLibrary({
     refreshSync();
   }, [refreshSync]);
 
-  useMediaSync(() => {
+  const handleUploadComplete = useCallback(() => {
     onUploadComplete();
     refreshSync();
-  });
+  }, [onUploadComplete, refreshSync]);
 
   const editRelease = editReleaseId ? catalog.find((release) => release.id === editReleaseId) : null;
   const editUi = editReleaseId ? releases.find((release) => release.id === editReleaseId) : null;
@@ -723,13 +722,13 @@ export function MediaLibrary({
       </nav>
       <div className="media-sync-section-scroll">
         {activeSection === "singles" ? (
-          <ReleaseManagementSection sectionTitle="Singles" catalog={catalog} releases={releases} filter={singlesFilter} syncRows={syncRows} onEdit={setEditReleaseId} onOpenRelease={onOpenRelease} onUploadComplete={onUploadComplete} actions={actions} />
+          <ReleaseManagementSection sectionTitle="Singles" catalog={catalog} releases={releases} filter={singlesFilter} syncRows={syncRows} onEdit={setEditReleaseId} onOpenRelease={onOpenRelease} onUploadComplete={handleUploadComplete} actions={actions} />
         ) : null}
         {activeSection === "albums_eps" ? (
-          <ReleaseManagementSection sectionTitle="Albums & EPs" catalog={catalog} releases={releases} filter={albumsFilter} syncRows={syncRows} onEdit={setEditReleaseId} onOpenRelease={onOpenRelease} onUploadComplete={onUploadComplete} actions={actions} />
+          <ReleaseManagementSection sectionTitle="Albums & EPs" catalog={catalog} releases={releases} filter={albumsFilter} syncRows={syncRows} onEdit={setEditReleaseId} onOpenRelease={onOpenRelease} onUploadComplete={handleUploadComplete} actions={actions} />
         ) : null}
         {activeSection === "features" ? (
-          <ReleaseManagementSection sectionTitle="Features" catalog={catalog} releases={releases} filter={featuresFilter} syncRows={syncRows} onEdit={setEditReleaseId} onOpenRelease={onOpenRelease} onUploadComplete={onUploadComplete} actions={actions} />
+          <ReleaseManagementSection sectionTitle="Features" catalog={catalog} releases={releases} filter={featuresFilter} syncRows={syncRows} onEdit={setEditReleaseId} onOpenRelease={onOpenRelease} onUploadComplete={handleUploadComplete} actions={actions} />
         ) : null}
         {activeSection === "hero" ? <HeroControlSection onUploadComplete={onUploadComplete} /> : null}
         {activeSection === "vault" ? <VaultControlSection onUploadComplete={onUploadComplete} /> : null}
