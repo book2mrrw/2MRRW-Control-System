@@ -1,12 +1,14 @@
 import { NextResponse } from "next/server";
 
+import { requireAdmin } from "@/server/http";
 import { getServerSupabase } from "@/server/supabase/client";
 import { buildProductionHealthStatus, getEnvironmentSafety } from "@/server/release-management/releaseLifecycleService";
 
+// This endpoint is expensive. Do not poll. Use /api/health/basic for uptime checks.
+
 const requiredEnvKeys = [
   "NEXT_PUBLIC_SUPABASE_URL",
-  "NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY",
-  "SUPABASE_MEDIA_BUCKET"
+  "NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY"
 ] as const;
 
 const optionalEnvKeys = [
@@ -18,7 +20,13 @@ const optionalEnvKeys = [
   "STRIPE_SECRET_KEY",
   "STRIPE_WEBHOOK_SECRET",
   "NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY",
-  "PRINTFUL_API_KEY"
+  "PRINTFUL_API_KEY",
+  "CLOUDFLARE_R2_ACCOUNT_ID",
+  "CLOUDFLARE_R2_ACCESS_KEY_ID",
+  "CLOUDFLARE_R2_SECRET_ACCESS_KEY",
+  "CLOUDFLARE_R2_BUCKET_NAME",
+  "CLOUDFLARE_R2_ENDPOINT",
+  "NEXT_PUBLIC_R2_PUBLIC_URL"
 ] as const;
 
 const checkedTables = [
@@ -54,7 +62,13 @@ function hasEnv(key: string) {
   return Boolean(process.env[key]);
 }
 
-export async function GET() {
+export async function GET(request: Request) {
+  try {
+    requireAdmin(request);
+  } catch {
+    return NextResponse.json({ error: { message: "Admin privileges required" } }, { status: 403 });
+  }
+
   const env = Object.fromEntries(
     [...requiredEnvKeys, ...optionalEnvKeys].map((key) => [key, hasEnv(key)])
   );
@@ -74,9 +88,14 @@ export async function GET() {
     databaseError = "Supabase server client is not configured.";
     missingTables = [...checkedTables];
   } else {
-    for (const table of checkedTables) {
-      const { error } = await supabase.from(table).select("*", { count: "exact", head: true });
+    const tableResults = await Promise.all(
+      checkedTables.map(async (table) => {
+        const { error } = await supabase.from(table).select("*", { count: "exact", head: true });
+        return { table, error };
+      })
+    );
 
+    for (const { table, error } of tableResults) {
       if (error) {
         missingTables.push(table);
         databaseError ??= error.message;

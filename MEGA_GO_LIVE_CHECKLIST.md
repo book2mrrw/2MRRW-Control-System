@@ -69,7 +69,7 @@ curl -sS -X POST -H "Authorization: Bearer $CRON_SECRET" \
   "https://2-mrrw-control-system.vercel.app/api/admin/ops/backfill-covers"
 ```
 
-Verify: `/api/health` → `storage.usesFallback: false` and love-hz signed URL contains `supabase.co`.
+Verify: `/api/health` → `storage.usesFallback: false` and love-hz sample message reads `R2 signed URL OK` (CDN or presigned R2 URL, not legacy Supabase Storage).
 
 ---
 

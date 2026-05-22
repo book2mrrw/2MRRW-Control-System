@@ -188,7 +188,20 @@ export async function pushCatalogSyncPayload(input: {
   };
 }
 
-async function runWithRetries<T>(fn: () => Promise<T>, attempts = 3) {
+function storefrontSyncUrlConfigured() {
+  return Boolean(
+    process.env.NEXT_PUBLIC_STOREFRONT_URL?.trim() ||
+      process.env.STOREFRONT_URL?.trim() ||
+      process.env.NEXT_PUBLIC_ARTIST_PLATFORM_URL?.trim()
+  );
+}
+
+async function runWithRetries<T>(fn: () => Promise<T>, attempts = 2) {
+  if (!storefrontSyncUrlConfigured()) {
+    console.warn("[sync] storefront URL not configured; skipping catalog sync");
+    throw new Error("Storefront URL not configured");
+  }
+
   let lastError: unknown;
   for (let attempt = 1; attempt <= attempts; attempt += 1) {
     try {
@@ -196,7 +209,7 @@ async function runWithRetries<T>(fn: () => Promise<T>, attempts = 3) {
     } catch (error) {
       lastError = error;
       if (attempt < attempts) {
-        await new Promise((resolve) => setTimeout(resolve, attempt * 400));
+        await new Promise((resolve) => setTimeout(resolve, attempt * 1000));
       }
     }
   }
@@ -257,7 +270,7 @@ export function queueStorefrontCatalogSync(input?: {
   collectorCardIds?: string[];
   reason?: string;
 }) {
-  void runWithRetries(() => syncPublishedCatalogToStorefront(input), 3).catch((error) => {
+  void runWithRetries(() => syncPublishedCatalogToStorefront(input), 2).catch((error) => {
     console.warn("[catalog-sync] storefront push failed after retries", error);
   });
 }

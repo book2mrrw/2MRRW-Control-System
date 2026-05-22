@@ -6,14 +6,13 @@ import { detectMediaKind, isMotionMedia } from "@/lib/media/mediaVisual";
 import { buildStudioCatalogFallback } from "@/server/catalog/studioCatalogFallback";
 import { fetchDurableReleaseCatalog } from "@/server/catalog/releaseCatalogService";
 import { deriveReleaseLiveStatus, fetchCatalogSyncState } from "@/server/catalog/releaseLiveStatusEngine";
-import { ensureCatalogHydrated } from "@/server/release-management/frontendReleaseIngestionService";
 import { assertSupabaseServiceRoleKeyConfigured } from "@/server/supabase/client";
 import { publicPathToUrl } from "@/server/media/catalogMediaUrl";
 import type { CatalogRelease } from "@/server/catalog/releaseCatalogService";
 import type { DurableCatalogRelease } from "@/services/catalog/controlCatalogClient";
 
-const HYDRATION_BUDGET_MS = 3_000;
 const CATALOG_FETCH_BUDGET_MS = 5_000;
+const DEFAULT_CATALOG_LIMIT = 50;
 
 function pickStillCoverAsset(release: CatalogRelease) {
   const links = release.releaseMedia.filter(
@@ -85,20 +84,18 @@ function resolveReleaseMediaPublic(release: CatalogRelease) {
   };
 }
 
-export async function buildControlCatalogPayload(): Promise<DurableCatalogRelease[]> {
+export async function buildControlCatalogPayload(options?: {
+  limit?: number;
+  offset?: number;
+}): Promise<DurableCatalogRelease[]> {
   console.log("[stabilize] buildControlCatalogPayload start");
   const started = Date.now();
-  if (assertSupabaseServiceRoleKeyConfigured().ok) {
-    await Promise.race([
-      ensureCatalogHydrated().catch((error) => {
-        console.warn("[stabilize] ensureCatalogHydrated failed", error);
-      }),
-      new Promise((resolve) => setTimeout(resolve, HYDRATION_BUDGET_MS))
-    ]);
-  }
+  const catalogLimit = options?.limit ?? DEFAULT_CATALOG_LIMIT;
+  const catalogOffset = options?.offset ?? 0;
+  void assertSupabaseServiceRoleKeyConfigured();
   const [catalog, syncRows] = await Promise.all([
     Promise.race([
-      fetchDurableReleaseCatalog(),
+      fetchDurableReleaseCatalog({ limit: catalogLimit, offset: catalogOffset }),
       new Promise<Awaited<ReturnType<typeof fetchDurableReleaseCatalog>>>((resolve) => {
         setTimeout(() => resolve([]), CATALOG_FETCH_BUDGET_MS);
       })

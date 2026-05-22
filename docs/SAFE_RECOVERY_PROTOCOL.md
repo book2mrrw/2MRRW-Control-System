@@ -12,7 +12,7 @@ Step-by-step recovery when production regresses. **Protect `main`.**
 ## Level 1 — Smoke failure only (runtime / env)
 
 1. Check https://2-mrrw-control-system.vercel.app/api/health/basic
-2. Check `/api/health/db` and Vercel env: `NEXT_PUBLIC_SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, `SUPABASE_MEDIA_BUCKET`
+2. Check `/api/health/db`, `/api/health/storage`, and Vercel env: `NEXT_PUBLIC_SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, plus all R2 vars (`CLOUDFLARE_R2_ACCOUNT_ID`, `CLOUDFLARE_R2_ACCESS_KEY_ID`, `CLOUDFLARE_R2_SECRET_ACCESS_KEY`, `CLOUDFLARE_R2_BUCKET_NAME`, `CLOUDFLARE_R2_ENDPOINT`, `NEXT_PUBLIC_R2_PUBLIC_URL`)
 3. Redeploy **without code change** if env was fixed: Vercel → Redeploy latest `main`
 
 ## Level 2 — Vercel rollback

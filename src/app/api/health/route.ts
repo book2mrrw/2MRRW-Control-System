@@ -42,7 +42,7 @@ export async function GET() {
       message: signed.ok
         ? usesFallback
           ? "Using artist-platform fallback (storage object may be missing)"
-          : "Supabase signed URL OK"
+          : "R2 signed URL OK"
         : signed.message
     };
 

@@ -209,7 +209,12 @@ async function fetchScopedMediaAssets(
   return mediaById;
 }
 
-export async function fetchDurableReleaseCatalog(): Promise<CatalogRelease[]> {
+export async function fetchDurableReleaseCatalog(options?: {
+  limit?: number;
+  offset?: number;
+  releaseId?: string;
+  slug?: string;
+}): Promise<CatalogRelease[]> {
   console.log("[stabilize] fetchDurableReleaseCatalog start");
   const started = Date.now();
   const supabase = getServerSupabase();
@@ -218,19 +223,44 @@ export async function fetchDurableReleaseCatalog(): Promise<CatalogRelease[]> {
     return [];
   }
 
+  const limit = Math.min(Math.max(options?.limit ?? 50, 1), 200);
+  const offset = Math.max(options?.offset ?? 0, 0);
+  const rangeEnd = offset + limit - 1;
+
   const releaseSelect =
     "id, artist_id, slug, title, release_date, release_type, release_category, status, scheduled_publish_at, release_time, publish_timezone, schedule_attempts, schedule_last_error, published_at, ingestion_source, ingestion_ref, catalog_version, artists(id, name, slug)";
   const legacySelect =
     "id, artist_id, slug, title, release_date, release_type, release_category, status, published_at, artists(id, name, slug)";
 
-  const primaryResult = await supabase
+  let primaryQuery = supabase
     .from("releases")
     .select(releaseSelect)
     .order("release_date", { ascending: false, nullsFirst: false });
+  if (options?.releaseId) {
+    primaryQuery = primaryQuery.eq("id", options.releaseId);
+  } else if (options?.slug) {
+    primaryQuery = primaryQuery.eq("slug", options.slug);
+  } else {
+    primaryQuery = primaryQuery.range(offset, rangeEnd);
+  }
+
+  const primaryResult = await primaryQuery;
+
+  let legacyQuery = supabase
+    .from("releases")
+    .select(legacySelect)
+    .order("release_date", { ascending: false, nullsFirst: false });
+  if (options?.releaseId) {
+    legacyQuery = legacyQuery.eq("id", options.releaseId);
+  } else if (options?.slug) {
+    legacyQuery = legacyQuery.eq("slug", options.slug);
+  } else {
+    legacyQuery = legacyQuery.range(offset, rangeEnd);
+  }
 
   const releaseResult =
     primaryResult.error && /ingestion_|catalog_version/i.test(primaryResult.error.message ?? "")
-      ? await supabase.from("releases").select(legacySelect).order("release_date", { ascending: false, nullsFirst: false })
+      ? await legacyQuery
       : primaryResult;
 
   if (releaseResult.error || !releaseResult.data?.length) {
@@ -385,11 +415,11 @@ export async function fetchDurableReleaseCatalog(): Promise<CatalogRelease[]> {
 }
 
 export async function fetchDurableReleaseById(releaseId: string) {
-  const catalog = await fetchDurableReleaseCatalog();
+  const catalog = await fetchDurableReleaseCatalog({ releaseId, limit: 1 });
   return catalog.find((release) => release.id === releaseId) ?? null;
 }
 
 export async function fetchDurableReleaseBySlug(slug: string) {
-  const catalog = await fetchDurableReleaseCatalog();
+  const catalog = await fetchDurableReleaseCatalog({ slug, limit: 1 });
   return catalog.find((release) => release.slug === slug) ?? null;
 }

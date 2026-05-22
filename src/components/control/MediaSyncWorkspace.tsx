@@ -597,7 +597,6 @@ export function ReleaseMediaSyncWorkspace({
   actions: ReleaseStudioActions;
 }) {
   const [activeSection, setActiveSection] = useState<MediaSectionId>("cover");
-  useMediaSync(() => onUploadComplete?.());
 
   return (
     <div className="media-sync-workspace">

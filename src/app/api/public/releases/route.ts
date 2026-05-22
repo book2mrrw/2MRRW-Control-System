@@ -1,7 +1,7 @@
 import { buildReleasePrimaryAsset } from "@/lib/media/releasePrimaryAsset";
 import { buildStudioCatalogFallback } from "@/server/catalog/studioCatalogFallback";
 import { getLatestReleasesDurable } from "@/server/releases/releaseReadService";
-import { resolveCatalogMediaUrl } from "@/server/media/catalogMediaUrl";
+import { publicPathToUrl } from "@/server/media/catalogMediaUrl";
 import { ok } from "@/server/http";
 
 const PUBLIC_FRONTEND_ORIGINS = new Set([
@@ -32,7 +32,7 @@ export async function GET(request: Request) {
   const url = new URL(request.url);
   const limit = Number(url.searchParams.get("limit") ?? 100);
   const apiBase = process.env.NEXT_PUBLIC_APP_URL?.replace(/\/$/, "") ?? "https://2-mrrw-control-system.vercel.app";
-  const boundedLimit = Number.isFinite(limit) ? limit : 100;
+  const boundedLimit = Number.isFinite(limit) ? Math.min(Math.max(limit, 1), 200) : 100;
   const releases = await Promise.race([
     getLatestReleasesDurable({ limit: boundedLimit }),
     new Promise<Awaited<ReturnType<typeof getLatestReleasesDurable>>>((resolve) => {
@@ -59,14 +59,9 @@ export async function GET(request: Request) {
     }));
     return ok({ releases: enriched, count: enriched.length }, { headers: publicReadCorsHeaders(request) });
   }
-  const enriched = await Promise.all(
-    releases.map(async (release) => {
-      const resolvedCover = release.artwork
-        ? await resolveCatalogMediaUrl(release.artwork.assetId, release.artwork.sourcePath, { publicKinds: ["artwork", "loop"] })
-        : null;
-      const resolvedLoop = release.motionArtwork
-        ? await resolveCatalogMediaUrl(release.motionArtwork.assetId, release.motionArtwork.sourcePath, { publicKinds: ["artwork", "loop"] })
-        : null;
+  const enriched = releases.map((release) => {
+      const resolvedCover = release.artwork?.sourcePath ? publicPathToUrl(release.artwork.sourcePath) : null;
+      const resolvedLoop = release.motionArtwork?.sourcePath ? publicPathToUrl(release.motionArtwork.sourcePath) : null;
       const coverUrl =
         resolvedCover ?? (release.artwork?.signedUrlEndpoint ? `${apiBase}${release.artwork.signedUrlEndpoint}` : null);
       const loopUrl =
@@ -87,7 +82,6 @@ export async function GET(request: Request) {
         loopUrl,
         primaryAsset
       };
-    })
-  );
+    });
   return ok({ releases: enriched, count: enriched.length }, { headers: publicReadCorsHeaders(request) });
 }
