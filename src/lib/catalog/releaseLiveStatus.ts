@@ -189,16 +189,15 @@ export function computeReleaseLiveStatus(
   const syncError =
     !hasCover ||
     !hasAudio ||
-    !hasMedia ||
     !hasMapping ||
-    (dirty && failed) ||
-    (published && dirty);
+    failed ||
+    (dirty && failed);
 
   if (syncError) {
     return { liveStatus: "sync_error", liveStatusReasons: reasons, updatedAt };
   }
 
-  const liveReady = published && !dirty && hasCover && hasAudio && hasMapping && hasMedia;
+  const liveReady = published && !failed && hasCover && hasAudio && hasMapping;
   if (liveReady) {
     return { liveStatus: "live", liveStatusReasons: ["Published with cover, audio, routing, and clean sync"], updatedAt };
   }

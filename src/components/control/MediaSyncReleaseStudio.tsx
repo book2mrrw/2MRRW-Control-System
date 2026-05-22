@@ -304,7 +304,7 @@ function LyricsEditor({
   track: DurableCatalogTrack;
   onSaved?: () => void;
 }) {
-  const [lyrics, setLyrics] = useState("");
+  const [lyrics, setLyrics] = useState(track.lyricsText ?? "");
   const [status, setStatus] = useState("Loading lyrics…");
   const [busy, setBusy] = useState(false);
 
@@ -313,39 +313,53 @@ function LyricsEditor({
     void loadReleaseLyricsSession(release.id).then((result) => {
       if (cancelled) return;
       if (result.ok) {
-        setLyrics(result.data[track.id] ?? "");
-        setStatus("Lyrics loaded from session.");
+        setLyrics(result.data[track.id] ?? track.lyricsText ?? "");
+        setStatus("");
       } else {
+        setLyrics(track.lyricsText ?? "");
         setStatus(result.error);
       }
     });
     return () => {
       cancelled = true;
     };
-  }, [release.id, track.id]);
+  }, [release.id, track.id, track.lyricsText]);
 
   const save = useCallback(async () => {
     setBusy(true);
     setStatus("Saving lyrics…");
+    const trackResult = await patchReleaseTrack(release.id, track.id, { lyricsText: lyrics.trim() || null });
+    if (!trackResult.ok) {
+      setBusy(false);
+      setStatus(trackResult.error);
+      return;
+    }
     const existing = await loadReleaseLyricsSession(release.id);
     const map = existing.ok ? { ...existing.data, [track.id]: lyrics } : { [track.id]: lyrics };
-    const result = await saveReleaseLyricsSession(release.id, map);
+    const sessionResult = await saveReleaseLyricsSession(release.id, map);
     setBusy(false);
-    setStatus(result.ok ? "Lyrics saved to release session." : result.error);
-    if (result.ok) onSaved?.();
+    setStatus(sessionResult.ok ? "Lyrics saved." : sessionResult.error);
+    if (sessionResult.ok) onSaved?.();
   }, [lyrics, onSaved, release.id, track.id]);
 
   return (
-    <div className="media-sync-lyrics-panel media-sync-ws-full">
-      <label className="input-group span-2">
-        <span className="input-label">Lyrics — {track.title}</span>
-        <textarea className="input textarea" rows={14} value={lyrics} onChange={(event) => setLyrics(event.target.value)} placeholder="Paste or write lyrics…" />
+    <div className="media-sync-lyrics-panel media-sync-ws-full studio-lyrics-panel">
+      <label className="studio-lyrics-field">
+        <span>Lyrics — {track.title}</span>
+        <textarea
+          className="studio-lyrics-textarea"
+          value={lyrics}
+          onChange={(event) => setLyrics(event.target.value)}
+          placeholder="Paste or type your lyrics here..."
+        />
       </label>
-      <div className="row gap-8">
-        <button type="button" className="btn btn-primary btn-sm" disabled={busy} onClick={() => void save()}>Save lyrics</button>
-        {status ? <span className="form-status">{status}</span> : null}
+      <div className="studio-lyrics-footer">
+        <span className="studio-lyrics-count">{lyrics.length} characters</span>
+        <button type="button" className="studio-lyrics-save" disabled={busy} onClick={() => void save()}>
+          Save Lyrics
+        </button>
       </div>
-      <MediaUploadPanel draft={releaseDraft(release)} fixedCategory="lyrics" compact onUploadComplete={onSaved} />
+      {status ? <p className="form-status">{status}</p> : null}
     </div>
   );
 }
@@ -363,8 +377,37 @@ function MetadataEditor({
   const [slug, setSlug] = useState(release.slug);
   const [releaseDate, setReleaseDate] = useState(release.releaseDate?.slice(0, 10) ?? ui.date);
   const [metadataNotes, setMetadataNotes] = useState("");
+  const [producer, setProducer] = useState("");
+  const [mixingEngineer, setMixingEngineer] = useState("");
+  const [masteringEngineer, setMasteringEngineer] = useState("");
+  const [recordLabel, setRecordLabel] = useState("");
+  const [writtenBy, setWrittenBy] = useState("");
   const [status, setStatus] = useState("");
   const [busy, setBusy] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    void fetch(`/api/admin/releases/manage/${release.id}/metadata`, { headers: { "x-admin": "true" }, cache: "no-store" })
+      .then((response) => response.json())
+      .then((payload) => {
+        if (cancelled) return;
+        const draft = payload?.data?.draft;
+        const credits = payload?.data?.credits ?? {};
+        if (draft?.title) setTitle(draft.title);
+        if (draft?.slug) setSlug(draft.slug);
+        if (draft?.originalReleaseDate) setReleaseDate(String(draft.originalReleaseDate).slice(0, 10));
+        if (draft?.metadataNotes) setMetadataNotes(draft.metadataNotes);
+        setProducer(draft?.producer ?? credits.producer ?? "");
+        setMixingEngineer(draft?.mixingEngineer ?? credits.mixingEngineer ?? "");
+        setMasteringEngineer(draft?.masteringEngineer ?? credits.masteringEngineer ?? "");
+        setRecordLabel(draft?.recordLabel ?? credits.recordLabel ?? "");
+        setWrittenBy(draft?.writtenBy ?? credits.writtenBy ?? "");
+      })
+      .catch(() => undefined);
+    return () => {
+      cancelled = true;
+    };
+  }, [release.id]);
 
   const save = async () => {
     setBusy(true);
@@ -373,7 +416,12 @@ function MetadataEditor({
       title: title.trim(),
       slug: slug.trim(),
       originalReleaseDate: releaseDate || undefined,
-      metadataNotes: metadataNotes.trim() || undefined
+      metadataNotes: metadataNotes.trim() || undefined,
+      producer: producer.trim() || undefined,
+      mixingEngineer: mixingEngineer.trim() || undefined,
+      masteringEngineer: masteringEngineer.trim() || undefined,
+      recordLabel: recordLabel.trim() || undefined,
+      writtenBy: writtenBy.trim() || undefined
     });
     setBusy(false);
     setStatus(result.ok ? "Metadata saved." : result.error);
@@ -382,7 +430,7 @@ function MetadataEditor({
 
   return (
     <form
-      className="media-sync-meta-panel media-sync-meta-form"
+      className="media-sync-meta-panel media-sync-meta-form studio-meta-form"
       onSubmit={(event) => {
         event.preventDefault();
         void save();
@@ -390,24 +438,44 @@ function MetadataEditor({
     >
       <label className="input-group">
         <span className="input-label">Title</span>
-        <input className="input" value={title} onChange={(event) => setTitle(event.target.value)} required />
+        <input className="input studio-meta-input" value={title} onChange={(event) => setTitle(event.target.value)} required />
       </label>
       <label className="input-group">
         <span className="input-label">Slug</span>
-        <input className="input" value={slug} onChange={(event) => setSlug(event.target.value)} required />
+        <input className="input studio-meta-input" value={slug} onChange={(event) => setSlug(event.target.value)} required />
       </label>
       <label className="input-group">
         <span className="input-label">Release date</span>
-        <input className="input" type="date" value={releaseDate} onChange={(event) => setReleaseDate(event.target.value)} />
+        <input className="input studio-meta-input" type="date" value={releaseDate} onChange={(event) => setReleaseDate(event.target.value)} />
+      </label>
+      <label className="input-group">
+        <span className="input-label">Producer</span>
+        <input className="input studio-meta-input" value={producer} onChange={(event) => setProducer(event.target.value)} placeholder="Producer name" />
+      </label>
+      <label className="input-group">
+        <span className="input-label">Mixing Engineer</span>
+        <input className="input studio-meta-input" value={mixingEngineer} onChange={(event) => setMixingEngineer(event.target.value)} placeholder="Mixing engineer" />
+      </label>
+      <label className="input-group">
+        <span className="input-label">Mastering Engineer</span>
+        <input className="input studio-meta-input" value={masteringEngineer} onChange={(event) => setMasteringEngineer(event.target.value)} placeholder="Mastering engineer" />
+      </label>
+      <label className="input-group">
+        <span className="input-label">Record Label</span>
+        <input className="input studio-meta-input" value={recordLabel} onChange={(event) => setRecordLabel(event.target.value)} placeholder="Record label" />
+      </label>
+      <label className="input-group">
+        <span className="input-label">Written By</span>
+        <input className="input studio-meta-input" value={writtenBy} onChange={(event) => setWrittenBy(event.target.value)} placeholder="Songwriter credits" />
       </label>
       <label className="input-group span-2">
         <span className="input-label">Metadata notes</span>
-        <textarea className="input textarea" rows={4} value={metadataNotes} onChange={(event) => setMetadataNotes(event.target.value)} placeholder="Credits, publishing, internal notes…" />
+        <textarea className="input textarea studio-meta-input" rows={4} value={metadataNotes} onChange={(event) => setMetadataNotes(event.target.value)} placeholder="Credits, publishing, internal notes…" />
       </label>
       <div className="mvrow"><strong>Type</strong><span>{ui.type}</span></div>
       <div className="mvrow"><strong>Status</strong><span>{ui.status}</span></div>
       <div className="mvrow"><strong>Tracks</strong><span>{release.tracks.length}</span></div>
-      <button type="submit" className="btn btn-primary btn-sm" disabled={busy}>Save metadata</button>
+      <button type="submit" className="studio-lyrics-save" disabled={busy}>Save metadata</button>
       {status ? <p className="form-status">{status}</p> : null}
     </form>
   );
@@ -589,7 +657,7 @@ function ReleaseWorkspacePanel({
               ) : (
                 <div className="media-sync-asset-preview empty">No cover yet</div>
               )}
-              <MediaUploadPanel draft={draft} mode="artwork" fixedCategory="release_cover" compact acceptOverride={isAlbumLike ? undefined : `${motionAccept},image/*`} onUploadComplete={onUploadComplete} />
+              <MediaUploadPanel draft={draft} mode="artwork" fixedCategory="release_cover" compact studioLayout acceptOverride={isAlbumLike ? undefined : `${motionAccept},image/*`} onUploadComplete={onUploadComplete} />
             </AssetPanel>
             {isAlbumLike ? (
               <AssetPanel title="Motion Cover" status={release.loopUrl ? "Linked" : "Missing"} ok={Boolean(release.loopUrl)} hint="MP4 / MOV / WebM · up to 90s loop">
@@ -621,33 +689,59 @@ function ReleaseWorkspacePanel({
                     <div className="media-sync-audio-teaser-grid">
                       <AssetPanel title="Full Audio" status={t.audioUrl ? "Linked" : "Missing"} ok={Boolean(t.audioUrl)}>
                         {t.audioUrl ? <AudioMiniPlayer url={t.audioUrl} /> : null}
-                        <MediaUploadPanel draft={{ ...draft, tracks: [{ id: t.id, title: t.title, position: t.position }] }} fixedCategory="full_song_files" compact onUploadComplete={onUploadComplete} />
+                        <MediaUploadPanel draft={{ ...draft, tracks: [{ id: t.id, title: t.title, position: t.position }] }} fixedCategory="full_song_files" compact studioLayout onUploadComplete={onUploadComplete} />
                       </AssetPanel>
                       <AssetPanel title="Preview Audio" status={t.previewUrl ? "Linked" : "Missing"} ok={Boolean(t.previewUrl)}>
                         {t.previewUrl ? <button type="button" className="btn btn-ghost btn-sm" onClick={() => setPreviewUrl(t.previewUrl!)}><Maximize2 size={12} /> Play</button> : null}
-                        <MediaUploadPanel draft={{ ...draft, tracks: [{ id: t.id, title: t.title, position: t.position }] }} fixedCategory="preview_snippets" compact onUploadComplete={onUploadComplete} />
+                        <MediaUploadPanel draft={{ ...draft, tracks: [{ id: t.id, title: t.title, position: t.position }] }} fixedCategory="preview_snippets" compact studioLayout onUploadComplete={onUploadComplete} />
                       </AssetPanel>
                     </div>
                   </details>
                 ))}
               </div>
             </div>
-          ) : track ? (
-            <div className="media-sync-audio-teaser-grid">
-              <AssetPanel title="Full Audio" status={track.audioUrl ? "Linked" : "Missing"} ok={Boolean(track.audioUrl)} hint="Master audio — gated on frontend">
-                {track.audioUrl ? <AudioMiniPlayer url={track.audioUrl} accent="full" /> : null}
-                <MediaUploadPanel draft={draft} fixedCategory="full_song_files" compact onUploadComplete={onUploadComplete} />
+          ) : (
+            <div className="media-sync-audio-teaser-grid media-sync-ws-full">
+              {!track ? (
+                <p className="input-hint">No track row is linked yet — uploads still prepare against this release. Add a track from Tracklist for precise mapping.</p>
+              ) : null}
+              <AssetPanel title="Full Audio" status={track?.audioUrl ? "Linked" : "Missing"} ok={Boolean(track?.audioUrl)} hint="Master audio — gated on frontend">
+                {track?.audioUrl ? <AudioMiniPlayer url={track.audioUrl} accent="full" /> : null}
+                <MediaUploadPanel
+                  draft={track ? draft : { ...draft, tracks: [{ id: release.id, title: release.title, position: 1 }] }}
+                  fixedCategory="full_song_files"
+                  compact
+                  studioLayout
+                  onUploadComplete={onUploadComplete}
+                />
               </AssetPanel>
-              <AssetPanel title="Preview Audio" status={track.previewUrl ? "Linked" : "Missing"} ok={Boolean(track.previewUrl)} hint="Public preview clip">
-                {track.previewUrl ? <><AudioMiniPlayer url={track.previewUrl} accent="preview" /><button type="button" className="btn btn-ghost btn-sm" onClick={() => setPreviewUrl(track.previewUrl!)}><Maximize2 size={12} /> Expand</button></> : null}
-                <MediaUploadPanel draft={draft} fixedCategory="preview_snippets" compact onUploadComplete={onUploadComplete} />
+              <AssetPanel title="Preview Audio" status={track?.previewUrl ? "Linked" : "Missing"} ok={Boolean(track?.previewUrl)} hint="Public preview clip">
+                {track?.previewUrl ? (
+                  <>
+                    <AudioMiniPlayer url={track.previewUrl} accent="preview" />
+                    <button type="button" className="btn btn-ghost btn-sm" onClick={() => setPreviewUrl(track.previewUrl!)}>
+                      <Maximize2 size={12} /> Expand
+                    </button>
+                  </>
+                ) : null}
+                <MediaUploadPanel
+                  draft={track ? draft : { ...draft, tracks: [{ id: release.id, title: release.title, position: 1 }] }}
+                  fixedCategory="preview_snippets"
+                  compact
+                  studioLayout
+                  onUploadComplete={onUploadComplete}
+                />
               </AssetPanel>
             </div>
-          ) : <p className="empty-desc">Add a track before uploading audio.</p>
+          )
         ) : null}
 
         {tab === "lyrics" ? (
-          track ? <LyricsEditor release={release} track={track} onSaved={onUploadComplete} /> : <p className="empty-desc">No track for lyrics.</p>
+          track ? (
+            <LyricsEditor release={release} track={track} onSaved={onUploadComplete} />
+          ) : (
+            <p className="empty-desc">Add a track from Tracklist to attach lyrics to a specific row.</p>
+          )
         ) : null}
 
         {tab === "metadata" ? (

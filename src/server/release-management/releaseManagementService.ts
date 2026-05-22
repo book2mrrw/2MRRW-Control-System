@@ -12,6 +12,7 @@ import { validateDraftCommerceFields, persistDraftCommerceColumns } from "@/serv
 import { emitAfterSuccessfulAction } from "@/server/events/eventedWriteService";
 import { persistSyncEvent } from "@/server/events/syncEventPersistenceService";
 import { rememberContributorFromCredit, rememberReleaseMetadata } from "@/server/release-management/contributorDirectoryService";
+import { persistReleaseCreditMetadata } from "@/server/release-management/releaseMetadataPersistenceService";
 import {
   buildFrontendPreviewLinks,
   buildPublishDryRun,
@@ -124,6 +125,10 @@ export type ReleaseManagementDraft = {
   continueCard: DraftContinueCard;
   language: string;
   recordLabel?: string;
+  producer?: string;
+  mixingEngineer?: string;
+  masteringEngineer?: string;
+  writtenBy?: string;
   copyrightOwner?: string;
   publisherName?: string;
   recordingLocation?: string;
@@ -768,6 +773,10 @@ export function updateReleaseMetadata(
       | "title"
       | "language"
       | "recordLabel"
+      | "producer"
+      | "mixingEngineer"
+      | "masteringEngineer"
+      | "writtenBy"
       | "copyrightOwner"
       | "upc"
       | "scheduledPublishAt"
@@ -893,6 +902,13 @@ export function updateReleaseMetadata(
     copyrightOwner: draft.copyrightOwner,
     publisherName: draft.publisherName,
     recordingLocation: draft.recordingLocation
+  });
+  void persistReleaseCreditMetadata(draft.id, {
+    producer: draft.producer,
+    mixingEngineer: draft.mixingEngineer,
+    masteringEngineer: draft.masteringEngineer,
+    recordLabel: draft.recordLabel,
+    writtenBy: draft.writtenBy
   });
   draft.readinessState = getReadinessSummary(draft.id).ready ? "ready_for_review" : draft.readinessState;
   draft.saveState = "saved";

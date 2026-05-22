@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState, type DragEvent } from "react";
+import { StudioMediaUpload } from "@/components/control/StudioMediaUpload";
 import { professionalAudioExtensions, professionalAudioMimeTypes, type AudioUploadMetadata } from "@/services/media/audioSupport";
 import { enqueueUpload, patchUploadQueue } from "@/hooks/sync/useUploadQueue";
 import type { MediaDestination, RoutedMediaType } from "@/services/sync/contentRouting";
@@ -183,6 +184,20 @@ const coverArtworkHelperText = "Upload square cover artwork. Minimum size: 1400x
 const coverExtensions = new Set(["jpg", "jpeg", "png", "webp", "gif", "mp4", "mov", "webm"]);
 const coverMimeTypes = new Set(["image/jpeg", "image/png", "image/webp", "image/gif", "video/mp4", "video/quicktime", "video/webm"]);
 const coverMaxBytes = 70 * 1024 * 1024;
+const studioAudioFormats = [
+  "16-bit / 44.1kHz",
+  "16-bit / 48kHz",
+  "24-bit / 44.1kHz",
+  "24-bit / 48kHz",
+  "32-bit / 44.1kHz",
+  "32-bit / 48kHz"
+] as const;
+
+function parseStudioAudioFormat(value: string): Pick<AudioUploadMetadata, "bitDepth" | "sampleRateHz"> {
+  const bitDepth = value.includes("32-bit") ? "32_float" : value.includes("24-bit") ? 24 : 16;
+  const sampleRateHz = value.includes("48kHz") ? 48000 : 44100;
+  return { bitDepth, sampleRateHz };
+}
 
 function isCoverCategory(category: UploadCategory) {
   return category === "release_cover" || category === "single_cover_art" || category === "album_cover_art";
@@ -232,6 +247,7 @@ export function MediaUploadPanel({
   mode = "all",
   fixedCategory,
   compact = false,
+  studioLayout = false,
   acceptOverride,
   onUploadComplete
 }: {
@@ -239,6 +255,7 @@ export function MediaUploadPanel({
   mode?: string;
   fixedCategory?: UploadCategory;
   compact?: boolean;
+  studioLayout?: boolean;
   acceptOverride?: string;
   onUploadComplete?: () => void;
 }) {
@@ -254,6 +271,7 @@ export function MediaUploadPanel({
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
   const [videoDurationReady, setVideoDurationReady] = useState(true);
   const [audioDurationSeconds, setAudioDurationSeconds] = useState<number | undefined>();
+  const [audioFormat, setAudioFormat] = useState<string>(studioAudioFormats[0]);
   const [status, setStatus] = useState("Drop a file or click to prepare an upload.");
   const [artworkValidation, setArtworkValidation] = useState<ArtworkValidation>({
     state: "idle",
@@ -459,10 +477,11 @@ export function MediaUploadPanel({
     const ownerPayload = selectedOption?.ownerField && selectedOption.ownerField !== "releaseId" && selectedOption.ownerField !== "trackId"
       ? { [selectedOption.ownerField]: externalOwnerId }
       : {};
+    const selectedAudioFormat = parseStudioAudioFormat(audioFormat);
     const audioMetadata = audioSelected && file ? {
       format: audioFormatFor(file.name),
-      bitDepth: "unknown",
-      sampleRateHz: "unknown",
+      bitDepth: selectedAudioFormat.bitDepth,
+      sampleRateHz: selectedAudioFormat.sampleRateHz,
       channels: "unknown",
       durationSeconds: audioDurationSeconds
     } satisfies AudioUploadMetadata : undefined;
@@ -580,6 +599,50 @@ export function MediaUploadPanel({
       : externalOwnerId || "Choose owner";
 
   const fileAccept = acceptOverride ?? selectedOption?.accept ?? "";
+  const studioValidationLine = coverSelected
+    ? artworkValidation.state === "approved"
+      ? { ok: true, text: artworkValidation.message }
+      : file
+        ? { ok: false, text: artworkValidation.message }
+        : null
+    : audioSelected && file
+      ? { ok: true, text: status || "Audio file ready to upload." }
+      : audioSelected && !file
+        ? null
+        : null;
+
+  if (studioLayout && compact && (coverSelected || audioSelected)) {
+    return (
+      <section className="upload-panel upload-panel-compact upload-panel-studio">
+        <StudioMediaUpload
+          mode={coverSelected ? "cover" : "audio"}
+          accept={fileAccept}
+          previewUrl={previewUrl || undefined}
+          previewIsVideo={Boolean(file && isVideoArtwork(file))}
+          fileName={file?.name}
+          specs={
+            coverSelected
+              ? "JPG · PNG · WEBP · Min 1400×1400 · Max 70MB · Square only"
+              : "WAV · AIFF · FLAC · MP3 · AAC · Max 70MB"
+          }
+          mainLabel={coverSelected ? "Drop your cover art here" : "Drop your audio file here"}
+          subLabel="or click to browse"
+          buttonLabel="Prepare Upload"
+          validationLine={studioValidationLine}
+          canUpload={canRequestUpload}
+          audioFormat={audioFormat}
+          audioFormats={audioSelected ? [...studioAudioFormats] : undefined}
+          onAudioFormatChange={setAudioFormat}
+          onFileSelected={(next) => {
+            setFile(next);
+            setDeleteConfirmOpen(false);
+          }}
+          onUpload={() => void requestUploadIntent()}
+        />
+        {status ? <p className="form-status studio-upload-status">{status}</p> : null}
+      </section>
+    );
+  }
 
   return (
     <section className={`upload-panel${compact ? " upload-panel-compact" : ""}`}>

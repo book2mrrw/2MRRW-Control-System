@@ -71,7 +71,7 @@ export type ControlUiRelease = {
   id: string;
   slug: string;
   title: string;
-  type: "Album" | "Single" | "EP" | "Deluxe";
+  type: "Album" | "Single" | "EP" | "Deluxe" | "Feature";
   status: "Scheduled" | "Released" | "Draft" | "Rejected";
   date: string;
   tracks: number;
@@ -108,8 +108,13 @@ function visualForTitle(title: string, id: string) {
   return { emoji, grad: GRADIENTS[seed % GRADIENTS.length] };
 }
 
-function mapReleaseType(releaseType?: string | null, trackCount = 0): ControlUiRelease["type"] {
-  if (releaseType === "single" || releaseType === "feature") return "Single";
+function mapReleaseType(
+  releaseType?: string | null,
+  trackCount = 0,
+  releaseCategory?: string | null
+): ControlUiRelease["type"] {
+  if (releaseCategory === "feature" || releaseType === "feature") return "Feature";
+  if (releaseType === "single") return "Single";
   if (releaseType === "ep") return "EP";
   if (releaseType === "deluxe") return "Deluxe";
   if (releaseType === "album" && trackCount >= 2 && trackCount <= 6) return "EP";
@@ -130,7 +135,7 @@ export function mapCatalogReleaseToUi(release: DurableCatalogRelease): ControlUi
     id: release.id,
     slug: release.slug,
     title: release.title,
-    type: mapReleaseType(release.releaseType, release.tracks?.length ?? 0),
+    type: mapReleaseType(release.releaseType, release.tracks?.length ?? 0, release.releaseCategory),
     status: mapReleaseStatus(release.status),
     date: release.releaseDate?.slice(0, 10) ?? "Date TBD",
     tracks: release.tracks?.length ?? 0,

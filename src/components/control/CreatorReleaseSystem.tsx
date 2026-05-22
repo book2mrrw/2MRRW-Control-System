@@ -714,12 +714,13 @@ function Releases({
   actions: ReleaseStudioActions;
 }) {
   const [tab, setTab] = useState("All");
-  const tabs = ["All", "Albums & EPs", "Singles", "Drafts"];
+  const tabs = ["All", "Albums & EPs", "Singles", "Features", "Drafts"];
   const filtered = useMemo(() => {
     if (tab === "All") return releases;
     if (tab === "Drafts") return releases.filter((release) => release.status === "Draft" || release.status === "Scheduled");
     if (tab === "Albums & EPs") return releases.filter((r) => r.type === "Album" || r.type === "EP" || r.type === "Deluxe");
     if (tab === "Singles") return releases.filter((r) => r.type === "Single");
+    if (tab === "Features") return releases.filter((r) => r.type === "Feature");
     return releases;
   }, [releases, tab]);
   return (

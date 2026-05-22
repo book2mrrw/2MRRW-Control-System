@@ -1,4 +1,6 @@
 import { fail, ok, parseJson, requireAdmin } from "@/server/http";
+import { getReleaseDraft } from "@/server/release-management/releaseManagementService";
+import { loadReleaseCreditMetadata } from "@/server/release-management/releaseMetadataPersistenceService";
 import { updateReleaseMetadata } from "@/server/release-management/releaseManagementService";
 import { lyricReadinessStates, releaseVisibilityStates, uploadReadinessStates } from "@/server/release-management/taxonomies";
 import { pricingTiers } from "@/server/commerce/pricingTaxonomies";
@@ -15,6 +17,10 @@ const metadataSchema = z.object({
   visibilityState: z.enum(releaseVisibilityStates).optional(),
   language: z.string().min(2).optional(),
   recordLabel: z.string().optional(),
+  producer: z.string().optional(),
+  mixingEngineer: z.string().optional(),
+  masteringEngineer: z.string().optional(),
+  writtenBy: z.string().optional(),
   copyrightOwner: z.string().optional(),
   publisherName: z.string().optional(),
   recordingLocation: z.string().optional(),
@@ -46,6 +52,33 @@ const metadataSchema = z.object({
   bundlePriceInCents: z.number().int().min(0).nullable().optional(),
   perTrackOverrides: z.record(z.string(), z.unknown()).nullable().optional()
 });
+
+export async function GET(request: Request, { params }: { params: Promise<{ id: string }> }) {
+  try {
+    requireAdmin(request);
+    const { id } = await params;
+    const draft = getReleaseDraft(id);
+    const credits = await loadReleaseCreditMetadata(id);
+    return ok({
+      draft: draft
+        ? {
+            title: draft.title,
+            slug: draft.slug,
+            originalReleaseDate: draft.originalReleaseDate,
+            metadataNotes: draft.metadataNotes,
+            recordLabel: draft.recordLabel,
+            producer: draft.producer,
+            mixingEngineer: draft.mixingEngineer,
+            masteringEngineer: draft.masteringEngineer,
+            writtenBy: draft.writtenBy
+          }
+        : null,
+      credits
+    });
+  } catch (error) {
+    return fail(error instanceof Error ? error.message : "Invalid metadata request", 400);
+  }
+}
 
 export async function PATCH(request: Request, { params }: { params: Promise<{ id: string }> }) {
   try {

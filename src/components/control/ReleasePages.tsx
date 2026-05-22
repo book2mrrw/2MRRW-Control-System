@@ -50,7 +50,7 @@ function releaseDateLabel(draft: ReleaseManagementDraft) {
 }
 
 type ReleaseTab = "draft" | "scheduled" | "published" | "archived";
-type ReleaseTypeFilter = "single" | "album" | "ep";
+type ReleaseTypeFilter = "single" | "album" | "ep" | "feature";
 
 function tabMatchesRelease(tab: ReleaseTab | undefined, draft: ReleaseManagementDraft) {
   if (!tab) return true;
@@ -60,6 +60,7 @@ function tabMatchesRelease(tab: ReleaseTab | undefined, draft: ReleaseManagement
 
 function typeMatchesRelease(type: ReleaseTypeFilter | undefined, draft: ReleaseManagementDraft) {
   if (!type) return true;
+  if (type === "feature") return draft.releaseType === "feature";
   if (type === "album") return draft.releaseType === "album" || draft.releaseType === "deluxe" || draft.releaseType === "ep";
   return draft.releaseType === type;
 }
@@ -143,6 +144,7 @@ export function ReleaseIndexPage({ status, type }: { status?: ReleaseTab; type?:
             { label: "All", href: "/releases", active: !status && !type },
             { label: "Albums & EPs", href: "/releases?type=album", active: type === "album" },
             { label: "Singles", href: "/releases?type=single", active: type === "single" },
+            { label: "Features", href: "/releases?type=feature", active: type === "feature" },
             { label: "EPs", href: "/releases?type=ep", active: type === "ep" },
             { label: "Drafts", href: "/releases/drafts", active: status === "draft" },
             { label: "Scheduled", href: "/releases/scheduled", active: status === "scheduled" },
