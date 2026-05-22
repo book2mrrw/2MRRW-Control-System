@@ -1,23 +1,18 @@
 import { ok } from "@/server/http";
-import { createSignedMediaUrl } from "@/server/media/signedUrlService";
-
-const SAMPLE_ASSET_ID = "60869b4b-7867-551f-a0b2-a9532d720d26";
+import { checkR2Connectivity } from "@/lib/storage/r2";
 
 export async function GET() {
   const started = Date.now();
-  const signed = await createSignedMediaUrl(null, SAMPLE_ASSET_ID, {
-    studioBypass: true,
-    publicKinds: ["artwork", "loop"]
-  });
+  const r2 = await checkR2Connectivity();
   const timingMs = Date.now() - started;
 
-  if (!signed.ok) {
+  if (!r2.ok) {
     return ok(
       {
         ok: false,
         timestamp: new Date().toISOString(),
         timingMs,
-        message: signed.message
+        message: r2.message,
       },
       { status: 503 }
     );
@@ -27,6 +22,6 @@ export async function GET() {
     ok: true,
     timestamp: new Date().toISOString(),
     timingMs,
-    signedUrlSample: `${signed.url.slice(0, 80)}…`
+    bucket: r2.bucket,
   });
 }

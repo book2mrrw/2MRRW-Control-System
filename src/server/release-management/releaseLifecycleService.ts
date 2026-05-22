@@ -1,3 +1,4 @@
+import { R2_BUCKET } from "@/lib/storage/r2";
 import type {
   BackgroundProcessState,
   ContentReadinessState,
@@ -126,7 +127,7 @@ export type PublishConflictWarning = {
 };
 
 export type StructuredStoragePlan = {
-  bucket: "protected-media";
+  bucket: string;
   canonicalPath: string;
   originalFileName: string;
   canonicalFileName: string;
@@ -917,7 +918,7 @@ export function buildStructuredStoragePlan(input: {
   const canonicalPath = `${ownerFolder}/${canonicalName}`;
   const variantBase = canonicalPath.replace(/\.[a-z0-9]+$/i, "");
   return {
-    bucket: "protected-media",
+    bucket: R2_BUCKET || "2mrrw-media",
     canonicalPath,
     originalFileName: input.fileName,
     canonicalFileName: canonicalName,

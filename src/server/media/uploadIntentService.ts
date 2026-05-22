@@ -1,4 +1,11 @@
 import { getServerSupabase } from "@/server/supabase/client";
+import {
+  R2_BUCKET,
+  R2_PREFIX,
+  buildR2Key,
+  createR2SignedPutUrl,
+  r2MockSignedUrl
+} from "@/lib/storage/r2";
 import { emitAfterSuccessfulAction } from "@/server/events/eventedWriteService";
 import {
   resolveContentDestinations,
@@ -67,7 +74,7 @@ export const releaseUploadAssetTypes = ["master_audio", "preview_audio", "artwor
 export type ReleaseUploadAssetType = (typeof releaseUploadAssetTypes)[number];
 
 type UploadPolicy = {
-  bucket: "protected-media";
+  bucket: string;
   folder: "singles" | "albums" | "masters" | "previews" | "lyrics" | "signal" | "radio" | "collectors" | "vault" | "features" | "merch";
   maxSizeMb: number;
   mimeTypes: readonly string[];
@@ -107,7 +114,7 @@ export type MediaUploadIntentInput = {
 
 export type MediaUploadIntent = {
   ok: true;
-  bucket: "protected-media";
+  bucket: string;
   path: string;
   category: MediaUploadCategory;
   uploadMethod: "direct-to-storage";
@@ -128,7 +135,7 @@ export type MediaUploadIntent = {
 
 export type ManagedMediaAssetRecord = {
   id: string;
-  bucket: "protected-media";
+  bucket: string;
   path: string;
   category: MediaUploadCategory;
   ownerId: string;
@@ -310,7 +317,7 @@ function isReleaseArtworkCategory(category: MediaUploadCategory) {
 
 const UPLOAD_POLICIES: Record<MediaUploadCategory, UploadPolicy> = {
   release_cover: {
-    bucket: "protected-media",
+    bucket: R2_BUCKET || "2mrrw-media",
     folder: "singles",
     maxSizeMb: 70,
     mimeTypes: coverMimeTypes,
@@ -320,7 +327,7 @@ const UPLOAD_POLICIES: Record<MediaUploadCategory, UploadPolicy> = {
     artworkQualityTarget: coverArtworkTarget
   },
   track_audio: {
-    bucket: "protected-media",
+    bucket: R2_BUCKET || "2mrrw-media",
     folder: "masters",
     maxSizeMb: 250,
     mimeTypes: audioMimeTypes,
@@ -331,7 +338,7 @@ const UPLOAD_POLICIES: Record<MediaUploadCategory, UploadPolicy> = {
     audioQualityTarget: professionalAudioQualityTarget
   },
   hero_media: {
-    bucket: "protected-media",
+    bucket: R2_BUCKET || "2mrrw-media",
     folder: "signal",
     maxSizeMb: 500,
     mimeTypes: [...imageMimeTypes, ...videoMimeTypes, ...audioMimeTypes],
@@ -339,7 +346,7 @@ const UPLOAD_POLICIES: Record<MediaUploadCategory, UploadPolicy> = {
     ownerField: "signalId"
   },
   vault_media: {
-    bucket: "protected-media",
+    bucket: R2_BUCKET || "2mrrw-media",
     folder: "vault",
     maxSizeMb: 500,
     mimeTypes: [...imageMimeTypes, ...videoMimeTypes, ...audioMimeTypes],
@@ -347,7 +354,7 @@ const UPLOAD_POLICIES: Record<MediaUploadCategory, UploadPolicy> = {
     ownerField: "vaultContentId"
   },
   audio_visual: {
-    bucket: "protected-media",
+    bucket: R2_BUCKET || "2mrrw-media",
     folder: "radio",
     maxSizeMb: 500,
     mimeTypes: [...imageMimeTypes, ...videoMimeTypes, ...audioMimeTypes],
@@ -355,7 +362,7 @@ const UPLOAD_POLICIES: Record<MediaUploadCategory, UploadPolicy> = {
     ownerField: "radioId"
   },
   collectible_media: {
-    bucket: "protected-media",
+    bucket: R2_BUCKET || "2mrrw-media",
     folder: "collectors",
     maxSizeMb: 500,
     mimeTypes: [...imageMimeTypes, ...videoMimeTypes, ...audioMimeTypes],
@@ -363,7 +370,7 @@ const UPLOAD_POLICIES: Record<MediaUploadCategory, UploadPolicy> = {
     ownerField: "collectorId"
   },
   merch_media: {
-    bucket: "protected-media",
+    bucket: R2_BUCKET || "2mrrw-media",
     folder: "merch",
     maxSizeMb: 500,
     mimeTypes: [...imageMimeTypes, ...videoMimeTypes],
@@ -371,7 +378,7 @@ const UPLOAD_POLICIES: Record<MediaUploadCategory, UploadPolicy> = {
     ownerField: "collectorId"
   },
   latest_singles: {
-    bucket: "protected-media",
+    bucket: R2_BUCKET || "2mrrw-media",
     folder: "singles",
     maxSizeMb: 500,
     mimeTypes: [...coverMimeTypes, ...audioMimeTypes],
@@ -380,7 +387,7 @@ const UPLOAD_POLICIES: Record<MediaUploadCategory, UploadPolicy> = {
     requiresRelease: true
   },
   albums: {
-    bucket: "protected-media",
+    bucket: R2_BUCKET || "2mrrw-media",
     folder: "albums",
     maxSizeMb: 500,
     mimeTypes: [...coverMimeTypes, ...audioMimeTypes],
@@ -389,7 +396,7 @@ const UPLOAD_POLICIES: Record<MediaUploadCategory, UploadPolicy> = {
     requiresRelease: true
   },
   features: {
-    bucket: "protected-media",
+    bucket: R2_BUCKET || "2mrrw-media",
     folder: "features",
     maxSizeMb: 500,
     mimeTypes: [...coverMimeTypes, ...audioMimeTypes],
@@ -398,7 +405,7 @@ const UPLOAD_POLICIES: Record<MediaUploadCategory, UploadPolicy> = {
     requiresRelease: true
   },
   preview_snippets: {
-    bucket: "protected-media",
+    bucket: R2_BUCKET || "2mrrw-media",
     folder: "previews",
     maxSizeMb: 70,
     mimeTypes: audioMimeTypes,
@@ -408,7 +415,7 @@ const UPLOAD_POLICIES: Record<MediaUploadCategory, UploadPolicy> = {
     requiresTrack: true
   },
   full_song_files: {
-    bucket: "protected-media",
+    bucket: R2_BUCKET || "2mrrw-media",
     folder: "masters",
     maxSizeMb: 250,
     mimeTypes: audioMimeTypes,
@@ -419,7 +426,7 @@ const UPLOAD_POLICIES: Record<MediaUploadCategory, UploadPolicy> = {
     audioQualityTarget: professionalAudioQualityTarget
   },
   single_cover_art: {
-    bucket: "protected-media",
+    bucket: R2_BUCKET || "2mrrw-media",
     folder: "singles",
     maxSizeMb: 70,
     mimeTypes: coverMimeTypes,
@@ -429,7 +436,7 @@ const UPLOAD_POLICIES: Record<MediaUploadCategory, UploadPolicy> = {
     artworkQualityTarget: coverArtworkTarget
   },
   album_cover_art: {
-    bucket: "protected-media",
+    bucket: R2_BUCKET || "2mrrw-media",
     folder: "albums",
     maxSizeMb: 70,
     mimeTypes: coverMimeTypes,
@@ -439,7 +446,7 @@ const UPLOAD_POLICIES: Record<MediaUploadCategory, UploadPolicy> = {
     artworkQualityTarget: coverArtworkTarget
   },
   audio_preview: {
-    bucket: "protected-media",
+    bucket: R2_BUCKET || "2mrrw-media",
     folder: "previews",
     maxSizeMb: 70,
     mimeTypes: audioMimeTypes,
@@ -449,7 +456,7 @@ const UPLOAD_POLICIES: Record<MediaUploadCategory, UploadPolicy> = {
     requiresTrack: true
   },
   audio_full_song: {
-    bucket: "protected-media",
+    bucket: R2_BUCKET || "2mrrw-media",
     folder: "masters",
     maxSizeMb: 250,
     mimeTypes: audioMimeTypes,
@@ -460,7 +467,7 @@ const UPLOAD_POLICIES: Record<MediaUploadCategory, UploadPolicy> = {
     audioQualityTarget: professionalAudioQualityTarget
   },
   lyrics: {
-    bucket: "protected-media",
+    bucket: R2_BUCKET || "2mrrw-media",
     folder: "lyrics",
     maxSizeMb: 10,
     mimeTypes: docMimeTypes,
@@ -470,7 +477,7 @@ const UPLOAD_POLICIES: Record<MediaUploadCategory, UploadPolicy> = {
     requiresTrack: true
   },
   signal_asset: {
-    bucket: "protected-media",
+    bucket: R2_BUCKET || "2mrrw-media",
     folder: "signal",
     maxSizeMb: 70,
     mimeTypes: [...imageMimeTypes, ...mp4MimeTypes, ...audioMimeTypes],
@@ -478,7 +485,7 @@ const UPLOAD_POLICIES: Record<MediaUploadCategory, UploadPolicy> = {
     ownerField: "signalId"
   },
   radio_asset: {
-    bucket: "protected-media",
+    bucket: R2_BUCKET || "2mrrw-media",
     folder: "radio",
     maxSizeMb: 70,
     mimeTypes: [...imageMimeTypes, ...mp4MimeTypes, ...audioMimeTypes],
@@ -486,7 +493,7 @@ const UPLOAD_POLICIES: Record<MediaUploadCategory, UploadPolicy> = {
     ownerField: "radioId"
   },
   collector_card_asset: {
-    bucket: "protected-media",
+    bucket: R2_BUCKET || "2mrrw-media",
     folder: "collectors",
     maxSizeMb: 70,
     mimeTypes: coverMimeTypes,
@@ -494,7 +501,7 @@ const UPLOAD_POLICIES: Record<MediaUploadCategory, UploadPolicy> = {
     ownerField: "collectorId"
   },
   vault_asset: {
-    bucket: "protected-media",
+    bucket: R2_BUCKET || "2mrrw-media",
     folder: "vault",
     maxSizeMb: 70,
     mimeTypes: [...imageMimeTypes, ...mp4MimeTypes, ...audioMimeTypes, ...docMimeTypes],
@@ -688,7 +695,7 @@ export async function createMediaUploadIntent(input: MediaUploadIntentInput): Pr
       path,
       category,
       uploadMethod: "direct-to-storage",
-      signedUploadUrl: `https://signed-upload.local/${policy.bucket}/${path}`,
+      signedUploadUrl: r2MockSignedUrl(buildR2Key(R2_PREFIX.PROTECTED_MEDIA, path)),
       maxSizeBytes,
       acceptedMimeTypes: policy.mimeTypes,
       acceptedExtensions: policy.extensions,
@@ -703,17 +710,14 @@ export async function createMediaUploadIntent(input: MediaUploadIntentInput): Pr
     };
   }
 
-  const storage = supabase.storage.from(policy.bucket) as unknown as {
-    createSignedUploadUrl: (path: string) => Promise<{
-      data?: { signedUrl?: string; token?: string };
-      error?: { message?: string };
-    }>;
-  };
-  const { data, error } = await storage.createSignedUploadUrl(path);
-
-  if (error || !data?.signedUrl) {
-    markUploadQueueItem(queuedUpload.id, "retry_available", error?.message ?? "Unable to create signed upload URL");
-    throw new Error(error?.message ?? "Unable to create signed upload URL");
+  const r2Key = buildR2Key(R2_PREFIX.PROTECTED_MEDIA, path);
+  let signedUploadUrl: string;
+  try {
+    signedUploadUrl = await createR2SignedPutUrl(r2Key, input.mimeType, 300);
+  } catch (err) {
+    const message = err instanceof Error ? err.message : "Unable to create signed upload URL";
+    markUploadQueueItem(queuedUpload.id, "retry_available", message);
+    throw new Error(message);
   }
 
   return {
@@ -722,8 +726,8 @@ export async function createMediaUploadIntent(input: MediaUploadIntentInput): Pr
     path,
     category,
     uploadMethod: "direct-to-storage",
-    signedUploadUrl: data.signedUrl,
-    token: data.token,
+    signedUploadUrl,
+    token: undefined,
     maxSizeBytes,
     acceptedMimeTypes: policy.mimeTypes,
     acceptedExtensions: policy.extensions,

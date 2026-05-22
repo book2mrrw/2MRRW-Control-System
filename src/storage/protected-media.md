@@ -1,6 +1,6 @@
 # Protected Media Storage
 
-Create a private Supabase Storage bucket named `protected-media`. This bucket architecture is shared by both
+Upload and read media through the unified Cloudflare R2 bucket (`CLOUDFLARE_R2_BUCKET_NAME`, e.g. `2mrrw-media`) using the `protected-media/` key prefix (replaces the former Supabase `protected-media` bucket name). This bucket architecture is shared by both
 interfaces: the Control CMS writes/uploads and the public experience reads through service-backed media objects.
 Do not create a separate frontend media bucket or hardcode release asset paths in UI components.
 
@@ -38,8 +38,8 @@ Upload flow:
 
 1. Admin/mobile clients call `POST /api/admin/media/upload-intent` with a category, owner id, filename,
    MIME type, and size. The server validates category-specific limits and creates a short-lived signed
-   upload URL for the private bucket.
-2. The client uploads bytes directly to Supabase Storage from the phone/computer. Large release assets do
+   upload URL for the R2 bucket with `protected-media/` prefix.
+2. The client uploads bytes directly to R2 (S3-compatible API) from the phone/computer. Large release assets do
    not proxy through Next.js route handlers.
 3. The admin client calls `POST /api/admin/media/upload-complete` with the category and path. The backend
    records the media asset boundary and updates release readiness for cover art, audio, and lyrics when

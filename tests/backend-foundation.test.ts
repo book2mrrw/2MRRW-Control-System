@@ -420,7 +420,7 @@ function testProductionResilienceContracts() {
   const strategy = buildMediaStorageStrategy({
     assetId: "asset_strategy",
     storagePlan: {
-      bucket: "protected-media",
+      bucket: "2mrrw-media",
       canonicalPath: "masters/release/track/audio.wav",
       originalFileName: "Audio.wav",
       canonicalFileName: "audio.wav",
@@ -495,7 +495,7 @@ async function testMediaUploadIntentFoundation() {
     mimeType: "audio/wav",
     sizeBytes: 80 * 1024 * 1024
   });
-  assert.equal(masterIntent.bucket, "protected-media");
+  assert.equal(masterIntent.bucket, process.env.CLOUDFLARE_R2_BUCKET_NAME || "2mrrw-media");
   assert.equal(masterIntent.uploadMethod, "direct-to-storage");
   assert.match(masterIntent.path, new RegExp(`^masters/${release.id}/${track.id}/`));
   assert.deepEqual(masterIntent.audioQualityTarget, professionalAudioQualityTarget);
@@ -879,7 +879,11 @@ function testPlaybackEventContract() {
 }
 
 function testAnimatedSinglePrimaryAssetsPreferVideoLoop() {
-  const base = "https://artist-platform-silk.vercel.app";
+  const base = (
+    process.env.NEXT_PUBLIC_R2_PUBLIC_URL ||
+    process.env.ARTIST_PLATFORM_PUBLIC_URL ||
+    "https://artist-platform-silk.vercel.app"
+  ).replace(/\/$/, "");
   const animatedSingles = [
     { slug: "hour-glass", mp4: "hourglass.mp4", poster: "hourglass.jpg" },
     { slug: "artificial", mp4: "artificial.mp4", poster: "artificial.jpg" },

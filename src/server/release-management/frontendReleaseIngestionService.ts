@@ -1,5 +1,7 @@
 import "server-only";
 
+import { R2_BUCKET } from "@/lib/storage/r2";
+
 import { createHash } from "node:crypto";
 import { access, readFile } from "node:fs/promises";
 import path from "node:path";
@@ -422,7 +424,7 @@ export async function buildFrontendEcosystemPersistencePlan(): Promise<FrontendE
         id: record.id,
         ownerType: record.ownerType,
         ownerId: record.ownerId,
-        bucket: "protected-media",
+        bucket: R2_BUCKET || "2mrrw-media",
         storagePath: record.path,
         accessLevel: record.access
       });
@@ -552,7 +554,7 @@ async function persistReleaseRows(input: {
     id: asset.id,
     owner_type: asset.ownerType,
     owner_id: asset.ownerId,
-    bucket: "protected-media",
+    bucket: R2_BUCKET || "2mrrw-media",
     storage_path: asset.path,
     access_level: asset.access
   })), { onConflict: "id" });

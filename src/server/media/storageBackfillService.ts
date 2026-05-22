@@ -1,7 +1,10 @@
 import "server-only";
 
+import { PutObjectCommand } from "@aws-sdk/client-s3";
 import { artworkPublicFallbackUrl } from "@/server/media/artworkPublicFallback";
+import { buildR2Key, r2Client, R2_BUCKET, R2_PREFIX } from "@/lib/storage/r2";
 import { getServerSupabase } from "@/server/supabase/client";
+
 
 export type BackfillCoverResult = {
   slug: string;
@@ -17,7 +20,7 @@ export async function backfillPrimaryCoversFromPublicUrls(): Promise<{
   failed: number;
 }> {
   const supabase = getServerSupabase();
-  const bucket = process.env.SUPABASE_MEDIA_BUCKET ?? "protected-media";
+  const bucket = R2_BUCKET || "2mrrw-media";
   if (!supabase) {
     throw new Error("Supabase unavailable (missing URL or service role key)");
   }
@@ -70,15 +73,21 @@ export async function backfillPrimaryCoversFromPublicUrls(): Promise<{
     const body = Buffer.from(await response.arrayBuffer());
     const contentType = response.headers.get("content-type") ?? "image/jpeg";
 
-    const { error: uploadError } = await supabase.storage.from(asset.bucket).upload(asset.storage_path, body, {
-      upsert: true,
-      contentType
-    });
-
-    if (uploadError) {
+    const r2Key = buildR2Key(R2_PREFIX.PROTECTED_MEDIA, asset.storage_path);
+    try {
+      await r2Client.send(
+        new PutObjectCommand({
+          Bucket: bucket,
+          Key: r2Key,
+          Body: body,
+          ContentType: contentType,
+        })
+      );
+    } catch (uploadError) {
+      const message = uploadError instanceof Error ? uploadError.message : "upload failed";
       results.push({
         slug: row.slug,
-        status: `upload_error:${uploadError.message}`,
+        status: `upload_error:${message}`,
         path: asset.storage_path,
         sourceUrl
       });

@@ -1,5 +1,7 @@
 import "server-only";
 
+import { R2_BUCKET } from "@/lib/storage/r2";
+
 import { createHash } from "node:crypto";
 import { persistSyncEvent } from "@/server/events/syncEventPersistenceService";
 import { getServerSupabase } from "@/server/supabase/client";
@@ -49,7 +51,7 @@ export async function replaceReleaseMedia(input: {
     id: mediaAssetId,
     owner_type: input.trackId ? "track" : "release",
     owner_id: input.trackId ?? input.releaseId,
-    bucket: "protected-media",
+    bucket: R2_BUCKET || "2mrrw-media",
     storage_path: input.storagePath,
     access_level: input.accessLevel ?? "entitled"
   });

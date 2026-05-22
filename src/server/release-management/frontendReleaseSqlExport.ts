@@ -1,5 +1,7 @@
 import "server-only";
 
+import { R2_BUCKET } from "@/lib/storage/r2";
+
 import { parseYouTubeAudioVisualUrl } from "@/server/audio-visuals/audioVisualService";
 import type { ReleaseType } from "@/server/release-management/taxonomies";
 
@@ -35,7 +37,7 @@ export type FrontendEcosystemPersistencePlan = {
     id: string;
     ownerType: string;
     ownerId: string;
-    bucket: "protected-media";
+    bucket: string;
     storagePath: string;
     accessLevel: string;
   }>;

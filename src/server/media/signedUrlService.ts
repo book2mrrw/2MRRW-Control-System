@@ -1,4 +1,11 @@
 import { artworkPublicFallbackUrl } from "@/server/media/artworkPublicFallback";
+import {
+  R2_BUCKET,
+  R2_PREFIX,
+  buildR2Key,
+  createR2SignedGetUrl,
+  r2MockSignedUrl
+} from "@/lib/storage/r2";
 import { getServerSupabase } from "@/server/supabase/client";
 import { assertCanAccessMedia } from "@/server/media/mediaAssetService";
 import { classifyMediaAsset } from "@/server/media/mediaObjects";
@@ -212,27 +219,26 @@ export async function createSignedMediaUrl(
     console.log("[stabilize] createSignedMediaUrl mocked", { assetId, ms: Date.now() - started });
     return {
       ok: true as const,
-      url: `https://signed.local/${signableAsset.bucket}/${signableAsset.path}?asset=${assetId}`,
+      url: r2MockSignedUrl(buildR2Key(R2_PREFIX.PROTECTED_MEDIA, signableAsset.path)) + `?asset=${assetId}`,
       expiresIn: 300,
       mocked: true
     };
   }
 
-  const { data, error } = await supabase.storage
-    .from(signableAsset.bucket)
-    .createSignedUrl(signableAsset.path, 300);
-
-  if (error || !data?.signedUrl) {
+  const r2Key = buildR2Key(R2_PREFIX.PROTECTED_MEDIA, signableAsset.path);
+  try {
+    const signedUrl = await createR2SignedGetUrl(r2Key, 300);
+    console.log("[stabilize] createSignedMediaUrl ok", { assetId, ms: Date.now() - started });
+    return { ok: true as const, url: signedUrl, expiresIn: 300, mocked: false };
+  } catch (err) {
     const fallback = artworkPublicFallbackUrl(signableAsset.path);
     if (fallback) {
       console.log("[stabilize] createSignedMediaUrl fallback", { assetId, ms: Date.now() - started });
       return { ok: true as const, url: fallback, expiresIn: 300, mocked: false, fallback: true as const };
     }
+    const message = err instanceof Error ? err.message : "Unable to create signed URL";
     console.log("[stabilize] createSignedMediaUrl error", { assetId, ms: Date.now() - started });
-    return { ok: false as const, status: 502, message: error?.message ?? "Unable to create signed URL" };
+    return { ok: false as const, status: 502, message };
   }
-
-  console.log("[stabilize] createSignedMediaUrl ok", { assetId, ms: Date.now() - started });
-  return { ok: true as const, url: data.signedUrl, expiresIn: 300, mocked: false };
   });
 }
