@@ -1,7 +1,8 @@
 "use client";
 
-import { FormEvent, Suspense, useState } from "react";
+import { FormEvent, Suspense, useEffect, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
+import { ADMIN_SESSION_EXPIRED_MESSAGE } from "@/server/auth/adminSession";
 import { createSupabaseBrowserClient } from "@/utils/supabase/client";
 
 function LoginForm() {
@@ -11,6 +12,12 @@ function LoginForm() {
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    if (searchParams.get("expired") === "1") {
+      setError(ADMIN_SESSION_EXPIRED_MESSAGE);
+    }
+  }, [searchParams]);
 
   const handleSubmit = async (event: FormEvent) => {
     event.preventDefault();
@@ -45,6 +52,14 @@ function LoginForm() {
     if (profile?.role !== "admin") {
       await supabase.auth.signOut();
       setError("Access denied. Admin account required.");
+      setLoading(false);
+      return;
+    }
+
+    const sessionResponse = await fetch("/api/auth/admin-session", { method: "POST", credentials: "include" });
+    if (!sessionResponse.ok) {
+      await supabase.auth.signOut();
+      setError("Could not start admin session. Please try again.");
       setLoading(false);
       return;
     }

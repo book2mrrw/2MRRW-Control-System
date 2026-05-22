@@ -1,5 +1,11 @@
 import assert from "node:assert/strict";
 import {
+  ADMIN_SESSION_MAX_AGE_MS,
+  ADMIN_SESSION_COOKIE,
+  isAdminSessionExpired,
+  parseAdminSessionStartedAt
+} from "@/server/auth/adminSession";
+import {
   createAudioVisual,
   listAudioVisuals,
   parseYouTubeAudioVisualUrl,
@@ -1143,5 +1149,16 @@ testUniversalCommerceValidation();
 testReleaseCommerceValidation();
 testReleaseTypeFiltering();
 await testAudioVisualPublishedFiltering();
+
+function testAdminSessionTimeout() {
+  const startedAt = Date.now() - ADMIN_SESSION_MAX_AGE_MS + 1000;
+  const cookie = `${ADMIN_SESSION_COOKIE}=${startedAt}`;
+  assert.equal(parseAdminSessionStartedAt(cookie), startedAt);
+  assert.equal(isAdminSessionExpired(startedAt), false);
+  assert.equal(isAdminSessionExpired(startedAt - ADMIN_SESSION_MAX_AGE_MS - 1), true);
+  assert.equal(isAdminSessionExpired(null), true);
+}
+
+testAdminSessionTimeout();
 
 console.log("backend foundation verification passed");

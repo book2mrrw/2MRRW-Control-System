@@ -1,5 +1,12 @@
 import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
+import {
+  ADMIN_SESSION_EXPIRED_MESSAGE,
+  adminSessionLoginPath,
+  clearAdminSessionCookie,
+  isAdminSessionExpired,
+  parseAdminSessionStartedAt
+} from "@/server/auth/adminSession";
 import { getSupabasePublicConfig } from "@/utils/supabase/config";
 
 const DEFAULT_FRONTEND_ORIGINS = [
@@ -83,7 +90,27 @@ async function applyAuthGuard(request: NextRequest) {
   } = await supabase.auth.getSession();
 
   const isLoginPage = request.nextUrl.pathname === "/login";
-  const isPublicPage = isLoginPage || request.nextUrl.pathname === "/api/revalidate";
+  const isPublicPage =
+    isLoginPage ||
+    request.nextUrl.pathname === "/api/revalidate" ||
+    request.nextUrl.pathname === "/api/auth/admin-session";
+
+  let isAdminUser = false;
+  if (session?.user?.id) {
+    const { data: profile } = await supabase.from("profiles").select("role").eq("id", session.user.id).maybeSingle();
+    isAdminUser = profile?.role === "admin";
+  }
+
+  const adminSessionStartedAt = parseAdminSessionStartedAt(request.headers.get("cookie") ?? "");
+  const adminSessionExpired = isAdminUser && isAdminSessionExpired(adminSessionStartedAt);
+
+  if (adminSessionExpired && !isLoginPage) {
+    await supabase.auth.signOut();
+    const loginUrl = new URL(adminSessionLoginPath(request.url), request.url);
+    const redirect = NextResponse.redirect(loginUrl);
+    clearAdminSessionCookie(redirect);
+    return redirect;
+  }
 
   if (!session && !isPublicPage) {
     const loginUrl = new URL("/login", request.url);
@@ -94,7 +121,7 @@ async function applyAuthGuard(request: NextRequest) {
     return NextResponse.redirect(loginUrl);
   }
 
-  if (session && isLoginPage) {
+  if (session && isLoginPage && isAdminUser && !adminSessionExpired) {
     const returnTo = request.nextUrl.searchParams.get("returnTo");
     const destination = returnTo && returnTo.startsWith("/") && !returnTo.startsWith("//") ? returnTo : "/dashboard";
     return NextResponse.redirect(new URL(destination, request.url));
@@ -103,12 +130,39 @@ async function applyAuthGuard(request: NextRequest) {
   return response;
 }
 
+async function applyAdminSessionApiGuard(request: NextRequest) {
+  const pathname = request.nextUrl.pathname;
+  const needsAdminSession =
+    pathname.startsWith("/api/admin") ||
+    pathname.startsWith("/api/gifts") ||
+    pathname === "/api/r2/presign";
+
+  if (!needsAdminSession) {
+    return applyApiCors(NextResponse.next(), request);
+  }
+
+  const startedAt = parseAdminSessionStartedAt(request.headers.get("cookie") ?? "");
+  if (!isAdminSessionExpired(startedAt)) {
+    return applyApiCors(NextResponse.next(), request);
+  }
+
+  const response = applyApiCors(
+    NextResponse.json({ error: { message: ADMIN_SESSION_EXPIRED_MESSAGE } }, { status: 401 }),
+    request
+  );
+  clearAdminSessionCookie(response);
+  return response;
+}
+
 export async function proxy(request: NextRequest) {
   if (request.nextUrl.pathname.startsWith("/api")) {
     if (request.method === "OPTIONS") {
       return applyApiCors(new NextResponse(null, { status: 204 }), request);
     }
-    return applyApiCors(NextResponse.next(), request);
+    if (request.nextUrl.pathname === "/api/auth/admin-session") {
+      return applyApiCors(NextResponse.next(), request);
+    }
+    return applyAdminSessionApiGuard(request);
   }
 
   return applyAuthGuard(request);

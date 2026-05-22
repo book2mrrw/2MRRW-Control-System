@@ -1658,6 +1658,7 @@ function SettingsPage() {
   };
   const signOut = async () => {
     setSigningOut(true);
+    await fetch("/api/auth/admin-session", { method: "DELETE", credentials: "include" });
     const { createSupabaseBrowserClient } = await import("@/utils/supabase/client");
     const supabase = createSupabaseBrowserClient();
     await supabase.auth.signOut();

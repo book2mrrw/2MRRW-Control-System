@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import crypto from "node:crypto";
+import { assertAdminSessionActive, ADMIN_SESSION_EXPIRED_MESSAGE } from "@/server/auth/adminSession";
 
 const DEFAULT_FRONTEND_ORIGINS = [
   "https://artist-platform-silk.vercel.app",
@@ -190,6 +191,12 @@ export function requireStudioAccess(request: Request) {
     return;
   } catch {
     if (isSameOriginStudioRequest(request)) {
+      try {
+        assertAdminSessionActive(request);
+      } catch (error) {
+        const message = error instanceof Error ? error.message : ADMIN_SESSION_EXPIRED_MESSAGE;
+        throw new Error(message);
+      }
       return;
     }
     throw new Error("Studio access required");

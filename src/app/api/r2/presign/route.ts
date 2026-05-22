@@ -3,13 +3,14 @@ import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 import { createServerClient } from "@supabase/ssr";
 import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
+import { assertAdminSessionActive, ADMIN_SESSION_EXPIRED_MESSAGE } from "@/server/auth/adminSession";
 import { getPublicR2Url, r2Client, R2_BUCKET } from "@/lib/storage/r2";
 import { getSupabasePublicConfig } from "@/utils/supabase/config";
 
 const ALLOWED_ARTWORK_TYPES = ["image/jpeg", "image/png", "image/webp"];
 const ALLOWED_AUDIO_TYPES = ["audio/wav", "audio/aiff", "audio/x-aiff", "audio/flac", "audio/x-flac", "audio/mpeg"];
 
-async function requireAdmin() {
+async function requireAdmin(request: Request) {
   const cookieStore = await cookies();
   const { url, publishableKey } = getSupabasePublicConfig();
   const supabase = createServerClient(url, publishableKey, {
@@ -31,11 +32,17 @@ async function requireAdmin() {
     return { error: NextResponse.json({ error: "Forbidden" }, { status: 403 }) };
   }
 
+  try {
+    assertAdminSessionActive(request);
+  } catch {
+    return { error: NextResponse.json({ error: ADMIN_SESSION_EXPIRED_MESSAGE }, { status: 401 }) };
+  }
+
   return { supabase };
 }
 
 export async function POST(request: Request) {
-  const auth = await requireAdmin();
+  const auth = await requireAdmin(request);
   if ("error" in auth && auth.error) return auth.error;
 
   if (!R2_BUCKET) {
