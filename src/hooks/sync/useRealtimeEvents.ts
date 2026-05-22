@@ -28,12 +28,18 @@ let connected = false;
 let events: EventPayload[] = [];
 const storeListeners = new Set<() => void>();
 
+type RealtimeSnapshot = { events: EventPayload[]; connected: boolean };
+let cachedSnapshot: RealtimeSnapshot | null = null;
+
 function notifyStore() {
   storeListeners.forEach((listener) => listener());
 }
 
-function getSnapshot() {
-  return { events, connected };
+function getSnapshot(): RealtimeSnapshot {
+  if (!cachedSnapshot || cachedSnapshot.events !== events || cachedSnapshot.connected !== connected) {
+    cachedSnapshot = { events, connected };
+  }
+  return cachedSnapshot;
 }
 
 function getServerSnapshot() {

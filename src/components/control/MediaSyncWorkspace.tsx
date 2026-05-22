@@ -1,7 +1,7 @@
 "use client";
 
 import { ChevronDown, ChevronRight, Headphones, Maximize2, Pencil, Play, Plus, Radio, RefreshCw, Rocket, Upload } from "lucide-react";
-import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { AudioVisualsPanel } from "@/components/control/AudioVisualsPanel";
 import { MediaUploadPanel } from "@/components/control/MediaUploadPanel";
 import type { ControlUiRelease, DurableCatalogRelease, DurableCatalogReleaseMedia } from "@/services/catalog/controlCatalogClient";
@@ -674,14 +674,19 @@ export function MediaLibrary({
       });
   }, []);
 
+  const onUploadCompleteRef = useRef(onUploadComplete);
+  const refreshSyncRef = useRef(refreshSync);
+  onUploadCompleteRef.current = onUploadComplete;
+  refreshSyncRef.current = refreshSync;
+
   useEffect(() => {
     refreshSync();
   }, [refreshSync]);
 
   const handleUploadComplete = useCallback(() => {
-    onUploadComplete();
-    refreshSync();
-  }, [onUploadComplete, refreshSync]);
+    onUploadCompleteRef.current();
+    refreshSyncRef.current();
+  }, []);
 
   const handleMediaSyncEvent = useCallback(() => {
     handleUploadComplete();

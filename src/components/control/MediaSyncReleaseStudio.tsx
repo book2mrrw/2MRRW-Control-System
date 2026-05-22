@@ -691,9 +691,12 @@ export function ReleaseManagementSection({
 
   const [selectedId, setSelectedId] = useState<string | null>(null);
   useEffect(() => {
-    if (!rows.length) { setSelectedId(null); return; }
-    if (!selectedId || !rows.some((row) => row.release.id === selectedId)) setSelectedId(rows[0]!.release.id);
-  }, [rows, selectedId]);
+    setSelectedId((current) => {
+      if (!rows.length) return null;
+      if (current && rows.some((row) => row.release.id === current)) return current;
+      return rows[0]!.release.id;
+    });
+  }, [rows]);
 
   const selected = rows.find((row) => row.release.id === selectedId) ?? null;
   const liveCount = rows.filter((row) => resolveCardLiveStatus(row.release) === "live").length;
