@@ -24,8 +24,8 @@ npm ls next react react-dom @supabase/supabase-js --depth=0
 
 | Field | Value |
 |-------|--------|
-| **URL** | https://2-mrrw-control-system.vercel.app |
-| **Vercel project** | `2-mrrw-control-system` |
+| **URL** | https://2mrrw-control-system.vercel.app |
+| **Vercel project** | `2mrrw-control-system` |
 | **Reference deploy** | `dpl_3Q5z4Q1b61JrHXVCZPn9EmiBbjgm` (post edge-verify restore; see `docs/PROMPT_DEPLOY_TIMELINE.md`) |
 
 ## What works (verified contract)

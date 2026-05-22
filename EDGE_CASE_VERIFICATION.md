@@ -1,7 +1,7 @@
 # Edge-Case Verification — 2MRRW Control System Go-Live
 
 **Date:** 2026-05-19 (full re-verification + media rendering matrix)  
-**Control prod:** https://2-mrrw-control-system.vercel.app  
+**Control prod:** https://2mrrw-control-system.vercel.app  
 **Deploy:** `dpl_HyJb2XSdrL5AS6cZoL1YdzmybWKQ` (single-loop media resolver `b26558e`)  
 **Frontend prod:** https://artist-platform-silk.vercel.app  
 **Supabase prod:** `xzghdntnvslvpxedgfku`

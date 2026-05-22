@@ -48,8 +48,8 @@ npx vercel --prod --yes
 ### 3. Verify
 
 ```bash
-curl -sS "https://2-mrrw-control-system.vercel.app/api/health/basic"
-curl -sS "https://2-mrrw-control-system.vercel.app/api/public/releases?limit=100"
+curl -sS "https://2mrrw-control-system.vercel.app/api/health/basic"
+curl -sS "https://2mrrw-control-system.vercel.app/api/public/releases?limit=100"
 ```
 
 ### 4. Merge policy

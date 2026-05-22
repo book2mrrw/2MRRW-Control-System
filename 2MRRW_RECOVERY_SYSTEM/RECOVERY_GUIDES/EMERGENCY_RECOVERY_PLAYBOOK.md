@@ -129,7 +129,7 @@ See [`../../docs/SAFE_RECOVERY_PROTOCOL.md`](../../docs/SAFE_RECOVERY_PROTOCOL.m
 **Steps:**
 
 1. Confirm control smoke passes.
-2. Vercel **artist-platform**: set `NEXT_PUBLIC_CONTROL_SYSTEM_API_URL=https://2-mrrw-control-system.vercel.app`.
+2. Vercel **artist-platform**: set `NEXT_PUBLIC_CONTROL_SYSTEM_API_URL=https://2mrrw-control-system.vercel.app`.
 3. Set `NEXT_PUBLIC_SITE_URL=https://artist-platform-silk.vercel.app`.
 4. Redeploy frontend.
 5. See [`FULL_RECOVERY_GUIDE.md`](FULL_RECOVERY_GUIDE.md) Phase C.

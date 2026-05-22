@@ -28,14 +28,14 @@ npx vercel --prod --yes
 
 ## Vercel dashboard rollback (no build)
 
-1. Project **2-mrrw-control-system** → Deployments  
+1. Project **2mrrw-control-system** → Deployments  
 2. Deploy `dpl_3Q5z4Q1b61JrHXVCZPn9EmiBbjgm` → **Promote to Production**
 
 ## Post-deploy smoke
 
 ```bash
-curl -sS "https://2-mrrw-control-system.vercel.app/api/health/basic"
-curl -sS "https://2-mrrw-control-system.vercel.app/api/public/releases?limit=100"
+curl -sS "https://2mrrw-control-system.vercel.app/api/health/basic"
+curl -sS "https://2mrrw-control-system.vercel.app/api/public/releases?limit=100"
 ```
 
 Expect `ok: true` and **9** releases.
@@ -48,7 +48,7 @@ Expect `ok: true` and **9** releases.
 git clone <YOUR_ARTIST_PLATFORM_REPO_URL> artist-platform
 cd artist-platform
 # Ensure Vercel Production has:
-# NEXT_PUBLIC_CONTROL_SYSTEM_API_URL=https://2-mrrw-control-system.vercel.app
+# NEXT_PUBLIC_CONTROL_SYSTEM_API_URL=https://2mrrw-control-system.vercel.app
 # NEXT_PUBLIC_SITE_URL=https://artist-platform-silk.vercel.app
 npm ci
 npx vercel --prod --yes

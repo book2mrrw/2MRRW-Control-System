@@ -88,7 +88,7 @@ Foundation lock-in completed: documentation, dependency pins, guardrails script,
 
 ## Phase 8 — Production verification
 
-**URL:** https://2-mrrw-control-system.vercel.app
+**URL:** https://2mrrw-control-system.vercel.app
 
 | Check | Result |
 |-------|--------|

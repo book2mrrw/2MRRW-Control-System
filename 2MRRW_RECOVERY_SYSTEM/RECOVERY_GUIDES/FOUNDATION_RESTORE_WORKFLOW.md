@@ -50,8 +50,8 @@ Or promote known-good deploy per [`DEPLOYMENT_RECOVERY_GUIDE.md`](DEPLOYMENT_REC
 ### 6. Smoke
 
 ```bash
-curl -sS "https://2-mrrw-control-system.vercel.app/api/health/basic"
-curl -sS "https://2-mrrw-control-system.vercel.app/api/public/releases?limit=100"
+curl -sS "https://2mrrw-control-system.vercel.app/api/health/basic"
+curl -sS "https://2mrrw-control-system.vercel.app/api/public/releases?limit=100"
 ```
 
 ### 7. Fix forward (required for permanent fix)

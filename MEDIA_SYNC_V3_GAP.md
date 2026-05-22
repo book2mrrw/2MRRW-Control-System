@@ -50,4 +50,4 @@ npm run verify   # passed
 npm run build    # passed
 ```
 
-**Production URL:** https://2-mrrw-control-system.vercel.app/media
+**Production URL:** https://2mrrw-control-system.vercel.app/media

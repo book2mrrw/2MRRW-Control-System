@@ -1,8 +1,8 @@
 # Production Audit — 2MRRW Control System
 
 **Date:** 2026-05-19  
-**Production URL:** https://2-mrrw-control-system.vercel.app  
-**Media Control Room:** https://2-mrrw-control-system.vercel.app/media
+**Production URL:** https://2mrrw-control-system.vercel.app  
+**Media Control Room:** https://2mrrw-control-system.vercel.app/media
 
 ## Dependency graph
 
@@ -45,9 +45,9 @@ npm run build    # passed
 ## Post-deploy checks
 
 ```bash
-curl -s "https://2-mrrw-control-system.vercel.app/api/public/releases?limit=100" | jq '.data.count'
-curl -s "https://2-mrrw-control-system.vercel.app/api/public/audio-visuals" | jq '.data.count'
-curl -s "https://2-mrrw-control-system.vercel.app/api/public/hero" | jq '.data.hero.background_media_url'
+curl -s "https://2mrrw-control-system.vercel.app/api/public/releases?limit=100" | jq '.data.count'
+curl -s "https://2mrrw-control-system.vercel.app/api/public/audio-visuals" | jq '.data.count'
+curl -s "https://2mrrw-control-system.vercel.app/api/public/hero" | jq '.data.hero.background_media_url'
 ```
 
 ## UI verification on /media

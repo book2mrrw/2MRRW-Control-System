@@ -30,8 +30,8 @@ From [`DEPLOYMENT_REFERENCES/STABLE_DEPLOYMENT_REFERENCE.md`](../DEPLOYMENT_REFE
 | `dpl_3Q5z4Q1b61JrHXVCZPn9EmiBbjgm` | Known-good post edge-verify restore (catalog + 9 releases) |
 | `dpl_HyJb2XSdrL5AS6cZoL1YdzmybWKQ` | Edge-verify deploy (MP4 matrix verified) |
 
-**Project:** `2-mrrw-control-system`  
-**URL:** https://2-mrrw-control-system.vercel.app
+**Project:** `2mrrw-control-system`  
+**URL:** https://2mrrw-control-system.vercel.app
 
 ### Frontend (artist-platform)
 

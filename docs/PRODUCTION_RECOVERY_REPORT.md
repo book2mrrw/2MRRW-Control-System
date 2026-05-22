@@ -1,7 +1,7 @@
 # Production Recovery Report
 
 **Date:** 2026-05-19  
-**Production URL:** https://2-mrrw-control-system.vercel.app  
+**Production URL:** https://2mrrw-control-system.vercel.app  
 **Status:** STABILIZED (UI shell recovered; Supabase-backed routes still timing out on prod — investigate separately)
 
 ## Problem
@@ -51,7 +51,7 @@ npx vercel --prod --yes
 | `/media` (HEAD) | 200 | **0.34s** |
 | `/api/health` (legacy) | timeout | >25s |
 
-**Deploy URL:** https://2-mrrw-control-system.vercel.app  
+**Deploy URL:** https://2mrrw-control-system.vercel.app  
 **Commit:** `84d5e6e`
 
 ## Follow-up

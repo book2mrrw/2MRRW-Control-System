@@ -40,7 +40,7 @@ From [`../../CURRENT_SYSTEM_STATE.md`](../../CURRENT_SYSTEM_STATE.md):
 
 | Surface | URL |
 |---------|-----|
-| Control | https://2-mrrw-control-system.vercel.app |
+| Control | https://2mrrw-control-system.vercel.app |
 | Frontend | https://artist-platform-silk.vercel.app |
 | Frontend → Control | `NEXT_PUBLIC_CONTROL_SYSTEM_API_URL` → control URL |
 
@@ -57,8 +57,8 @@ From [`../../CURRENT_SYSTEM_STATE.md`](../../CURRENT_SYSTEM_STATE.md):
 npm run verify
 ./scripts/check-architecture-guardrails.sh
 
-curl -sS "https://2-mrrw-control-system.vercel.app/api/health/basic"
-curl -sS "https://2-mrrw-control-system.vercel.app/api/public/releases?limit=100"
+curl -sS "https://2mrrw-control-system.vercel.app/api/health/basic"
+curl -sS "https://2mrrw-control-system.vercel.app/api/public/releases?limit=100"
 ```
 
 ## Cross-links

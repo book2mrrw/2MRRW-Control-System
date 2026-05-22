@@ -1,8 +1,8 @@
 # MEGA Go-Live Checklist — 2MRRW Control System
 
 **Audit date:** 2026-05-19  
-**Production URL:** https://2-mrrw-control-system.vercel.app  
-**Media Control Room:** https://2-mrrw-control-system.vercel.app/media  
+**Production URL:** https://2mrrw-control-system.vercel.app  
+**Media Control Room:** https://2mrrw-control-system.vercel.app/media  
 **Latest deploy:** `dpl_2wkbfGBxxVPoJ5DEwM78nCe2mg2w` (health, backfill API, GitHub workflows)  
 **PR:** https://github.com/book2mrrw/2MRRW-Control-System/pull/2 (merged)
 
@@ -26,7 +26,7 @@
 ./scripts/trigger-scheduled-cron.sh
 # or
 curl -sS -H "Authorization: Bearer $CRON_SECRET" \
-  "https://2-mrrw-control-system.vercel.app/api/cron/scheduled-releases"
+  "https://2mrrw-control-system.vercel.app/api/cron/scheduled-releases"
 ```
 
 Expect JSON like `{"due":1,"results":[{"ok":true,"status":"published"}]}`. See **`DROP_REHEARSAL.md`** for full rehearsal.
@@ -48,7 +48,7 @@ Bundled binary: `.tmp/gh/gh` (see `scripts/gh.sh`).
 ### Health monitoring
 
 ```bash
-curl -sS https://2-mrrw-control-system.vercel.app/api/health | jq .
+curl -sS https://2mrrw-control-system.vercel.app/api/health | jq .
 ```
 
 - `status`: `ok` | `degraded`
@@ -66,7 +66,7 @@ npm run backfill:covers
 
 # Production (uses Vercel service role)
 curl -sS -X POST -H "Authorization: Bearer $CRON_SECRET" \
-  "https://2-mrrw-control-system.vercel.app/api/admin/ops/backfill-covers"
+  "https://2mrrw-control-system.vercel.app/api/admin/ops/backfill-covers"
 ```
 
 Verify: `/api/health` → `storage.usesFallback: false` and love-hz sample message reads `R2 signed URL OK` (CDN or presigned R2 URL, not legacy Supabase Storage).
@@ -79,7 +79,7 @@ Verify: `/api/health` → `storage.usesFallback: false` and love-hz sample messa
 |---|------|--------|--------|
 | 1 | Migration `0017_release_scheduling` on prod Supabase | **DONE** | Applied via Supabase MCP (`release_scheduling`). Columns: `release_time`, `publish_timezone`, `schedule_attempts`, `schedule_last_error`. |
 | 2 | `CRON_SECRET` in Vercel production | **DONE** | Rotated via `vercel env rm/add` + redeploy `dpl_GvULKn8bU9x8zF3JVQQBEG8oX31j`. Value only in Vercel (not in repo). |
-| 3 | Cron schedule | **DONE** | `vercel.json`: `0 6 * * *` (Hobby daily). **Pro:** use `*/5 * * * *`. **Precise drops:** manual `curl -H "Authorization: Bearer $CRON_SECRET" https://2-mrrw-control-system.vercel.app/api/cron/scheduled-releases` |
+| 3 | Cron schedule | **DONE** | `vercel.json`: `0 6 * * *` (Hobby daily). **Pro:** use `*/5 * * * *`. **Precise drops:** manual `curl -H "Authorization: Bearer $CRON_SECRET" https://2mrrw-control-system.vercel.app/api/cron/scheduled-releases` |
 | 4 | Scheduled drop E2E test | **DONE** | `hour-glass` set `scheduled` → hidden from public (8/9). Cron fired (`due:1`, `ok:true`). Fixed `clearScheduleFailure` to set `status=published` in DB; public API restored 9/9. |
 | 5 | artist-platform API URL | **DONE** | `.env.example` already set. Local `.env.local` updated with `NEXT_PUBLIC_CONTROL_SYSTEM_API_URL`. Smoke: releases/hero/audio-visuals OK. |
 | 6 | Production `/media` ops | **DONE** | 9/9 releases `coverUrl` on public API. All have `cover_links=1` in DB. `sync_state`: catalog clean (not dirty). |
@@ -89,7 +89,7 @@ Verify: `/api/health` → `storage.usesFallback: false` and love-hz sample messa
 
 ### CRON_SECRET — Vercel dashboard (if re-setting)
 
-1. [Vercel](https://vercel.com) → **2-mrrw-control-system** → **Settings** → **Environment Variables**
+1. [Vercel](https://vercel.com) → **2mrrw-control-system** → **Settings** → **Environment Variables**
 2. Add `CRON_SECRET` = long random string (32+ chars), environments **Production** (+ Preview optional)
 3. **Redeploy** production (env vars apply on next deploy)
 
@@ -97,7 +97,7 @@ Verify: `/api/health` → `storage.usesFallback: false` and love-hz sample messa
 
 ```bash
 curl -sS -H "Authorization: Bearer $CRON_SECRET" \
-  "https://2-mrrw-control-system.vercel.app/api/cron/scheduled-releases"
+  "https://2mrrw-control-system.vercel.app/api/cron/scheduled-releases"
 ```
 
 ---
@@ -162,16 +162,16 @@ curl -sS -H "Authorization: Bearer $CRON_SECRET" \
 |------|--------|
 | `npm run verify` | **PASS** |
 | `npm run build` | **PASS** |
-| `npx vercel --prod --yes` | **PASS** → https://2-mrrw-control-system.vercel.app (`dpl_GvULKn8bU9x8zF3JVQQBEG8oX31j`) |
+| `npx vercel --prod --yes` | **PASS** → https://2mrrw-control-system.vercel.app (`dpl_GvULKn8bU9x8zF3JVQQBEG8oX31j`) |
 
 ---
 
 ## Production smoke (curl)
 
 ```bash
-curl -s "https://2-mrrw-control-system.vercel.app/api/public/releases?limit=100"
-curl -s "https://2-mrrw-control-system.vercel.app/api/public/hero"
-curl -s "https://2-mrrw-control-system.vercel.app/api/public/audio-visuals"
+curl -s "https://2mrrw-control-system.vercel.app/api/public/releases?limit=100"
+curl -s "https://2mrrw-control-system.vercel.app/api/public/hero"
+curl -s "https://2mrrw-control-system.vercel.app/api/public/audio-visuals"
 ```
 
 ---

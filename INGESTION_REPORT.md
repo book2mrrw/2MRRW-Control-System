@@ -118,7 +118,7 @@ npx vercel --prod --yes
 
 - `npm run verify` — passed
 - `npm run build` — passed
-- **Production URL:** https://2-mrrw-control-system.vercel.app
+- **Production URL:** https://2mrrw-control-system.vercel.app
 - `GET /api/releases?limit=100` → **9** releases (Hour Glass, Love Hz, T.B.H., etc.)
 - `GET /api/public/releases?limit=100` → **count: 9**
 - Media/Releases pages: server components call `ensureCatalogHydrated()` → Supabase relational catalog → **9** discography cards + Media catalog table rows

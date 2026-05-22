@@ -142,7 +142,7 @@ cat >"${PLATFORM_FILE}" <<EOF
 
 | App | URL |
 |-----|-----|
-| Control | ${CONTROL_URL:-https://2-mrrw-control-system.vercel.app} |
+| Control | ${CONTROL_URL:-https://2mrrw-control-system.vercel.app} |
 | Frontend | https://artist-platform-silk.vercel.app |
 
 Sacred foundations (not replaced by checkpoints):

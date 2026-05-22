@@ -1,7 +1,7 @@
 # Pre-Verification Recovery
 
 **Date:** 2026-05-19  
-**Production URL:** https://2-mrrw-control-system.vercel.app  
+**Production URL:** https://2mrrw-control-system.vercel.app  
 **HEAD (recovery deploy):** `6112e55` (stabilization base `84d5e6e`)
 
 ---
@@ -124,13 +124,13 @@ Prod smoke:
 
 ```bash
 curl -sS -o /dev/null -w '%{http_code} %{time_total}s\n' --max-time 15 \
-  'https://2-mrrw-control-system.vercel.app/api/health/basic'
+  'https://2mrrw-control-system.vercel.app/api/health/basic'
 curl -sS --max-time 15 \
-  'https://2-mrrw-control-system.vercel.app/api/health/db'
+  'https://2mrrw-control-system.vercel.app/api/health/db'
 curl -sS --max-time 25 \
-  'https://2-mrrw-control-system.vercel.app/api/public/releases?limit=5'
+  'https://2mrrw-control-system.vercel.app/api/public/releases?limit=5'
 curl -sS -o /dev/null -w '%{http_code} %{time_total}s\n' --max-time 15 -I \
-  'https://2-mrrw-control-system.vercel.app/media'
+  'https://2mrrw-control-system.vercel.app/media'
 ```
 
 **4 singles MP4 check:** In `/api/public/releases?limit=5`, count releases where `primaryAsset.type === "mp4"` and `src` contains `/videos/singles/`.
@@ -163,5 +163,5 @@ curl -sS -o /dev/null -w '%{http_code} %{time_total}s\n' --max-time 15 -I \
 |------|--------|
 | **PRE_VERIFICATION commit** | `c75cab5` (`2026-05-19 04:10:34 -0500`) |
 | **Recovered** | Media stack already on `main` (matches `b26558e`/`27bca5a`); Supabase 10s fetch timeout + health/db fail-fast |
-| **Deploy URL** | https://2-mrrw-control-system.vercel.app |
+| **Deploy URL** | https://2mrrw-control-system.vercel.app |
 | **Follow-up** | Fix Vercel ↔ Supabase connectivity (env, region, pooler); then re-run MP4 API smoke |

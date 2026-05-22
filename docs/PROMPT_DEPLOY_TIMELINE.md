@@ -27,7 +27,7 @@ eae73ab  Frontend media manifest (reverted by this rollback)
 
 **Vercel rollback:** `npx vercel rollback dpl_HyJb2XSdrL5AS6cZoL1YdzmybWKQ` failed (402 — Hobby plan cannot roll back further than previous prod). Restore via git reset + `npx vercel --prod --yes`.
 
-**Post-restore prod deploy:** `dpl_3Q5z4Q1b61JrHXVCZPn9EmiBbjgm` → https://2-mrrw-control-system.vercel.app (2026-05-19, HEAD `5da668d` = `27bca5a` + timeline doc).
+**Post-restore prod deploy:** `dpl_3Q5z4Q1b61JrHXVCZPn9EmiBbjgm` → https://2mrrw-control-system.vercel.app (2026-05-19, HEAD `5da668d` = `27bca5a` + timeline doc).
 
 ### Commits removed from `main` by this rollback
 

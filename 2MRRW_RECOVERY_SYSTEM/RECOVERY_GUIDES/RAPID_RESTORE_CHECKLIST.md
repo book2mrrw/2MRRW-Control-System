@@ -4,7 +4,7 @@ Use when production is down and you need control + API healthy in under 30 minut
 
 ## Prerequisites
 
-- [ ] Vercel access to `2-mrrw-control-system` (and `artist-platform` if UI broken)
+- [ ] Vercel access to `2mrrw-control-system` (and `artist-platform` if UI broken)
 - [ ] Supabase dashboard access
 - [ ] Git clone of control repo
 

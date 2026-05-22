@@ -31,8 +31,8 @@ Root `layout.tsx` must keep `initialCatalog={[]}` and must not call `buildContro
 After every production deploy:
 
 ```bash
-curl -sS "https://2-mrrw-control-system.vercel.app/api/health/basic"
-curl -sS "https://2-mrrw-control-system.vercel.app/api/public/releases?limit=100"
+curl -sS "https://2mrrw-control-system.vercel.app/api/health/basic"
+curl -sS "https://2mrrw-control-system.vercel.app/api/public/releases?limit=100"
 ```
 
 Expect `ok: true` on health and **9** releases on the public catalog API.

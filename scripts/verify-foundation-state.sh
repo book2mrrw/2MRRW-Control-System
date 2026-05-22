@@ -7,7 +7,7 @@
 #   CONTROL_URL=https://example.com EXPECTED_RELEASES=9 ./scripts/verify-foundation-state.sh
 #
 # Env:
-#   CONTROL_URL          Production base URL (default: 2-mrrw-control-system.vercel.app)
+#   CONTROL_URL          Production base URL (default: 2mrrw-control-system.vercel.app)
 #   EXPECTED_RELEASES    Expected public release count (default: 9)
 #   CURL_MAX_TIME        curl --max-time seconds (default: 20)
 set -euo pipefail

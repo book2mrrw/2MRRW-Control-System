@@ -31,7 +31,7 @@ export function OPTIONS(request: Request) {
 export async function GET(request: Request) {
   const url = new URL(request.url);
   const limit = Number(url.searchParams.get("limit") ?? 100);
-  const apiBase = process.env.NEXT_PUBLIC_APP_URL?.replace(/\/$/, "") ?? "https://2-mrrw-control-system.vercel.app";
+  const apiBase = process.env.NEXT_PUBLIC_APP_URL?.replace(/\/$/, "") ?? "https://2mrrw-control-system.vercel.app";
   const boundedLimit = Number.isFinite(limit) ? Math.min(Math.max(limit, 1), 200) : 100;
   const releases = await Promise.race([
     getLatestReleasesDurable({ limit: boundedLimit }),

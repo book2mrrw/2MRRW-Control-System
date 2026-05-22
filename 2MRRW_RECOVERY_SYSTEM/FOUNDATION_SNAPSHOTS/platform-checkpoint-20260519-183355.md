@@ -14,7 +14,7 @@
 
 | App | URL |
 |-----|-----|
-| Control | https://2-mrrw-control-system.vercel.app |
+| Control | https://2mrrw-control-system.vercel.app |
 | Frontend | https://artist-platform-silk.vercel.app |
 
 Sacred foundations (not replaced by checkpoints):

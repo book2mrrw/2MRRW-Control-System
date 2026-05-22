@@ -1,13 +1,13 @@
 # 2MRRW Control System — Operations
 
-One-page reference for day-to-day ops and drop night. Production: **https://2-mrrw-control-system.vercel.app**
+One-page reference for day-to-day ops and drop night. Production: **https://2mrrw-control-system.vercel.app**
 
 ## Where secrets live
 
 | Secret | Location | Used by |
 |--------|----------|---------|
 | `CRON_SECRET` | Vercel Production env | `/api/cron/scheduled-releases`, `/api/admin/ops/backfill-covers`, GitHub Action `scheduled-releases.yml` |
-| `CONTROL_SYSTEM_URL` | GitHub repo secret | `https://2-mrrw-control-system.vercel.app` |
+| `CONTROL_SYSTEM_URL` | GitHub repo secret | `https://2mrrw-control-system.vercel.app` |
 | `SUPABASE_SERVICE_ROLE_KEY` | Vercel Production | DB + Storage writes |
 | `CONTROL_SYSTEM_ADMIN_API_KEY` | Vercel (optional) | `x-admin-token` for scripted admin calls |
 
@@ -28,11 +28,11 @@ Upgrade to **Vercel Pro** only if you want platform cron at `*/5 * * * *` instea
 ## Daily ops
 
 ```bash
-curl -sS https://2-mrrw-control-system.vercel.app/api/health | jq .
+curl -sS https://2mrrw-control-system.vercel.app/api/health | jq .
 # Expect: status ok, publishedReleases ≥ 1, storage usesFallback false for sample
 ```
 
-- **Media Control Room:** https://2-mrrw-control-system.vercel.app/media  
+- **Media Control Room:** https://2mrrw-control-system.vercel.app/media  
 - **Public catalog sanity:** `GET /api/public/releases` (published only)  
 - **GitHub:** Actions → “Scheduled releases cron” / “Production health check” should be green  
 

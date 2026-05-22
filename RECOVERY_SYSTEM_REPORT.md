@@ -43,7 +43,7 @@ git fetch --tags origin && git checkout foundation-stable-v1 && npm ci && npm ru
 
 | Surface | URL |
 |---------|-----|
-| Control | https://2-mrrw-control-system.vercel.app |
+| Control | https://2mrrw-control-system.vercel.app |
 | Frontend | https://artist-platform-silk.vercel.app |
 | Known-good deploy | `dpl_3Q5z4Q1b61JrHXVCZPn9EmiBbjgm` |
 

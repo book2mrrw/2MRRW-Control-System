@@ -50,7 +50,7 @@ npm run build
 npx vercel --prod --yes
 ```
 
-**Production:** https://2-mrrw-control-system.vercel.app/media
+**Production:** https://2mrrw-control-system.vercel.app/media
 
 ### Production smoke test
 

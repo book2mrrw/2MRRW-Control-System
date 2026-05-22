@@ -1,0 +1,51 @@
+---
+description: Zip every audit/report/summary to ~/Downloads for sharing
+globs:
+alwaysApply: false
+---
+
+# Report deliverables
+
+After any audit, read-only report, or implementation summary, package it for sharing in **Downloads**.
+
+## Output path
+
+```text
+/Users/recharge/Downloads/2MRRW-{ReportType}-{YYYY-MM-DD}.zip
+```
+
+Example: `2MRRW-Vercel-Env-Audit-2026-05-22.zip`
+
+## Zip contents
+
+1. Full markdown report (`2MRRW-*-READONLY-*.md`, implementation summary, or audit doc)
+2. `README.txt` — one-line description (title or `--desc`)
+3. Relevant evidence or snippets (logs, curl output, screenshots) when applicable
+
+**Never** include secrets: `.env`, `.env.local`, credentials files, API keys, or token dumps.
+
+## Helper script
+
+From repo root (when `scripts/zip-report-to-downloads.sh` exists):
+
+```bash
+# Single report (+ optional evidence paths)
+./scripts/zip-report-to-downloads.sh reports/2MRRW-Vercel-Env-Audit-READONLY-2026-05-22.md
+
+# Override type or description
+./scripts/zip-report-to-downloads.sh --type Vercel-Env-Audit path/to/report.md --desc "Vercel production env audit"
+
+# Bundle multiple reports (catch-up / archive)
+./scripts/zip-report-to-downloads.sh --archive \
+  reports/*.md \
+  docs/commerce/*REPORT*.md \
+  docs/commerce/*E2E*.md
+```
+
+Produces `2MRRW-Reports-Archive-YYYY-MM-DD.zip` for `--archive`.
+
+## Agent checklist
+
+- Finish the markdown report in `reports/` or the relevant `docs/` path first.
+- Run the zip script; confirm the printed path under `~/Downloads`.
+- For batch catch-up, use `--archive` once rather than many duplicate singles.

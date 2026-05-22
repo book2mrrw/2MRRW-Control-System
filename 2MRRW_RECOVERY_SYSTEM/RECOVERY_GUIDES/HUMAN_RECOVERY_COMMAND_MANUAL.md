@@ -394,7 +394,7 @@ zip -r ~/Desktop/2MRRW-recovery-$DATE.zip 2MRRW_RECOVERY_SYSTEM/
 **Override production URL:**
 
 ```bash
-CONTROL_URL=https://2-mrrw-control-system.vercel.app npm run foundation:verify
+CONTROL_URL=https://2mrrw-control-system.vercel.app npm run foundation:verify
 ```
 
 ---
@@ -424,7 +424,7 @@ CONTROL_URL=https://2-mrrw-control-system.vercel.app npm run foundation:verify
 
 | | |
 |---|---|
-| **Commands (order)** | 1. `cd ~/2MRRW-Control-System` → `npm run foundation:recover-platform` 2. `npm run foundation:verify-platform` 3. Vercel env audit: control `ARTIST_PLATFORM_PUBLIC_URL`; frontend `NEXT_PUBLIC_CONTROL_SYSTEM_API_URL=https://2-mrrw-control-system.vercel.app` 4. If only frontend deploy needed: `cd ~/artist-platform` → `npm run recover:deploy -- --deploy` |
+| **Commands (order)** | 1. `cd ~/2MRRW-Control-System` → `npm run foundation:recover-platform` 2. `npm run foundation:verify-platform` 3. Vercel env audit: control `ARTIST_PLATFORM_PUBLIC_URL`; frontend `NEXT_PUBLIC_CONTROL_SYSTEM_API_URL=https://2mrrw-control-system.vercel.app` 4. If only frontend deploy needed: `cd ~/artist-platform` → `npm run recover:deploy -- --deploy` |
 | **CWD** | Control first |
 | **What it does** | Aligns both repos to paired sacred anchors |
 | **Files touched** | Both `node_modules/`; Vercel env (dashboard) |

@@ -14,7 +14,7 @@ jobs:
         env:
           CONTROL_SYSTEM_URL: ${{ secrets.CONTROL_SYSTEM_URL }}
         run: |
-          URL="${CONTROL_SYSTEM_URL:-https://2-mrrw-control-system.vercel.app}"
+          URL="${CONTROL_SYSTEM_URL:-https://2mrrw-control-system.vercel.app}"
           echo "GET ${URL%/}/api/health"
           body="$(curl -fsS "${URL%/}/api/health")"
           echo "$body"

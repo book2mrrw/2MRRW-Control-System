@@ -1,13 +1,13 @@
 # Deployment Recovery Guide
 
-Recover Vercel production for **2-mrrw-control-system** and **artist-platform** without losing audit history.
+Recover Vercel production for **2mrrw-control-system** and **artist-platform** without losing audit history.
 
 ## Control system — Vercel
 
 | Field | Value |
 |-------|--------|
-| Project | `2-mrrw-control-system` |
-| Production URL | https://2-mrrw-control-system.vercel.app |
+| Project | `2mrrw-control-system` |
+| Production URL | https://2mrrw-control-system.vercel.app |
 | Known-good deploy | `dpl_3Q5z4Q1b61JrHXVCZPn9EmiBbjgm` |
 | MP4 verify deploy | `dpl_HyJb2XSdrL5AS6cZoL1YdzmybWKQ` |
 | Framework | Next.js (`vercel.json`) |
@@ -59,11 +59,11 @@ Rules: [`../../docs/DEPLOYMENT_RULES.md`](../../docs/DEPLOYMENT_RULES.md).
 
 ```bash
 # Control
-curl -sS "https://2-mrrw-control-system.vercel.app/api/health/basic"
-curl -sS "https://2-mrrw-control-system.vercel.app/api/public/releases?limit=100"
+curl -sS "https://2mrrw-control-system.vercel.app/api/health/basic"
+curl -sS "https://2mrrw-control-system.vercel.app/api/public/releases?limit=100"
 
 # Optional: single MP4 check
-curl -sS "https://2-mrrw-control-system.vercel.app/api/public/releases?limit=100" | jq '.releases[] | select(.slug=="hour-glass") | .primaryAsset.type'
+curl -sS "https://2mrrw-control-system.vercel.app/api/public/releases?limit=100" | jq '.releases[] | select(.slug=="hour-glass") | .primaryAsset.type'
 ```
 
 Expect `mp4` for animated singles when on foundation media baseline.

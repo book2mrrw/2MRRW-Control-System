@@ -14,7 +14,7 @@ Production broken?
 
 ## Option 1 — Vercel promote (fastest, no build)
 
-1. Vercel → project **2-mrrw-control-system** → **Deployments**.
+1. Vercel → project **2mrrw-control-system** → **Deployments**.
 2. Select deploy `dpl_3Q5z4Q1b61JrHXVCZPn9EmiBbjgm` (or `dpl_HyJb2XSdrL5AS6cZoL1YdzmybWKQ` for MP4 verify).
 3. **⋯** → **Promote to Production**.
 
@@ -46,8 +46,8 @@ npx vercel --prod --yes
 ## Post-rollback smoke (required)
 
 ```bash
-curl -sS "https://2-mrrw-control-system.vercel.app/api/health/basic"
-curl -sS "https://2-mrrw-control-system.vercel.app/api/public/releases?limit=100"
+curl -sS "https://2mrrw-control-system.vercel.app/api/health/basic"
+curl -sS "https://2mrrw-control-system.vercel.app/api/public/releases?limit=100"
 ```
 
 ## Copy-paste bundle

@@ -2,7 +2,7 @@
 
 **Generated:** 2026-05-19  
 **Foundation tag:** `foundation-stable-v1` → `6d988f573af1fd6f31daa4b90d25bbf92f840ce1` (`6d988f5`)  
-**Production URL:** https://2-mrrw-control-system.vercel.app
+**Production URL:** https://2mrrw-control-system.vercel.app
 
 ## Summary
 
@@ -51,7 +51,7 @@ Guide: `2MRRW_RECOVERY_SYSTEM/RECOVERY_GUIDES/PLATFORM_ONE_COMMAND_RECOVERY.md`.
 
 | Variable | Default | Used by |
 |----------|---------|---------|
-| `CONTROL_URL` | `https://2-mrrw-control-system.vercel.app` | verify, deploy post-smoke |
+| `CONTROL_URL` | `https://2mrrw-control-system.vercel.app` | verify, deploy post-smoke |
 | `EXPECTED_RELEASES` | `9` | verify |
 | `CURL_MAX_TIME` | `20` | verify |
 | `FOUNDATION_TAG` | `foundation-stable-v1` | rollback, recover |

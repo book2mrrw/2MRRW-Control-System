@@ -35,7 +35,7 @@ Rehearse the full path before a real drop. Use a **non-production** release slug
 ## Health
 
 ```bash
-curl -sS https://2-mrrw-control-system.vercel.app/api/health | jq .
+curl -sS https://2mrrw-control-system.vercel.app/api/health | jq .
 ```
 
 Look for `"status":"ok"`, `catalog.publishedReleases`, and `storage` not stuck on fallback-only if bucket backfill completed.

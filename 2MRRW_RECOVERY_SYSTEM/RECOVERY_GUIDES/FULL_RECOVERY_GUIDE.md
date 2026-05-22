@@ -6,7 +6,7 @@ End-to-end recovery for **control** and **frontend** when production is broken, 
 
 | Component | Local path (example) | Git remote | Production |
 |-----------|-------------------|------------|------------|
-| Control | `~/2MRRW-Control-System` | Your `origin` | https://2-mrrw-control-system.vercel.app |
+| Control | `~/2MRRW-Control-System` | Your `origin` | https://2mrrw-control-system.vercel.app |
 | Frontend | `~/artist-platform` | Your `origin` | https://artist-platform-silk.vercel.app |
 
 **Foundation restore tag (control):** `foundation-stable-v1` → `6d988f5` (stabilization era `0e1b15a`).
@@ -29,8 +29,8 @@ End-to-end recovery for **control** and **frontend** when production is broken, 
 3. Run smoke without deploying:
 
 ```bash
-curl -sS "https://2-mrrw-control-system.vercel.app/api/health/basic"
-curl -sS "https://2-mrrw-control-system.vercel.app/api/public/releases?limit=100"
+curl -sS "https://2mrrw-control-system.vercel.app/api/health/basic"
+curl -sS "https://2mrrw-control-system.vercel.app/api/public/releases?limit=100"
 ```
 
 Expect `ok: true` and **9** releases.
@@ -78,8 +78,8 @@ Or Vercel dashboard → promote `dpl_3Q5z4Q1b61JrHXVCZPn9EmiBbjgm` (see [`DEPLOY
 ### B5. Post-deploy smoke
 
 ```bash
-curl -sS "https://2-mrrw-control-system.vercel.app/api/health/basic"
-curl -sS "https://2-mrrw-control-system.vercel.app/api/public/releases?limit=100"
+curl -sS "https://2mrrw-control-system.vercel.app/api/health/basic"
+curl -sS "https://2mrrw-control-system.vercel.app/api/public/releases?limit=100"
 ```
 
 ---
@@ -120,7 +120,7 @@ npm run foundation:recover-platform -- --dry-run
 
 Set in Vercel Production (names only — values from dashboard):
 
-- `NEXT_PUBLIC_CONTROL_SYSTEM_API_URL=https://2-mrrw-control-system.vercel.app`
+- `NEXT_PUBLIC_CONTROL_SYSTEM_API_URL=https://2mrrw-control-system.vercel.app`
 - `NEXT_PUBLIC_SITE_URL=https://artist-platform-silk.vercel.app`
 - Supabase + Stripe vars per [`ENVIRONMENT_VARIABLE_RECOVERY.md`](ENVIRONMENT_VARIABLE_RECOVERY.md)
 

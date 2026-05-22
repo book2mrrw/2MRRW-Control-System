@@ -6,7 +6,7 @@ Templates (no secrets): [`../ENVIRONMENT_BACKUPS/`](../ENVIRONMENT_BACKUPS/)
 
 ---
 
-## Control — `2-mrrw-control-system`
+## Control — `2mrrw-control-system`
 
 | Variable | Purpose | Vercel scope |
 |----------|---------|--------------|
@@ -65,7 +65,7 @@ Templates (no secrets): [`../ENVIRONMENT_BACKUPS/`](../ENVIRONMENT_BACKUPS/)
 
 ### Frontend — recovery order
 
-1. `NEXT_PUBLIC_CONTROL_SYSTEM_API_URL=https://2-mrrw-control-system.vercel.app`
+1. `NEXT_PUBLIC_CONTROL_SYSTEM_API_URL=https://2mrrw-control-system.vercel.app`
 2. `NEXT_PUBLIC_SITE_URL=https://artist-platform-silk.vercel.app`
 3. Supabase trio
 4. Stripe keys if commerce enabled

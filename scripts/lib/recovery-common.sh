@@ -7,7 +7,7 @@ ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 
 FOUNDATION_TAG="${FOUNDATION_TAG:-foundation-stable-v1}"
 FOUNDATION_SHA="${FOUNDATION_SHA:-6d988f5}"
-CONTROL_URL="${CONTROL_URL:-https://2-mrrw-control-system.vercel.app}"
+CONTROL_URL="${CONTROL_URL:-https://2mrrw-control-system.vercel.app}"
 EXPECTED_RELEASES="${EXPECTED_RELEASES:-9}"
 CURL_MAX_TIME="${CURL_MAX_TIME:-20}"
 

@@ -6,7 +6,7 @@ Offline-first disaster recovery bundle for the 2MRRW platform. Lives in the **co
 
 | Repo | Path | Production URL |
 |------|------|----------------|
-| Control | `2MRRW-Control-System` | https://2-mrrw-control-system.vercel.app |
+| Control | `2MRRW-Control-System` | https://2mrrw-control-system.vercel.app |
 | Frontend | `artist-platform` | https://artist-platform-silk.vercel.app |
 
 ## Operational lock-in checklist

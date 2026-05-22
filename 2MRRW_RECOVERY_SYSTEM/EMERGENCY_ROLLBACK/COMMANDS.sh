@@ -3,7 +3,7 @@
 # Run from repo root after clone. Review before executing in production.
 set -euo pipefail
 
-CONTROL_URL="https://2-mrrw-control-system.vercel.app"
+CONTROL_URL="https://2mrrw-control-system.vercel.app"
 FRONTEND_URL="https://artist-platform-silk.vercel.app"
 FOUNDATION_TAG="foundation-stable-v1"
 KNOWN_DEPLOY="dpl_3Q5z4Q1b61JrHXVCZPn9EmiBbjgm"

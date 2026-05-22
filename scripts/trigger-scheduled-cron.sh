@@ -15,7 +15,7 @@ if [[ -f .env.local ]]; then
 fi
 
 : "${CRON_SECRET:?Set CRON_SECRET in .env.local or export it (vercel env pull may redact — copy from Vercel dashboard)}"
-: "${CONTROL_SYSTEM_URL:=https://2-mrrw-control-system.vercel.app}"
+: "${CONTROL_SYSTEM_URL:=https://2mrrw-control-system.vercel.app}"
 
 echo "Triggering cron at ${CONTROL_SYSTEM_URL}/api/cron/scheduled-releases"
 curl -sS -w "\nHTTP %{http_code}\n" \

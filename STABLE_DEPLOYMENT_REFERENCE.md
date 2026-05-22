@@ -6,8 +6,8 @@ Production control surface for rollback and env auditing. **Names only** for sec
 
 | Field | Value |
 |-------|--------|
-| **Project** | `2-mrrw-control-system` |
-| **Production URL** | https://2-mrrw-control-system.vercel.app |
+| **Project** | `2mrrw-control-system` |
+| **Production URL** | https://2mrrw-control-system.vercel.app |
 | **Framework** | Next.js (`vercel.json` → `framework: nextjs`) |
 | **Known-good deploy ID** | `dpl_3Q5z4Q1b61JrHXVCZPn9EmiBbjgm` |
 | **Edge-verify deploy ID** | `dpl_HyJb2XSdrL5AS6cZoL1YdzmybWKQ` (MP4 matrix verified) |
@@ -54,7 +54,7 @@ Full template: `.env.example`
 
 ### Option A — Vercel dashboard (preferred)
 
-1. Vercel → **2-mrrw-control-system** → **Deployments**.
+1. Vercel → **2mrrw-control-system** → **Deployments**.
 2. Find a known-good deployment (e.g. `dpl_3Q5z4Q1b61JrHXVCZPn9EmiBbjgm`).
 3. **⋯** → **Promote to Production** (or **Rollback** if plan supports it).
 
@@ -96,8 +96,8 @@ npm run foundation:verify
 Or manual curls:
 
 ```bash
-curl -sS "https://2-mrrw-control-system.vercel.app/api/health/basic"
-curl -sS "https://2-mrrw-control-system.vercel.app/api/public/releases?limit=100" | jq '.releases | length'
+curl -sS "https://2mrrw-control-system.vercel.app/api/health/basic"
+curl -sS "https://2mrrw-control-system.vercel.app/api/public/releases?limit=100" | jq '.releases | length'
 ```
 
 Expect health `ok: true` and **9** public releases.

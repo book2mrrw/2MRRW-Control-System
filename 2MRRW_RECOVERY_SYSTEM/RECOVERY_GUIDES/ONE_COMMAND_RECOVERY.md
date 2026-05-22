@@ -68,7 +68,7 @@ Checks:
 Override URL:
 
 ```bash
-CONTROL_URL=https://2-mrrw-control-system.vercel.app npm run foundation:verify
+CONTROL_URL=https://2mrrw-control-system.vercel.app npm run foundation:verify
 ```
 
 ---
