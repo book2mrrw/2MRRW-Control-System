@@ -808,7 +808,6 @@ function areaState(ready: boolean, started: boolean): ContentReadinessState {
 export function buildReleaseReadinessVector(target: ReleaseLifecycleTarget): ReleaseReadinessVector {
   const audioStarted = target.tracks.some((track) => track.audioState !== "missing") || target.audioAssetsState !== "missing";
   const artworkStarted = target.coverArtState !== "missing";
-  const lyricsBlocking = target.lyricsState !== "not_required" && !uploadReady(target.lyricsState);
   const scheduledOrPublic = target.status === "scheduled" || target.status === "published" || Boolean(target.scheduledPublishAt);
 
   return {
@@ -817,7 +816,7 @@ export function buildReleaseReadinessVector(target: ReleaseLifecycleTarget): Rel
     artwork: areaState(uploadReady(target.coverArtState), artworkStarted),
     credits: areaState(target.creditsComplete, target.tracks.length > 0),
     visuals: target.visualsComplete ? "ready" : "not_started",
-    publishing: lyricsBlocking ? "blocked" : areaState(scheduledOrPublic, target.metadataComplete && target.creditsComplete)
+    publishing: areaState(scheduledOrPublic, target.metadataComplete && target.creditsComplete)
   };
 }
 

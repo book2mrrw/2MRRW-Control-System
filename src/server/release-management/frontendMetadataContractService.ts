@@ -1,4 +1,5 @@
 import { listTrackContributions, type ReleaseManagementDraft } from "@/server/release-management/releaseManagementService";
+import { storefrontSectionForReleaseType } from "@/services/sync/contentRouting";
 
 export type FrontendTrackCreditContract = {
   trackId: string;
@@ -29,7 +30,8 @@ export type FrontendReleaseMetadataContract = {
   readiness: ReleaseManagementDraft["contentReadiness"];
   tags: string[];
   language: string;
-  genres: {
+  storefrontSection: ReturnType<typeof storefrontSectionForReleaseType>;
+  genres?: {
     primary?: ReleaseManagementDraft["primaryGenre"];
     secondary?: ReleaseManagementDraft["secondaryGenre"];
   };
@@ -59,18 +61,29 @@ function unique(values: string[]) {
   return [...new Set(values.filter(Boolean))];
 }
 
+function nonEmptyString(value?: string | null) {
+  const trimmed = value?.trim();
+  return trimmed ? trimmed : null;
+}
+
 export function buildFrontendReleaseMetadataContract(draft: ReleaseManagementDraft): FrontendReleaseMetadataContract {
   const trackContracts = draft.tracks.map((track) => {
     const contributions = listTrackContributions(track.id);
+    const lyricsText = nonEmptyString(track.credits);
+    const producers = unique([...track.producerNames, ...contributions.filter((row) => productionRoles.has(row.contributionType)).map((row) => row.contributorName)]);
+    const songwriters = unique([
+      ...contributions.filter((row) => writingRoles.has(row.contributionType)).map((row) => row.contributorName),
+      ...(lyricsText ? [lyricsText] : [])
+    ]);
     return {
       trackId: track.id,
       title: track.title,
       artistName: draft.artistName,
-      lyrics: null,
+      lyrics: lyricsText,
       previewAudio: track.previewAudioFile,
       fullAudio: track.fullAudioFile ?? track.audioFile,
-      producers: unique([...track.producerNames, ...contributions.filter((row) => productionRoles.has(row.contributionType)).map((row) => row.contributorName)]),
-      songwriters: unique(contributions.filter((row) => writingRoles.has(row.contributionType)).map((row) => row.contributorName)),
+      producers,
+      songwriters,
       contributors: contributions.map((row) => ({ name: row.contributorName, role: row.contributionType })),
       fullCredits: {
         engineering: contributions.filter((row) => engineeringRoles.has(row.contributionType)).map((row) => ({ name: row.contributorName, role: row.contributionType })),
@@ -81,33 +94,53 @@ export function buildFrontendReleaseMetadataContract(draft: ReleaseManagementDra
   });
   const allContributions = trackContracts.flatMap((track) => track.contributors);
 
+  const genres =
+    draft.primaryGenre || draft.secondaryGenre
+      ? {
+          ...(draft.primaryGenre ? { primary: draft.primaryGenre } : {}),
+          ...(draft.secondaryGenre ? { secondary: draft.secondaryGenre } : {})
+        }
+      : undefined;
+  const releaseProducer = nonEmptyString(draft.producer);
+  const releaseMixer = nonEmptyString(draft.mixingEngineer);
+  const releaseMaster = nonEmptyString(draft.masteringEngineer);
+  const coverArt = nonEmptyString(draft.coverArtPath);
+  const motionArtwork = nonEmptyString(draft.motionArtworkPath);
+  const releaseProduction = unique([
+    ...(releaseProducer ? [releaseProducer] : []),
+    ...allContributions.filter((credit) => productionRoles.has(credit.role)).map((credit) => credit.name)
+  ]);
+  const releaseEngineering = unique([
+    ...(releaseMixer ? [releaseMixer] : []),
+    ...(releaseMaster ? [releaseMaster] : []),
+    ...allContributions.filter((credit) => engineeringRoles.has(credit.role)).map((credit) => credit.name)
+  ]);
+
   return {
     releaseId: draft.id,
     slug: draft.slug,
     title: draft.title,
     artistName: draft.artistName,
     releaseType: draft.releaseType,
-    releaseDate: draft.scheduledPublishAt ?? null,
+    releaseDate: draft.scheduledPublishAt ?? draft.originalReleaseDate ?? null,
     permalink: `/releases/${draft.slug}`,
     visibilityState: draft.visibilityState,
     readiness: draft.contentReadiness,
     tags: draft.tags,
     language: draft.language,
-    genres: {
-      primary: draft.primaryGenre,
-      secondary: draft.secondaryGenre
-    },
+    storefrontSection: storefrontSectionForReleaseType(draft.releaseType),
+    ...(genres ? { genres } : {}),
     credits: {
       artist: unique([draft.artistName, ...allContributions.filter((credit) => artistRoles.has(credit.role)).map((credit) => credit.name)]),
-      production: unique(allContributions.filter((credit) => productionRoles.has(credit.role)).map((credit) => credit.name)),
+      production: releaseProduction,
       writing: unique(allContributions.filter((credit) => writingRoles.has(credit.role)).map((credit) => credit.name)),
-      engineering: unique(allContributions.filter((credit) => engineeringRoles.has(credit.role)).map((credit) => credit.name)),
+      engineering: releaseEngineering,
       creative: unique(allContributions.filter((credit) => creativeRoles.has(credit.role)).map((credit) => credit.name))
     },
     previewLinks: draft.previewLinks,
     assets: {
-      coverArt: draft.coverArtPath,
-      motionArtwork: draft.motionArtworkPath
+      ...(coverArt ? { coverArt } : {}),
+      ...(motionArtwork ? { motionArtwork } : {})
     },
     frontendSyncTargets: draft.frontendSyncTargets,
     tracks: trackContracts

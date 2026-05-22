@@ -20,7 +20,7 @@ import { resolveEntitlements } from "@/server/entitlements/entitlementResolver";
 import { getMediaObjectReadiness } from "@/server/media/mediaAssetService";
 import { createSignedMediaUrl } from "@/server/media/signedUrlService";
 import { professionalAudioQualityTarget } from "@/services/media/audioSupport";
-import { resolveContentDestinations } from "@/services/sync/contentRouting";
+import { resolveContentDestinations, storefrontSectionForReleaseType } from "@/services/sync/contentRouting";
 import { computeReleaseLiveStatus } from "@/lib/catalog/releaseLiveStatus";
 import { buildReleasePrimaryAsset, resolveDisplayPrimaryAsset } from "@/lib/media/releasePrimaryAsset";
 import { localScheduleToUtcIso, scheduleIsInFuture, utcIsoToScheduleParts } from "@/lib/scheduling/releaseScheduleTime";
@@ -358,18 +358,28 @@ function testReleaseReadinessGates() {
   assert.ok(track);
   assert.equal(getReadinessSummary(release.id).ready, false);
   updateReleaseMetadata(release.id, {
-    copyrightOwner: "2MRRW",
-    primaryGenre: { category: "hip-hop-rap", subgenre: "alternative-rap" },
-    coverArtState: "uploaded"
+    coverArtState: "uploaded",
+    originalReleaseDate: "2026-05-22",
+    producer: "2MRRW",
+    recordLabel: "2MRRW",
+    mixingEngineer: "Mix Engineer"
   });
-  updateTrackInformation(release.id, track.id, { title: "Ready Track", audioState: "uploaded" });
-  attachTrackContribution(release.id, track.id, {
-    contributorName: "Writer",
-    contributionType: "both",
-    isPublisher: false,
-    ownershipSplit: 100
+  updateTrackInformation(release.id, track.id, {
+    title: "Ready Track",
+    audioState: "uploaded",
+    producerNames: ["Producer"],
+    credits: "Writer"
   });
   assert.equal(getReadinessSummary(release.id).ready, true);
+
+  const deluxe = createReleaseDraft({ releaseType: "deluxe", title: "Deluxe Gate", trackCount: 6 });
+  assert.equal(getReadinessSummary(deluxe.id).checks.find((check) => check.key === "track_count")?.passed, false);
+}
+
+function testStorefrontSectionRouting() {
+  assert.equal(storefrontSectionForReleaseType("single").section, "singles");
+  assert.equal(storefrontSectionForReleaseType("ep").tabLabel, "Albums & EPs");
+  assert.equal(storefrontSectionForReleaseType("deluxe").badge, "Deluxe");
 }
 
 function testCreatorSessionContinuityAndFlowIntelligence() {
@@ -802,22 +812,19 @@ async function testFrontendReleaseIngestion() {
 function makeReadyRelease(title: string, releaseType: "single" | "album" | "ep" = "single") {
   const release = createRelease({ releaseType, title, trackCount: releaseType === "single" ? 1 : releaseType === "album" ? 7 : 2 });
   updateReleaseMetadata(release.id, {
-    copyrightOwner: "2MRRW",
-    primaryGenre: { category: "hip-hop-rap", subgenre: "alternative-rap" },
-    coverArtState: "approved"
+    coverArtState: "approved",
+    originalReleaseDate: "2026-05-22",
+    producer: "2MRRW",
+    recordLabel: "2MRRW",
+    mixingEngineer: "Mix Engineer"
   });
 
   release.tracks.forEach((track, index) => {
     updateTrackInformation(release.id, track.id, {
       title: release.tracks.length === 1 ? `${title} Track` : `${title} Track ${index + 1}`,
       audioState: "approved",
-      lyricsState: "uploaded"
-    });
-    attachTrackContribution(release.id, track.id, {
-      contributorName: "Writer",
-      contributionType: "both",
-      isPublisher: false,
-      ownershipSplit: 100
+      producerNames: ["Track Producer"],
+      credits: `Writer ${index + 1}`
     });
   });
 
@@ -1115,6 +1122,7 @@ testContributorDirectoryMemory();
 testTaxonomyCompleteness();
 testGlobalSearchAndFrontendMetadataContract();
 testReleaseReadinessGates();
+testStorefrontSectionRouting();
 testCreatorSessionContinuityAndFlowIntelligence();
 testRelationalLifecycleContracts();
 testProductionResilienceContracts();

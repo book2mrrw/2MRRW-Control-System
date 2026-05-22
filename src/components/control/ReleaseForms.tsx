@@ -186,6 +186,9 @@ export function ReleaseMetadataForm({
         title: form.get("title"),
         language: form.get("language"),
         recordLabel: form.get("recordLabelAdvanced") || form.get("recordLabel"),
+        producer: form.get("producer"),
+        mixingEngineer: form.get("mixingEngineer"),
+        masteringEngineer: form.get("masteringEngineer"),
         copyrightOwner: form.get("copyrightOwnerAdvanced") || form.get("copyrightOwner"),
         upc: form.get("upc"),
         originalReleaseDate: String(form.get("originalReleaseDate") || "") || undefined,
@@ -243,7 +246,28 @@ export function ReleaseMetadataForm({
         <TypeaheadField label="Main Artist Search/Add" defaultValue={draft.artistName} options={savedContributors} readOnly />
         <label>
           Catalog release date
-          <input name="originalReleaseDate" type="date" defaultValue={catalogDate} />
+          <input name="originalReleaseDate" type="date" defaultValue={catalogDate} required />
+        </label>
+        <TypeaheadField
+          name="recordLabel"
+          label="Record label"
+          defaultValue={draft.recordLabel}
+          options={metadataOptions(metadataSuggestions, "label")}
+          placeholder="Label or independent"
+          emptyLabel="No labels found. Create a new label."
+          createLabel="+ Create New Label"
+        />
+        <label>
+          Producer
+          <input name="producer" defaultValue={draft.producer} placeholder="Release producer" required />
+        </label>
+        <label>
+          Mixing engineer
+          <input name="mixingEngineer" defaultValue={draft.mixingEngineer} placeholder="Mixing engineer" required />
+        </label>
+        <label>
+          Mastering engineer (optional)
+          <input name="masteringEngineer" defaultValue={draft.masteringEngineer} placeholder="Mastering engineer" />
         </label>
         <p className="input-hint span-2">
           Global drop scheduling (month/day/year, AM/PM, timezone) lives on the Review step and{" "}
@@ -396,6 +420,7 @@ export function TrackInformationForm({
       headers: { "Content-Type": "application/json", "x-admin": "true" },
       body: JSON.stringify({
         title: form.get("title"),
+        credits: form.get("writtenBy"),
         explicit: form.get("explicit") === "on",
         lyricsLanguage: form.get("lyricsLanguage"),
         isLiveVersion: form.get("isLiveVersion") === "on",
@@ -478,7 +503,11 @@ export function TrackInformationForm({
         Mood
         <input placeholder="Cinematic, high-energy, reflective" />
       </label>
-      <TypeaheadField name="producerNames" label="Producers / engineers / collaborators" defaultValue={track.producerNames.join(", ")} options={savedContributors} placeholder="Producer, engineer, designer, collaborator" />
+      <label>
+        Written by
+        <input name="writtenBy" defaultValue={track.credits} placeholder="Songwriter / writer credits" required />
+      </label>
+      <TypeaheadField name="producerNames" label="Producer (per track)" defaultValue={track.producerNames.join(", ")} options={savedContributors} placeholder="Track producer" />
       <label>
         Track sequence number
         <input min="1" type="number" defaultValue={track.position} />

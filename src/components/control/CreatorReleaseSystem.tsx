@@ -1232,7 +1232,8 @@ function StepReview({
       <div className="success-banner mb-16">
         <CheckCircle2 size={18} style={{ flexShrink: 0 }} />
         <span>
-          Complete artwork, audio, and store selections before publishing on <strong>{releaseData.date || "your release date"}</strong>.
+          Before publish: title, cover art, release date, producer, record label, mixing engineer, and every track complete (title, audio, producer, written by).
+          Singles need 1 track; EPs 2–6; albums and deluxe 7+. Optional fields only render on the storefront when filled.
         </span>
       </div>
       {releaseId ? (

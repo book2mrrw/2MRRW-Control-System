@@ -555,15 +555,53 @@ function ReviewPanel({ draft }: { draft: ReleaseManagementDraft }) {
   const readiness = getReadinessSummary(draft.id);
   const scheduleReady = Boolean(draft.scheduledPublishAt);
   const readinessByKey = new Map(readiness.checks.map((check) => [check.key, check]));
+  const trackChecksPassed =
+    readinessByKey.get("track_count")?.passed &&
+    readinessByKey.get("audio")?.passed &&
+    readinessByKey.get("track_credits")?.passed &&
+    readinessByKey.get("track_sequence")?.passed;
   const rows = [
-    { Checklist: "Release Details", Status: readinessByKey.get("metadata")?.passed ? "Complete" : "Missing", Notes: readinessByKey.get("metadata")?.message ?? "Confirm title, artist, genre, language, and release date." },
-    { Checklist: "Tracks & Credits", Status: readinessByKey.get("track_information")?.passed && readinessByKey.get("splits")?.passed ? "Complete" : "Missing", Notes: "Tracks, lyrics, credits, roles, and splits must be ready." },
-    { Checklist: "Artwork", Status: readinessByKey.get("cover_art")?.passed ? "Complete" : "Missing", Notes: readinessByKey.get("cover_art")?.message ?? "Upload approved release artwork." },
-    { Checklist: "Distribution", Status: readiness.ready ? "Complete" : "Needs attention", Notes: "Stores and delivery state follow release readiness." },
     {
-      Checklist: "Pricing & Stores",
-      Status: readinessByKey.get("pricing")?.passed ? "Complete" : draft.priceInCents != null || draft.pricingTier ? "Needs attention" : "Missing",
-      Notes: readinessByKey.get("pricing")?.message ?? "Set storefront price and tier, or leave unset for free."
+      Checklist: "Required metadata",
+      Status: readinessByKey.get("metadata")?.passed ? "Complete" : "Missing",
+      Notes: readinessByKey.get("metadata")?.message ?? "Title, release date, producer, record label, mixing engineer."
+    },
+    {
+      Checklist: "Cover art",
+      Status: readinessByKey.get("cover_art")?.passed ? "Complete" : "Missing",
+      Notes: readinessByKey.get("cover_art")?.message ?? "Upload cover art (cover_art_url)."
+    },
+    {
+      Checklist: "Tracks & audio",
+      Status: trackChecksPassed ? "Complete" : "Missing",
+      Notes:
+        [
+          readinessByKey.get("track_count")?.message,
+          readinessByKey.get("track_credits")?.message,
+          readinessByKey.get("track_sequence")?.message
+        ]
+          .filter(Boolean)
+          .join(" · ") || "Track count, audio, per-track producer/written-by, and sequence."
+    },
+    {
+      Checklist: "Storefront routing",
+      Status: readiness.ready ? "Complete" : "Needs attention",
+      Notes:
+        draft.releaseType === "single"
+          ? "Publishes to Singles section."
+          : draft.releaseType === "deluxe"
+            ? "Publishes to Albums & EPs with Deluxe badge."
+            : "Publishes to Albums & EPs section."
+    },
+    {
+      Checklist: "Optional storefront fields",
+      Status: "Ready",
+      Notes: "Subtitle, lyrics, mastering, executive producer, featured artists, genre, mood, copyright, publishing, UPC, and ISRC only render when filled."
+    },
+    {
+      Checklist: "Pricing (optional)",
+      Status: readinessByKey.get("pricing")?.passed ? "Complete" : "Needs attention",
+      Notes: readinessByKey.get("pricing")?.message ?? "Price and tier are optional unless gifting is enabled."
     }
   ];
   return (
@@ -603,13 +641,15 @@ function ReviewPanel({ draft }: { draft: ReleaseManagementDraft }) {
 
 function checklistLabel(key: string) {
   const labels: Record<string, string> = {
-    track_count: "Track count",
-    metadata: "Metadata complete",
-    cover_art: "Artwork approved",
-    audio: "Audio uploaded",
+    track_count: "Track count & audio",
+    metadata: "Required metadata",
+    cover_art: "Cover art",
+    audio: "Track audio",
+    track_credits: "Per-track credits",
+    track_sequence: "Track numbering",
     track_information: "Track information",
-    splits: "Contributors balanced",
-    pricing: "Storefront pricing"
+    splits: "Contributor splits (optional)",
+    pricing: "Storefront pricing (optional)"
   };
   return labels[key] ?? key.replaceAll("_", " ");
 }

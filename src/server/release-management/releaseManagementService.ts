@@ -340,7 +340,7 @@ function summarizeDraftForReadiness(draft: ReleaseManagementDraft) {
     lyricsState: draft.lyricsState,
     tracks: draft.tracks,
     metadataComplete: checks.some((check) => check.key === "metadata" && check.passed),
-    creditsComplete: checks.some((check) => check.key === "splits" && check.passed),
+    creditsComplete: checks.some((check) => check.key === "track_credits" && check.passed),
     visualsComplete: draft.tracks.some((track) => track.lyricsState === "uploaded" || track.lyricsState === "approved"),
     archivedAt: draft.archivedAt,
     tags: draft.tags
@@ -1091,76 +1091,135 @@ function importedReleaseHasCatalogMedia(draft: ReleaseManagementDraft) {
   return hasCover && hasAudio;
 }
 
+const trackWritingRoles = new Set(["songwriter", "composer", "lyricist", "music", "lyrics", "both"]);
+const trackProductionRoles = new Set(["producer", "co_producer", "executive_producer"]);
+
+function trackAudioReady(track: ReleaseManagementTrack) {
+  return track.audioState === "uploaded" || track.audioState === "approved";
+}
+
+function coverArtReady(draft: ReleaseManagementDraft) {
+  return draft.coverArtState === "uploaded" || draft.coverArtState === "approved" || Boolean(draft.coverArtPath?.trim());
+}
+
+function releaseDateReady(draft: ReleaseManagementDraft) {
+  return Boolean(draft.originalReleaseDate?.trim() || draft.scheduledPublishAt?.trim());
+}
+
+function trackHasProducer(track: ReleaseManagementTrack) {
+  if (track.producerNames.some((name) => name.trim())) return true;
+  return listTrackContributions(track.id).some((row) => trackProductionRoles.has(row.contributionType));
+}
+
+function trackHasWrittenBy(track: ReleaseManagementTrack) {
+  if (track.credits?.trim()) return true;
+  return listTrackContributions(track.id).some((row) => trackWritingRoles.has(row.contributionType));
+}
+
+function trackIsPublishComplete(track: ReleaseManagementTrack, importedPublished: boolean) {
+  if (!track.title.trim()) return false;
+  if (!trackAudioReady(track)) return false;
+  if (importedPublished) return true;
+  return trackHasProducer(track) && trackHasWrittenBy(track);
+}
+
+function tracksNumberedInOrder(tracks: ReleaseManagementTrack[]) {
+  if (!tracks.length) return false;
+  return tracks.every((track, index) => track.position === index + 1);
+}
+
+function trackCountRule(releaseType: ReleaseType, count: number) {
+  if (releaseType === "single" || releaseType === "feature") {
+    return { passed: count === 1, message: "Single requires exactly 1 track with uploaded audio" };
+  }
+  if (releaseType === "ep") {
+    return {
+      passed: count >= 2 && count <= 6,
+      message: "EP requires 2–6 tracks, each with uploaded audio"
+    };
+  }
+  if (releaseType === "album" || releaseType === "deluxe") {
+    return {
+      passed: count >= 7,
+      message: releaseType === "deluxe"
+        ? "Deluxe album requires at least 7 tracks, each with uploaded audio"
+        : "Album requires at least 7 tracks, each with uploaded audio"
+    };
+  }
+  return { passed: count >= 1, message: "Release requires at least 1 track with uploaded audio" };
+}
+
 export function validateReleaseStructure(draft: ReleaseManagementDraft): ReadinessCheck[] {
   const normalizedTracks = normalizeTrackArrayForRelease(draft);
   const importedPublished = isFrontendImportedRelease(draft) && importedReleaseHasCatalogMedia(draft);
-  const trackCountPassed = draft.releaseType === "single"
-    ? normalizedTracks.length === 1
-    : draft.releaseType === "ep"
-      ? normalizedTracks.length >= 2 && normalizedTracks.length <= 6
-      : draft.releaseType === "feature"
-        ? normalizedTracks.length === 1
-      : draft.releaseType === "album"
-        ? normalizedTracks.length >= 7
-        : normalizedTracks.length >= 1;
-  const trackCountMessage = draft.releaseType === "single"
-    ? "Single has exactly 1 track"
-    : draft.releaseType === "ep"
-      ? "EP has 2-6 tracks"
-      : draft.releaseType === "feature"
-        ? "Feature has exactly 1 track"
-      : draft.releaseType === "album"
-        ? "Album has 7 or more tracks"
-        : "Release has at least 1 track";
+  const trackCountRuleResult = trackCountRule(draft.releaseType, normalizedTracks.length);
+  const allTracksHaveAudio =
+    importedPublished || (normalizedTracks.length > 0 && normalizedTracks.every((track) => trackAudioReady(track)));
+  const incompleteTracks = importedPublished
+    ? normalizedTracks.filter((track) => !track.title.trim())
+    : normalizedTracks.filter((track) => !trackIsPublishComplete(track, false));
+  const metadataFields = [
+    Boolean(draft.title?.trim()),
+    releaseDateReady(draft),
+    Boolean(draft.producer?.trim()),
+    Boolean(draft.recordLabel?.trim()),
+    Boolean(draft.mixingEngineer?.trim())
+  ];
+  const metadataPassed = metadataFields.every(Boolean);
 
   return [
     {
       key: "track_count",
-      passed: trackCountPassed,
-      message: trackCountMessage
+      passed: trackCountRuleResult.passed && allTracksHaveAudio,
+      message: trackCountRuleResult.passed
+        ? allTracksHaveAudio
+          ? trackCountRuleResult.message
+          : "Every track needs uploaded audio before publish"
+        : trackCountRuleResult.message
     },
     {
       key: "metadata",
-      passed: Boolean(draft.title && draft.language && draft.copyrightOwner && draft.primaryGenre),
-      message: "Release details still need completion"
+      passed: metadataPassed,
+      message: "Required: title, release date, producer, record label, and mixing engineer"
     },
     {
       key: "cover_art",
-      passed: importedPublished || draft.coverArtState === "uploaded" || draft.coverArtState === "approved",
-      message: "Cover artwork must meet 2MRRW quality requirements."
+      passed: importedPublished || coverArtReady(draft),
+      message: "Cover art (cover_art_url) is required before publish"
     },
     {
       key: "audio",
-      passed: importedPublished || normalizedTracks.every((track) => track.audioState === "uploaded" || track.audioState === "approved"),
+      passed: allTracksHaveAudio,
       message: "Every track needs uploaded audio"
     },
     {
-      key: "track_information",
-      passed: importedPublished
-        ? normalizedTracks.every((track) => Boolean(track.title))
-        : normalizedTracks.every((track) => Boolean(track.title && track.compositionType)),
-      message: "Every track needs a title and track details"
+      key: "track_credits",
+      passed: incompleteTracks.length === 0,
+      message:
+        incompleteTracks.length === 0
+          ? "Every track has title, audio, producer, and written-by credits"
+          : "Each track must be complete: title, audio, producer, and written by (no half-filled tracks)"
     },
     {
-      key: "splits",
-      passed: importedPublished || normalizedTracks.every((track) => validateTrackSplits(track.id).passed),
-      message: "Every track needs contributor splits totaling exactly 100%"
+      key: "track_sequence",
+      passed: tracksNumberedInOrder(normalizedTracks),
+      message: "Track numbers must run 1…n with no gaps"
     },
     {
       key: "pricing",
       passed: (() => {
-        if (draft.pricingTier && draft.priceInCents == null) return false;
+        if (draft.giftingEnabled && draft.priceInCents == null) return false;
         if (draft.priceInCents != null) {
           return validateDraftCommerceFields(draft).ok;
         }
-        if (draft.giftingEnabled) return false;
         return true;
       })(),
-      message: draft.giftingEnabled && draft.priceInCents == null
-        ? "Gifting requires a valid storefront price"
-        : draft.pricingTier && draft.priceInCents == null
-          ? "Pricing tier requires a price in the allowed band"
-          : "Price must match the selected tier band (or leave both unset for free)"
+      message:
+        draft.giftingEnabled && draft.priceInCents == null
+          ? "Gifting requires a valid storefront price"
+          : draft.priceInCents != null
+            ? "Price must match the selected tier band"
+            : "Storefront price is optional"
     }
   ];
 }

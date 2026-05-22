@@ -110,14 +110,36 @@ export const releaseCategoryDestinations: Record<ReleaseCategory, FrontendDestin
   album: ["albums", "album_pages", "album_carousels", "music_albums", "homepage_featured_albums"]
 };
 
+/** Singles → Singles tab; EPs/albums/deluxe → Albums & EPs (deluxe gets storefront badge). */
 export const releaseTypeDestinations: Record<NonNullable<ContentRoutingInput["releaseType"]>, FrontendDestination[]> = {
   single: ["homepage_latest_singles", "latest_singles", "music_singles", "singles_sub_tab", "singles_carousel"],
   feature: ["features", "features_showcase", "features_carousel", "music_features"],
-  ep: ["eps", "music_eps"],
+  ep: ["eps", "music_eps", "albums", "album_pages", "album_carousels", "music_albums", "homepage_featured_albums"],
   album: ["albums", "album_pages", "album_carousels", "music_albums", "homepage_featured_albums"],
   deluxe: ["albums", "album_pages", "album_carousels", "music_albums", "homepage_featured_albums"],
   remix_pack: ["albums", "album_pages", "album_carousels", "music_albums", "homepage_featured_albums"]
 };
+
+export type StorefrontCatalogSection = "singles" | "albums_eps";
+
+export type StorefrontSectionRouting = {
+  section: StorefrontCatalogSection;
+  tabLabel: string;
+  badge: string | null;
+};
+
+/** Maps release type to dedicated storefront section header/tab. Optional fields stay off the storefront when empty. */
+export function storefrontSectionForReleaseType(
+  releaseType?: ContentRoutingInput["releaseType"] | null
+): StorefrontSectionRouting {
+  if (releaseType === "single" || releaseType === "feature") {
+    return { section: "singles", tabLabel: "Singles", badge: null };
+  }
+  if (releaseType === "deluxe") {
+    return { section: "albums_eps", tabLabel: "Albums & EPs", badge: "Deluxe" };
+  }
+  return { section: "albums_eps", tabLabel: "Albums & EPs", badge: null };
+}
 
 export const mediaDestinationRoutes: Record<MediaDestination, FrontendDestination[]> = {
   hero: ["hero"],
