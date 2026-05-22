@@ -1,4 +1,6 @@
+import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
+import { getSupabasePublicConfig } from "@/utils/supabase/config";
 
 const DEFAULT_FRONTEND_ORIGINS = [
   "https://artist-platform-silk.vercel.app",
@@ -55,14 +57,55 @@ function applyApiCors(response: NextResponse, request: NextRequest) {
   return response;
 }
 
-export function proxy(request: NextRequest) {
-  if (request.method === "OPTIONS") {
-    return applyApiCors(new NextResponse(null, { status: 204 }), request);
+async function applyAuthGuard(request: NextRequest) {
+  let response = NextResponse.next({ request });
+  const { url, publishableKey } = getSupabasePublicConfig();
+
+  const supabase = createServerClient(url, publishableKey, {
+    cookies: {
+      getAll() {
+        return request.cookies.getAll();
+      },
+      setAll(cookiesToSet) {
+        cookiesToSet.forEach(({ name, value }) => {
+          request.cookies.set(name, value);
+        });
+        response = NextResponse.next({ request });
+        cookiesToSet.forEach(({ name, value, options }) => {
+          response.cookies.set(name, value, options);
+        });
+      }
+    }
+  });
+
+  const {
+    data: { session }
+  } = await supabase.auth.getSession();
+
+  const isLoginPage = request.nextUrl.pathname === "/login";
+
+  if (!session && !isLoginPage) {
+    return NextResponse.redirect(new URL("/login", request.url));
   }
 
-  return applyApiCors(NextResponse.next(), request);
+  if (session && isLoginPage) {
+    return NextResponse.redirect(new URL("/dashboard", request.url));
+  }
+
+  return response;
+}
+
+export async function proxy(request: NextRequest) {
+  if (request.nextUrl.pathname.startsWith("/api")) {
+    if (request.method === "OPTIONS") {
+      return applyApiCors(new NextResponse(null, { status: 204 }), request);
+    }
+    return applyApiCors(NextResponse.next(), request);
+  }
+
+  return applyAuthGuard(request);
 }
 
 export const config = {
-  matcher: "/api/:path*"
+  matcher: ["/api/:path*", "/((?!_next/static|_next/image|favicon.ico).*)"]
 };

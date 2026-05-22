@@ -135,12 +135,33 @@ const NAV_ITEMS = [
   { id: "dashboard", icon: LayoutDashboard, label: "Dashboard" },
   { id: "releases", icon: Package, label: "Releases", badge: 1 },
   { id: "media", icon: Camera, label: "Media" },
+  { id: "commerce", icon: Coins, label: "Commerce" }
+] satisfies Array<{ id: Exclude<Page, "settings" | "flow" | "release-detail" | "collectors" | "vault" | "analytics" | "shop">; icon: typeof LayoutDashboard; label: string; badge?: number }>;
+
+type SidebarNavItem = {
+  id: Exclude<Page, "settings" | "flow" | "release-detail">;
+  icon: typeof LayoutDashboard;
+  label: string;
+  badge?: number;
+};
+
+const SIDEBAR_NAV_ITEMS: SidebarNavItem[] = [
+  ...NAV_ITEMS,
   { id: "collectors", icon: Gem, label: "Collector's Cards" },
   { id: "vault", icon: Lock, label: "Vault" },
-  { id: "commerce", icon: Coins, label: "Commerce" },
   { id: "analytics", icon: BarChart3, label: "Analytics" },
   { id: "shop", icon: ShoppingBag, label: "Shop" }
-] satisfies Array<{ id: Exclude<Page, "settings" | "flow" | "release-detail">; icon: typeof LayoutDashboard; label: string; badge?: number }>;
+];
+
+const MORE_NAV_ITEMS = [
+  { id: "vault" as const, icon: Lock, label: "Vault" },
+  { id: "collectors" as const, icon: Gem, label: "Collector's Cards" },
+  { id: "analytics" as const, icon: BarChart3, label: "Analytics" },
+  { id: "shop" as const, icon: ShoppingBag, label: "Shop" },
+  { id: "settings" as const, icon: Settings, label: "Settings" }
+] satisfies Array<{ id: Page; icon: typeof LayoutDashboard; label: string }>;
+
+const MORE_PAGE_IDS = new Set<Page>(MORE_NAV_ITEMS.map((item) => item.id));
 
 const RELEASE_TYPE_TAB_MAP: Record<string, Release["type"] | "AlbumOrEp"> = {
   Albums: "AlbumOrEp",
@@ -182,6 +203,14 @@ function releaseIdFromPathname(pathname: string) {
     return null;
   }
   return match[1];
+}
+
+function formatReleaseListDate(date: string) {
+  if (!date || date === "Date TBD") return date;
+  const parsed = /^(\d{4})-(\d{2})-(\d{2})/.exec(date);
+  if (!parsed) return date;
+  const month = new Date(Number(parsed[1]), Number(parsed[2]) - 1, Number(parsed[3])).toLocaleString("en-US", { month: "short" });
+  return `${month} ${Number(parsed[3])}, ${parsed[1]}`;
 }
 
 function pageFromPathname(pathname: string): Page {
@@ -406,34 +435,81 @@ function IG({ label, required, hint, children, style = {} }: { label?: string; r
   );
 }
 
-function MobileNav({ active, onNav }: { active: Page; onNav: (page: Page) => void }) {
-  const activeId = active === "flow" || active === "release-detail" ? "releases" : active;
+function MoreDrawer({
+  open,
+  active,
+  onClose,
+  onNav
+}: {
+  open: boolean;
+  active: Page;
+  onClose: () => void;
+  onNav: (page: Page) => void;
+}) {
+  if (!open) return null;
   return (
-    <nav className="mobile-nav" aria-label="Mobile navigation">
-      {NAV_ITEMS.map((item) => (
+    <>
+      <button className="more-drawer-backdrop" type="button" aria-label="Close menu" onClick={onClose} />
+      <div className="more-drawer" role="dialog" aria-label="More navigation">
+        {MORE_NAV_ITEMS.map((item) => (
+          <button
+            key={item.id}
+            className={`more-drawer-item${active === item.id ? " active" : ""}`}
+            type="button"
+            onClick={() => {
+              onNav(item.id);
+              onClose();
+            }}
+          >
+            <span className="more-drawer-icon">
+              <item.icon size={18} strokeWidth={2} aria-hidden="true" />
+            </span>
+            <span className="more-drawer-label">{item.label}</span>
+            <ChevronRight size={16} className="more-drawer-chevron" aria-hidden="true" />
+          </button>
+        ))}
+      </div>
+    </>
+  );
+}
+
+function MobileNav({ active, onNav }: { active: Page; onNav: (page: Page) => void }) {
+  const [moreOpen, setMoreOpen] = useState(false);
+  const activeId = active === "flow" || active === "release-detail" ? "releases" : active;
+  const moreActive = MORE_PAGE_IDS.has(active);
+  return (
+    <>
+      <MoreDrawer open={moreOpen} active={active} onClose={() => setMoreOpen(false)} onNav={onNav} />
+      <nav className="mobile-nav" aria-label="Mobile navigation">
+        {NAV_ITEMS.map((item) => (
+          <button
+            key={item.id}
+            className="mobile-nav-btn"
+            data-active={activeId === item.id ? "true" : undefined}
+            onClick={() => {
+              setMoreOpen(false);
+              onNav(item.id);
+            }}
+            type="button"
+            aria-label={item.label}
+          >
+            <item.icon size={20} strokeWidth={2} aria-hidden="true" />
+            {item.label}
+          </button>
+        ))}
         <button
-          key={item.id}
           className="mobile-nav-btn"
-          data-active={activeId === item.id ? "true" : undefined}
-          onClick={() => onNav(item.id)}
+          data-active={moreActive ? "true" : undefined}
+          onClick={() => setMoreOpen((open) => !open)}
           type="button"
-          aria-label={item.label}
+          aria-label="More"
+          aria-expanded={moreOpen}
         >
-          <item.icon size={20} strokeWidth={2} aria-hidden="true" />
-          {item.label}
+          <MoreHorizontal size={20} strokeWidth={2} aria-hidden="true" />
+          More
         </button>
-      ))}
-      <button
-        className="mobile-nav-btn"
-        data-active={active === "settings" ? "true" : undefined}
-        onClick={() => onNav("settings")}
-        type="button"
-        aria-label="Settings"
-      >
-        <Settings size={20} strokeWidth={2} aria-hidden="true" />
-        Settings
-      </button>
-    </nav>
+      </nav>
+    </>
   );
 }
 
@@ -461,7 +537,7 @@ function Sidebar({
       </div>
       <nav className="sb-nav">
         <div className="sb-section">Main</div>
-        {NAV_ITEMS.map((item) => (
+        {SIDEBAR_NAV_ITEMS.map((item) => (
           <button key={item.id} className={`nav-item${active === item.id ? " active" : ""}`} onClick={() => onNav(item.id)} title={collapsed ? item.label : undefined} type="button">
             <span className="nav-icon">
               <Icon icon={item.icon} size={17} />
@@ -761,8 +837,15 @@ function Releases({
               <Cover emoji={r.emoji} grad={r.grad} size="md" imageUrl={r.coverUrl} loopUrl={r.loopUrl} posterUrl={r.posterUrl} primaryAsset={r.primaryAsset} slug={r.slug} />
               <div style={{ flex: 1, minWidth: 0 }}>
                 <div className="release-title">{r.title}</div>
+                {r.status === "Scheduled" ? (
+                  <span className="badge badge-pri" style={{ marginTop: 4 }}>
+                    Upcoming · {formatReleaseListDate(r.date)}
+                  </span>
+                ) : r.status === "Released" && r.date !== "Date TBD" ? (
+                  <div style={{ fontSize: 12, color: "var(--tx3)", marginTop: 2 }}>{formatReleaseListDate(r.date)}</div>
+                ) : null}
                 <div className="release-meta">
-                  {r.type} · {r.date} · {r.tracks} track{r.tracks !== 1 ? "s" : ""}
+                  {r.type} · {r.tracks} track{r.tracks !== 1 ? "s" : ""}
                 </div>
               </div>
               <div className="row gap-8" onClick={(e) => e.stopPropagation()}>
@@ -1269,6 +1352,13 @@ function ReleaseFlow({ onBack, onDone, onRefresh }: { onBack: () => void; onDone
       }
     }
     if (targetStep === 5 && releaseId) {
+      const datePatch = await patchReleaseMetadata(releaseId, {
+        originalReleaseDate: releaseData.date
+      });
+      if (!datePatch.ok) {
+        setError(datePatch.error);
+        return false;
+      }
       const published = await publishReleaseAction(releaseId);
       if (!published.ok) {
         setError(published.error ?? "Publish failed — complete artwork and audio in Media, then retry.");
@@ -1546,10 +1636,20 @@ function Shop() {
 }
 
 function SettingsPage() {
+  const router = useRouter();
   const [saved, setSaved] = useState(false);
+  const [signingOut, setSigningOut] = useState(false);
   const save = () => {
     setSaved(true);
     setTimeout(() => setSaved(false), 2000);
+  };
+  const signOut = async () => {
+    setSigningOut(true);
+    const { createSupabaseBrowserClient } = await import("@/utils/supabase/client");
+    const supabase = createSupabaseBrowserClient();
+    await supabase.auth.signOut();
+    router.push("/login");
+    router.refresh();
   };
   const connections = [
     { name: "Spotify", ok: false },
@@ -1629,6 +1729,13 @@ function SettingsPage() {
               {c.ok ? <Badge variant="ok">Connected</Badge> : <Btn variant="ghost" size="sm">Connect</Btn>}
             </div>
           ))}
+        </div>
+        <div className="card mb-16">
+          <div style={{ fontSize: 15, fontWeight: 700, marginBottom: 18 }}>Account</div>
+          <p style={{ fontSize: 13, color: "var(--tx3)", marginBottom: 16 }}>Sign out of the control system admin session.</p>
+          <Btn variant="danger" size="sm" onClick={() => void signOut()} disabled={signingOut}>
+            {signingOut ? "Signing out…" : "Sign out"}
+          </Btn>
         </div>
         <div className="card">
           <div style={{ fontSize: 15, fontWeight: 700, marginBottom: 18 }}>Notifications</div>

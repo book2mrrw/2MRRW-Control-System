@@ -428,7 +428,7 @@ async function getDurableCatalogRows(options: { includeUnpublished?: boolean } =
 }
 
 function draftToCatalog(draft: ReleaseManagementDraft, status: "published" | "scheduled"): PublishedDraftRecord {
-  const releaseDate = draft.scheduledPublishAt?.slice(0, 10) ?? nowIso().slice(0, 10);
+  const releaseDate = draft.originalReleaseDate?.slice(0, 10) ?? draft.scheduledPublishAt?.slice(0, 10) ?? nowIso().slice(0, 10);
   const uploadedAssets = listConfirmedMediaAssets().filter((asset) => asset.releaseId === draft.id || draft.tracks.some((track) => track.id === asset.trackId || track.id === asset.ownerId));
   const coverAsset = uploadedAssets.find((asset) => asset.ownerType === "release" && (asset.category.includes("cover") || asset.frontendDestinations.includes("cover_art")));
   const releaseCategory = draft.releaseType === "feature" ? "feature" : draft.releaseType === "single" ? "single" : "album";
@@ -727,7 +727,9 @@ export function publishRelease(id: string): PublishReleaseResult | null {
       };
     }
 
-    const status = draft.scheduledPublishAt && draft.scheduledPublishAt > nowIso() ? "scheduled" : "published";
+    const today = nowIso().slice(0, 10);
+    const releaseDate = draft.originalReleaseDate?.slice(0, 10) ?? today;
+    const status = releaseDate > today || (draft.scheduledPublishAt && draft.scheduledPublishAt > nowIso()) ? "scheduled" : "published";
     draft.status = status;
     draft.visibilityState = status === "scheduled" ? "scheduled" : "public";
     draft.readinessState = "ready_for_review";
