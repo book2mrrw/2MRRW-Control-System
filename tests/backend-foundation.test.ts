@@ -530,12 +530,24 @@ async function testMediaUploadIntentFoundation() {
     releaseId: release.id,
     fileName: "cover-loop.mp4",
     mimeType: "video/mp4",
-    sizeBytes: 60 * 1024 * 1024
+    sizeBytes: 20 * 1024 * 1024
   });
   assert.match(albumCoverMp4Path, new RegExp(`^albums/${release.id}/cover/`));
 
+  assert.throws(
+    () =>
+      validateMediaUploadIntent({
+        category: "album_cover_art",
+        releaseId: release.id,
+        fileName: "cover-loop.mp4",
+        mimeType: "video/mp4",
+        sizeBytes: 60 * 1024 * 1024
+      }),
+    /50MB or smaller/
+  );
+
   const coverPolicy = getMediaUploadPolicy("single_cover_art");
-  assert.deepEqual(coverPolicy.extensions, ["jpg", "jpeg", "png", "gif", "webp", "mp4", "mov", "webm"]);
+  assert.deepEqual(coverPolicy.extensions, ["jpg", "jpeg", "png", "webp", "mp4"]);
   assert.deepEqual(masterIntent.audioQualityTarget, professionalAudioQualityTarget);
 
   const coverIntent = await createMediaUploadIntent({
@@ -550,8 +562,8 @@ async function testMediaUploadIntentFoundation() {
   const motionCoverIntent = await createMediaUploadIntent({
     category: "single_cover_art",
     releaseId: release.id,
-    fileName: "motion-cover.mov",
-    mimeType: "video/quicktime",
+    fileName: "motion-cover.mp4",
+    mimeType: "video/mp4",
     sizeBytes: 20 * 1024 * 1024
   });
   assert.deepEqual(motionCoverIntent.artworkQualityTarget, {
@@ -571,6 +583,9 @@ async function testMediaUploadIntentFoundation() {
   });
   assert.equal(finalizedMotionCover.frontendDestinations.includes("latest_singles"), true);
   assert.equal(release.motionArtworkPath, `singles/${release.id}/cover/motion-cover.mp4`);
+  assert.equal(release.csCover, `singles/${release.id}/cover/motion-cover.mp4`);
+  assert.equal(release.coverArtType, "video");
+  assert.equal(release.csCoverType, "video");
 
   const epRelease = createRelease({ releaseType: "ep", title: "EP Routing Test", trackCount: 2 });
   const epRouting = resolveContentDestinations({

@@ -44,6 +44,10 @@ export type CatalogTrack = {
   previewAssetId?: string | null;
   lyricsText?: string | null;
   lyricsMode?: "static" | "timed";
+  csCover?: string | null;
+  coverArtType?: "image" | "video" | null;
+  csCoverType?: "image" | "video" | null;
+  csAudio?: string | null;
   audioAsset?: CatalogMediaAsset | null;
   previewAsset?: CatalogMediaAsset | null;
 };
@@ -88,6 +92,9 @@ export type CatalogRelease = {
   coverArt?: CatalogMediaAsset | null;
   backgroundLoop?: CatalogMediaAsset | null;
   musicVideo?: CatalogMediaAsset | null;
+  csCover?: string | null;
+  coverArtType?: "image" | "video" | null;
+  csCoverType?: "image" | "video" | null;
 };
 
 function mapReleaseType(row: { release_type?: string | null; release_category?: string | null }): ReleaseType {
@@ -228,7 +235,7 @@ export async function fetchDurableReleaseCatalog(options?: {
   const rangeEnd = offset + limit - 1;
 
   const releaseSelect =
-    "id, artist_id, slug, title, release_date, release_type, release_category, status, scheduled_publish_at, release_time, publish_timezone, schedule_attempts, schedule_last_error, published_at, ingestion_source, ingestion_ref, catalog_version, artists(id, name, slug)";
+    "id, artist_id, slug, title, release_date, release_type, release_category, status, scheduled_publish_at, release_time, publish_timezone, schedule_attempts, schedule_last_error, published_at, ingestion_source, ingestion_ref, catalog_version, cs_cover, cover_art_type, cs_cover_type, artists(id, name, slug)";
   const legacySelect =
     "id, artist_id, slug, title, release_date, release_type, release_category, status, published_at, artists(id, name, slug)";
 
@@ -278,7 +285,7 @@ export async function fetchDurableReleaseCatalog(options?: {
   const [tracksResult, releaseMediaPrimary, creditsResult, distributionResult] = await Promise.all([
     supabase
       .from("tracks")
-      .select("id, release_id, title, duration_seconds, position, audio_state, audio_asset_id, preview_asset_id, lyrics_text, lyrics_mode")
+      .select("id, release_id, title, duration_seconds, position, audio_state, audio_asset_id, preview_asset_id, lyrics_text, lyrics_mode, cs_cover, cover_art_type, cs_cover_type, cs_audio")
       .in("release_id", releaseIds)
       .order("position", { ascending: true }),
     supabase.from("release_media").select(releaseMediaSelect).in("release_id", releaseIds),
@@ -311,6 +318,10 @@ export async function fetchDurableReleaseCatalog(options?: {
       previewAssetId: row.preview_asset_id as string | null,
       lyricsText: (row as { lyrics_text?: string | null }).lyrics_text ?? null,
       lyricsMode: (row as { lyrics_mode?: string }).lyrics_mode === "timed" ? "timed" : "static",
+      csCover: (row as { cs_cover?: string | null }).cs_cover ?? null,
+      coverArtType: ((row as { cover_art_type?: string | null }).cover_art_type === "video" ? "video" : "image") as "image" | "video",
+      csCoverType: ((row as { cs_cover_type?: string | null }).cs_cover_type === "video" ? "video" : "image") as "image" | "video",
+      csAudio: (row as { cs_audio?: string | null }).cs_audio ?? null,
       audioAsset: row.audio_asset_id ? mediaById.get(row.audio_asset_id as string) ?? null : null,
       previewAsset: row.preview_asset_id ? mediaById.get(row.preview_asset_id as string) ?? null : null
     };
@@ -404,7 +415,10 @@ export async function fetchDurableReleaseCatalog(options?: {
         })),
       coverArt,
       backgroundLoop,
-      musicVideo
+      musicVideo,
+      csCover: (row as { cs_cover?: string | null }).cs_cover ?? coverArt?.storagePath ?? null,
+      coverArtType: ((row as { cover_art_type?: string | null }).cover_art_type === "video" ? "video" : "image") as "image" | "video",
+      csCoverType: ((row as { cs_cover_type?: string | null }).cs_cover_type === "video" ? "video" : "image") as "image" | "video"
     } satisfies CatalogRelease;
   });
   console.log("[stabilize] fetchDurableReleaseCatalog done", {

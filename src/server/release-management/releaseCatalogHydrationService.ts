@@ -1,5 +1,6 @@
 import "server-only";
 
+import { coverArtTypeForPath, isCoverVideoPath } from "@/lib/media/coverArt";
 import { fetchDurableReleaseCatalog, type CatalogRelease } from "@/server/catalog/releaseCatalogService";
 import { upsertImportedMediaAsset, type MediaUploadCategory } from "@/server/media/uploadIntentService";
 import { getServerSupabase } from "@/server/supabase/client";
@@ -7,7 +8,7 @@ import { listReleaseDrafts, upsertImportedReleaseDraft } from "@/server/release-
 import type { ReleaseManagementStatus, ReleaseType, UploadReadinessState } from "@/server/release-management/taxonomies";
 
 function isMotionPath(path: string) {
-  return /\.(mp4|mov|webm)(\?|#|$)/i.test(path);
+  return isCoverVideoPath(path);
 }
 
 function isPreviewPath(path: string) {
@@ -81,6 +82,9 @@ export function hydrateDraftFromCatalogRelease(release: CatalogRelease) {
     };
   });
 
+  const csCover = release.csCover ?? release.coverArt?.storagePath;
+  const coverType = release.coverArtType ?? (csCover ? coverArtTypeForPath(csCover) : undefined);
+
   upsertImportedReleaseDraft({
     id: release.id,
     slug: release.slug,
@@ -94,8 +98,11 @@ export function hydrateDraftFromCatalogRelease(release: CatalogRelease) {
     timezone: release.publishTimezone ?? undefined,
     tracks,
     tags: ["frontend-import", "supabase-catalog"],
-    coverArtPath: release.coverArt?.storagePath,
-    motionArtworkPath: release.backgroundLoop?.storagePath ?? release.musicVideo?.storagePath,
+    coverArtPath: coverType === "video" ? undefined : csCover ?? release.coverArt?.storagePath,
+    motionArtworkPath: coverType === "video" ? csCover : release.backgroundLoop?.storagePath ?? release.musicVideo?.storagePath,
+    coverArtType: coverType,
+    csCover,
+    csCoverType: release.csCoverType ?? coverType,
     frontendSections: sections,
     sourceKey,
     metadataNotes: JSON.stringify({

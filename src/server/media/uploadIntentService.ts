@@ -28,6 +28,17 @@ import {
   type AudioUploadMetadata
 } from "@/services/media/audioSupport";
 import {
+  coverArtExtensions,
+  coverArtMimeTypes,
+  coverArtTypeForPath,
+  coverMaxSizeMbForExtension,
+  isCoverVideoPath
+} from "@/lib/media/coverArt";
+import {
+  persistReleaseCoverArtColumns,
+  persistTrackMediaColumns
+} from "@/server/release-management/coverArtPersistenceService";
+import {
   getReleaseDraft,
   updateReleaseMetadata,
   updateTrackInformation
@@ -186,9 +197,8 @@ const MB = 1024 * 1024;
 const imageMimeTypes = ["image/jpeg", "image/png", "image/gif", "image/webp"] as const;
 const imageExtensions = ["jpg", "jpeg", "png", "gif", "webp"] as const;
 const mp4MimeTypes = ["video/mp4"] as const;
-const motionCoverMimeTypes = [...mp4MimeTypes, "video/quicktime", "video/webm"] as const;
-const coverMimeTypes = [...imageMimeTypes, ...motionCoverMimeTypes] as const;
-const coverExtensions = [...imageExtensions, "mp4", "mov", "webm"] as const;
+const coverMimeTypes = coverArtMimeTypes;
+const coverExtensions = coverArtExtensions;
 const videoMimeTypes = ["video/mp4", "video/quicktime", "video/webm"] as const;
 const audioMimeTypes = [...professionalAudioMimeTypes, ...permissiveAudioMimeTypes] as const;
 const audioExtensions = professionalAudioExtensions;
@@ -308,7 +318,15 @@ function buildAudioRelationships(role?: AudioAssetRole) {
 }
 
 function isMotionArtworkPath(path: string) {
-  return ["mp4", "mov", "webm"].includes(extensionFor(path));
+  return isCoverVideoPath(path);
+}
+
+function coverArtworkMaxSizeMb(extension: string) {
+  return isReleaseArtworkExtension(extension) ? coverMaxSizeMbForExtension(extension) : 70;
+}
+
+function isReleaseArtworkExtension(extension: string) {
+  return coverExtensions.includes(extension as (typeof coverExtensions)[number]);
 }
 
 function isReleaseArtworkCategory(category: MediaUploadCategory) {
@@ -625,9 +643,10 @@ export function validateMediaUploadIntent(input: MediaUploadIntentInput) {
     validateAudioUploadMetadata(input.audioMetadata);
   }
 
-  const maxSizeBytes = policy.maxSizeMb * MB;
+  const maxSizeMb = isReleaseArtworkCategory(category) ? coverArtworkMaxSizeMb(extension) : policy.maxSizeMb;
+  const maxSizeBytes = maxSizeMb * MB;
   if (!Number.isFinite(input.sizeBytes) || input.sizeBytes <= 0 || input.sizeBytes > maxSizeBytes) {
-    throw new Error(`${category} uploads must be ${policy.maxSizeMb}MB or smaller`);
+    throw new Error(`${category} uploads must be ${maxSizeMb}MB or smaller`);
   }
 
   return { category, policy, ownerId, extension, maxSizeBytes, ...releaseContext };
@@ -928,10 +947,19 @@ export function confirmMediaUpload(input: {
   });
 
   if (isReleaseArtworkCategory(category) && input.releaseId) {
+    const coverType = coverArtTypeForPath(record.path);
     updateReleaseMetadata(input.releaseId, {
       coverArtState: "uploaded",
-      ...(isMotionArtworkPath(record.path) ? { motionArtworkPath: record.path } : { coverArtPath: record.path }),
+      csCover: record.path,
+      coverArtType: coverType,
+      csCoverType: coverType,
+      ...(coverType === "video" ? { motionArtworkPath: record.path } : { coverArtPath: record.path }),
       frontendSyncTargets: record.frontendDestinations
+    });
+    void persistReleaseCoverArtColumns(input.releaseId, {
+      csCover: record.path,
+      coverArtType: coverType,
+      csCoverType: coverType
     });
     recordReleaseActivity({ releaseId: input.releaseId, kind: "processing", message: "Artwork optimization queued" });
   }
@@ -940,8 +968,10 @@ export function confirmMediaUpload(input: {
     updateTrackInformation(input.releaseId, input.trackId, {
       audioState: "uploaded",
       audioFile: record.path,
+      csAudio: record.path,
       ...(audioAssetRole === "preview_audio" ? { previewAudioFile: record.path } : { fullAudioFile: record.path })
     });
+    void persistTrackMediaColumns(input.releaseId, input.trackId, { csAudio: record.path });
     recordReleaseActivity({ releaseId: input.releaseId, kind: "processing", message: previewGeneration?.state === "pending" ? "Audio waveform and preview generation queued" : "Audio preview and waveform metadata recorded" });
   }
 
@@ -1033,18 +1063,29 @@ export function upsertImportedMediaAsset(input: {
 
   confirmedMediaAssets.set(record.id, record);
   if (isReleaseArtworkCategory(input.category) && input.releaseId) {
+    const coverType = coverArtTypeForPath(record.path);
     updateReleaseMetadata(input.releaseId, {
       coverArtState: "uploaded",
-      ...(isMotionArtworkPath(record.path) ? { motionArtworkPath: record.path } : { coverArtPath: record.path }),
+      csCover: record.path,
+      coverArtType: coverType,
+      csCoverType: coverType,
+      ...(coverType === "video" ? { motionArtworkPath: record.path } : { coverArtPath: record.path }),
       frontendSyncTargets: record.frontendDestinations
+    });
+    void persistReleaseCoverArtColumns(input.releaseId, {
+      csCover: record.path,
+      coverArtType: coverType,
+      csCoverType: coverType
     });
   }
   if ((input.category === "audio_full_song" || input.category === "audio_preview" || input.category === "track_audio" || input.category === "preview_snippets" || input.category === "full_song_files") && input.releaseId && input.trackId) {
     updateTrackInformation(input.releaseId, input.trackId, {
       audioState: "uploaded",
       audioFile: record.path,
+      csAudio: record.path,
       ...(audioAssetRole === "preview_audio" ? { previewAudioFile: record.path } : { fullAudioFile: record.path })
     });
+    void persistTrackMediaColumns(input.releaseId, input.trackId, { csAudio: record.path });
   }
   emitAfterSuccessfulAction({
     type: "media.uploaded",

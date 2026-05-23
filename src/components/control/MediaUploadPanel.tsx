@@ -2,6 +2,13 @@
 
 import { useEffect, useMemo, useState, type DragEvent } from "react";
 import { StudioMediaUpload } from "@/components/control/StudioMediaUpload";
+import {
+  coverArtAccept,
+  coverImageMaxBytes,
+  coverVideoMaxBytes,
+  isAllowedCoverArtFile,
+  isCoverVideoFile
+} from "@/lib/media/coverArt";
 import { professionalAudioExtensions, professionalAudioMimeTypes, type AudioUploadMetadata } from "@/services/media/audioSupport";
 import { enqueueUpload, patchUploadQueue } from "@/hooks/sync/useUploadQueue";
 import type { MediaDestination, RoutedMediaType } from "@/services/sync/contentRouting";
@@ -45,6 +52,7 @@ const professionalAudioAccept = [
   ...professionalAudioMimeTypes
 ].join(",");
 const coverAccept = ".jpg,.jpeg,.png,.webp,.gif,.mp4,.mov,.webm,image/jpeg,image/png,image/webp,image/gif,video/mp4,video/quicktime,video/webm";
+const coverArtOnlyAccept = coverArtAccept;
 const visualAccept = `${coverAccept},${professionalAudioAccept}`;
 const mediaSectionOptions: Array<{ value: MediaDestination; label: string }> = [
   { value: "hero", label: "HERO SECTION" },
@@ -118,7 +126,7 @@ const uploadOptions: Array<{
   {
     value: "release_cover",
     label: "Cover Art",
-    accept: coverAccept,
+    accept: coverArtOnlyAccept,
     ownerField: "releaseId",
     note: "Cover art is tied to the exact release."
   },
@@ -180,10 +188,7 @@ const routingDefaultsByCategory: Record<UploadCategory, { destination: MediaDest
   vault_asset: { destination: "vault", mediaType: "video" }
 };
 
-const coverArtworkHelperText = "Upload square cover artwork. Minimum size: 1400x1400. Recommended size: 3000x3000.";
-const coverExtensions = new Set(["jpg", "jpeg", "png", "webp", "gif", "mp4", "mov", "webm"]);
-const coverMimeTypes = new Set(["image/jpeg", "image/png", "image/webp", "image/gif", "video/mp4", "video/quicktime", "video/webm"]);
-const coverMaxBytes = 70 * 1024 * 1024;
+const coverArtworkHelperText = "Upload square cover artwork. Minimum size: 1400x1400. Recommended size: 3000x3000. MP4 animated covers: max 50MB, no resolution requirement.";
 const studioAudioFormats = [
   "16-bit / 44.1kHz",
   "16-bit / 48kHz",
@@ -212,7 +217,7 @@ function extensionFor(name: string) {
 }
 
 function isVideoArtwork(file: File) {
-  return file.type.startsWith("video/") || ["mp4", "mov", "webm"].includes(extensionFor(file.name));
+  return isCoverVideoFile(file);
 }
 
 function audioFormatFor(fileName: string): AudioUploadMetadata["format"] {
@@ -302,7 +307,7 @@ export function MediaUploadPanel({
   }, [category]);
 
   useEffect(() => {
-    if (!file || !isVideoArtwork(file)) {
+    if (!file || !isVideoArtwork(file) || isCoverCategory(category)) {
       setVideoDurationReady(true);
       return;
     }
@@ -352,23 +357,51 @@ export function MediaUploadPanel({
       return;
     }
 
-    const extension = extensionFor(file.name);
     const warnings: string[] = [];
-    if (!coverExtensions.has(extension) || (file.type && !coverMimeTypes.has(file.type))) {
+    const videoCover = isCoverVideoFile(file);
+    if (!isAllowedCoverArtFile(file)) {
       setArtworkValidation({
         state: "needs_replacement",
-        message: "Artwork needs replacement: JPG, PNG, WEBP, GIF, MP4, MOV, and WEBM are the supported formats.",
+        message: "Artwork needs replacement: JPG, PNG, WEBP, and MP4 are the supported cover formats.",
         warnings: []
       });
       return;
     }
 
-    if (!Number.isFinite(file.size) || file.size <= 0 || file.size > coverMaxBytes) {
+    const maxBytes = videoCover ? coverVideoMaxBytes : coverImageMaxBytes;
+    if (!Number.isFinite(file.size) || file.size <= 0 || file.size > maxBytes) {
       setArtworkValidation({
         state: "needs_replacement",
-        message: "Artwork needs replacement: file size must be greater than 0 and 70MB or smaller.",
+        message: videoCover
+          ? "Artwork needs replacement: MP4 cover files must be greater than 0 and 50MB or smaller."
+          : "Artwork needs replacement: file size must be greater than 0 and 70MB or smaller.",
         warnings: []
       });
+      return;
+    }
+
+    if (videoCover) {
+      setArtworkValidation({ state: "processing", message: "Processing artwork", warnings: [] });
+      const url = URL.createObjectURL(file);
+      const video = document.createElement("video");
+      video.preload = "metadata";
+      video.onloadedmetadata = () => {
+        setArtworkValidation({
+          state: "approved",
+          message: "Artwork approved: MP4 animated cover ready for upload.",
+          warnings: []
+        });
+        URL.revokeObjectURL(url);
+      };
+      video.onerror = () => {
+        setArtworkValidation({
+          state: "needs_replacement",
+          message: "Artwork needs replacement: this MP4 cover could not be read and may be corrupted.",
+          warnings: []
+        });
+        URL.revokeObjectURL(url);
+      };
+      video.src = url;
       return;
     }
 
@@ -414,22 +447,6 @@ export function MediaUploadPanel({
       });
       URL.revokeObjectURL(url);
     };
-
-    if (isVideoArtwork(file)) {
-      const video = document.createElement("video");
-      video.preload = "metadata";
-      video.onloadedmetadata = () => applyDimensions(video.videoWidth, video.videoHeight);
-      video.onerror = () => {
-        setArtworkValidation({
-          state: "needs_replacement",
-          message: "Artwork needs replacement: this motion cover could not be read and may be corrupted.",
-          warnings: []
-        });
-        URL.revokeObjectURL(url);
-      };
-      video.src = url;
-      return;
-    }
 
     const image = new Image();
     image.onload = () => applyDimensions(image.naturalWidth, image.naturalHeight);
@@ -485,6 +502,8 @@ export function MediaUploadPanel({
       channels: "unknown",
       durationSeconds: audioDurationSeconds
     } satisfies AudioUploadMetadata : undefined;
+    const resolvedMediaType: RoutedMediaType =
+      coverSelected && file && isCoverVideoFile(file) ? "video" : mediaTypeAssignment;
     const intentResponse = await fetch("/api/admin/media/upload-intent", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -494,7 +513,7 @@ export function MediaUploadPanel({
         trackId: needsTrack ? trackId : undefined,
         ...ownerPayload,
         destination: sectionAssignment,
-        mediaType: mediaTypeAssignment,
+        mediaType: resolvedMediaType,
         fileName: file.name,
         mimeType: file.type || "application/octet-stream",
         sizeBytes: file.size,
@@ -519,7 +538,7 @@ export function MediaUploadPanel({
         trackId: needsTrack ? trackId : undefined,
         ...ownerPayload,
         destination: sectionAssignment,
-        mediaType: mediaTypeAssignment,
+        mediaType: resolvedMediaType,
         path: intent.path,
         ...(audioMetadata ? { audioMetadata } : {})
       })
@@ -552,7 +571,7 @@ export function MediaUploadPanel({
         trackId: needsTrack ? trackId : undefined,
         ...ownerPayload,
         destination: sectionAssignment,
-        mediaType: mediaTypeAssignment,
+        mediaType: resolvedMediaType,
         path: intent.path,
         ...(audioMetadata ? { audioMetadata } : {})
       })
@@ -598,7 +617,7 @@ export function MediaUploadPanel({
       ? selectedTrack ? `${selectedTrack.position}. ${selectedTrack.title}` : "Choose a track"
       : externalOwnerId || "Choose owner";
 
-  const fileAccept = acceptOverride ?? selectedOption?.accept ?? "";
+  const fileAccept = acceptOverride ?? (coverSelected ? coverArtOnlyAccept : selectedOption?.accept ?? "");
   const studioValidationLine = coverSelected
     ? artworkValidation.state === "approved"
       ? { ok: true, text: artworkValidation.message }
@@ -622,7 +641,7 @@ export function MediaUploadPanel({
           fileName={file?.name}
           specs={
             coverSelected
-              ? "JPG · PNG · WEBP · Min 1400×1400 · Max 70MB · Square only"
+              ? "JPG · PNG · WEBP · MP4 · Min 1400×1400 (images) · Max 50MB (MP4)"
               : "WAV · AIFF · FLAC · MP3 · AAC · Max 70MB"
           }
           mainLabel={coverSelected ? "Drop your cover art here" : "Drop your audio file here"}
@@ -743,9 +762,9 @@ export function MediaUploadPanel({
           </div>
           <p>{artworkValidation.message}</p>
           <ul>
-            <li>Format validation: JPG, PNG, WEBP, GIF, MP4, MOV, WEBM before processing.</li>
-            <li>Resolution validation: must be square and at least 1400x1400.</li>
-            <li>File size validation: must be 70MB or smaller.</li>
+            <li>Format validation: JPG, PNG, WEBP, and MP4 before processing.</li>
+            <li>Resolution validation: images must be square and at least 1400x1400; MP4 covers skip resolution checks.</li>
+            <li>File size validation: images up to 70MB; MP4 covers up to 50MB.</li>
             <li>Corruption detection: local media preview must load before upload.</li>
           </ul>
           {artworkValidation.warnings.map((warning) => (

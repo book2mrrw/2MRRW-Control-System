@@ -62,6 +62,8 @@ import {
   type UploadReadinessState
 } from "@/server/release-management/taxonomies";
 
+import type { CoverArtMediaType } from "@/lib/media/coverArt";
+
 export type GenreSelection = {
   category: string;
   subgenre: string;
@@ -86,6 +88,10 @@ export type ReleaseManagementTrack = {
   producerNames: string[];
   audioState: UploadReadinessState;
   lyricsState: LyricReadinessState;
+  coverArtType?: CoverArtMediaType;
+  csCover?: string;
+  csCoverType?: CoverArtMediaType;
+  csAudio?: string;
 };
 
 export type SongwriterProfile = {
@@ -151,6 +157,10 @@ export type ReleaseManagementDraft = {
   tags: string[];
   coverArtPath?: string;
   motionArtworkPath?: string;
+  coverArtType?: CoverArtMediaType;
+  csCover?: string;
+  csCoverType?: CoverArtMediaType;
+  csAudio?: string;
   frontendSyncTargets: string[];
   coverArtState: UploadReadinessState;
   audioAssetsState: UploadReadinessState;
@@ -549,6 +559,9 @@ export function upsertImportedReleaseDraft(input: {
   tags?: string[];
   coverArtPath?: string;
   motionArtworkPath?: string;
+  coverArtType?: CoverArtMediaType;
+  csCover?: string;
+  csCoverType?: CoverArtMediaType;
   metadataNotes?: string;
   frontendSections?: string[];
   sourceKey: string;
@@ -623,8 +636,11 @@ export function upsertImportedReleaseDraft(input: {
     tags: [...new Set([...(input.tags ?? []), ...(input.frontendSections ?? []), "frontend-import"].filter(Boolean))],
     coverArtPath: input.coverArtPath ?? existing?.coverArtPath,
     motionArtworkPath: input.motionArtworkPath ?? existing?.motionArtworkPath,
+    coverArtType: input.coverArtType ?? existing?.coverArtType,
+    csCover: input.csCover ?? existing?.csCover,
+    csCoverType: input.csCoverType ?? existing?.csCoverType,
     frontendSyncTargets: [...new Set([...(existing?.frontendSyncTargets ?? []), ...(input.frontendSections ?? [])])],
-    coverArtState: input.coverArtPath ? "uploaded" : existing?.coverArtState ?? "missing",
+    coverArtState: input.coverArtPath || input.csCover || input.motionArtworkPath ? "uploaded" : existing?.coverArtState ?? "missing",
     audioAssetsState: hasUploadedAudio ? "uploaded" : existing?.audioAssetsState ?? "missing",
     lyricsState: existing?.lyricsState ?? "not_required",
     tracks,
@@ -791,6 +807,10 @@ export function updateReleaseMetadata(
       | "timezone"
       | "coverArtPath"
       | "motionArtworkPath"
+      | "coverArtType"
+      | "csCover"
+      | "csCoverType"
+      | "csAudio"
       | "frontendSyncTargets"
       | "priceInCents"
       | "pricingTier"
@@ -966,6 +986,10 @@ export function updateTrackInformation(
       | "fullAudioFile"
       | "audioState"
       | "lyricsState"
+      | "coverArtType"
+      | "csCover"
+      | "csCoverType"
+      | "csAudio"
     >
   >
 ) {
