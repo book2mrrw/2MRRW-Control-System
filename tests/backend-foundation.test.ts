@@ -26,7 +26,11 @@ import { resolveEntitlements } from "@/server/entitlements/entitlementResolver";
 import { getMediaObjectReadiness } from "@/server/media/mediaAssetService";
 import { createSignedMediaUrl } from "@/server/media/signedUrlService";
 import { professionalAudioQualityTarget } from "@/services/media/audioSupport";
-import { resolveContentDestinations, storefrontSectionForReleaseType } from "@/services/sync/contentRouting";
+import {
+  releaseTypeDestinations,
+  resolveContentDestinations,
+  storefrontSectionForReleaseType
+} from "@/services/sync/contentRouting";
 import { computeReleaseLiveStatus } from "@/lib/catalog/releaseLiveStatus";
 import { buildReleasePrimaryAsset, resolveDisplayPrimaryAsset } from "@/lib/media/releasePrimaryAsset";
 import { localScheduleToUtcIso, scheduleIsInFuture, utcIsoToScheduleParts } from "@/lib/scheduling/releaseScheduleTime";
@@ -594,7 +598,7 @@ async function testMediaUploadIntentFoundation() {
     mediaType: "image",
     relatedReleaseId: epRelease.id
   });
-  assert.deepEqual(epRouting.frontendDestinations, ["eps", "music_eps"]);
+  assert.deepEqual(epRouting.frontendDestinations, releaseTypeDestinations.ep);
 
   const coverRoute = resolveMediaSyncRoute({
     relatedReleaseId: release.id,
@@ -626,14 +630,16 @@ async function testMediaUploadIntentFoundation() {
       }),
     /Unsupported file extension/
   );
-  assert.doesNotThrow(() =>
-    validateMediaUploadIntent({
-      category: "single_cover_art",
-      releaseId: release.id,
-      fileName: "cover-loop.webm",
-      mimeType: "video/webm",
-      sizeBytes: 1024
-    })
+  assert.throws(
+    () =>
+      validateMediaUploadIntent({
+        category: "single_cover_art",
+        releaseId: release.id,
+        fileName: "cover-loop.webm",
+        mimeType: "video/webm",
+        sizeBytes: 1024
+      }),
+    /Unsupported file extension/
   );
   assert.throws(
     () =>
@@ -912,6 +918,9 @@ function testAnimatedSinglePrimaryAssetsPreferVideoLoop() {
     process.env.ARTIST_PLATFORM_PUBLIC_URL ||
     "https://artist-platform-silk.vercel.app"
   ).replace(/\/$/, "");
+  const previousArtistPlatformUrl = process.env.ARTIST_PLATFORM_PUBLIC_URL;
+  process.env.ARTIST_PLATFORM_PUBLIC_URL = base;
+  try {
   const animatedSingles = [
     { slug: "hour-glass", mp4: "hourglass.mp4", poster: "hourglass.jpg" },
     { slug: "artificial", mp4: "artificial.mp4", poster: "artificial.jpg" },
@@ -964,6 +973,13 @@ function testAnimatedSinglePrimaryAssetsPreferVideoLoop() {
     loopUrl: `${base}/videos/singles/hourglass.mp4`
   });
   assert.equal(fixed?.type, "mp4");
+  } finally {
+    if (previousArtistPlatformUrl === undefined) {
+      delete process.env.ARTIST_PLATFORM_PUBLIC_URL;
+    } else {
+      process.env.ARTIST_PLATFORM_PUBLIC_URL = previousArtistPlatformUrl;
+    }
+  }
 }
 
 function testSchedulePastDateRejectedByApiPayload() {
