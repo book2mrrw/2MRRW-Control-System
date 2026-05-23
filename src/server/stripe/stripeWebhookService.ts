@@ -49,6 +49,13 @@ export async function handleStripeWebhook(request: Request): Promise<WebhookResu
     return { eventId: event.id, processed: true, grantedProductIds: [] };
   }
 
+  const seedGrantsEnabled =
+    process.env.NODE_ENV !== "production" && process.env.ALLOW_CONTROL_STRIPE_SEED === "true";
+
+  if (!seedGrantsEnabled) {
+    return { eventId: event.id, processed: true, grantedProductIds: [] };
+  }
+
   grantProductToUser(userId, productId);
   return { eventId: event.id, processed: true, grantedProductIds: [productId] };
 }

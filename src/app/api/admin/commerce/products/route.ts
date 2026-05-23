@@ -132,6 +132,7 @@ export async function PATCH(request: Request) {
     queueStorefrontCatalogSync({
       vaultItemIds: body.contentType === "vault_item" ? [body.contentId] : undefined,
       collectorCardIds: body.contentType === "collector_card" ? [body.contentId] : undefined,
+      releaseIds: body.contentType === "release" ? [body.contentId] : undefined,
       reason: "commerce.inline_edit"
     });
 

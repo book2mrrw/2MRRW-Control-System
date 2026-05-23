@@ -103,7 +103,7 @@ export async function GET(request: Request) {
       loopUrl: row.motionUrl ?? row.loopUrl,
       primaryAsset: row.primaryAsset,
       tracks: [],
-      entitlement: { canStream: true, canDownload: false, canAccessLyrics: false, requiredGrant: "none" as const },
+      entitlement: { canStream: false, canDownload: false, canAccessLyrics: false, requiredGrant: "release" as const },
       playback: { totalDurationSeconds: 0, trackCount: 0, saved: false }
     }));
     return ok({ releases: enriched, count: enriched.length }, { headers: publicReadCorsHeaders(request) });

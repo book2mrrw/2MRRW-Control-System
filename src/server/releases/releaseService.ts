@@ -934,6 +934,9 @@ export async function publishReleaseDurable(id: string): Promise<PublishReleaseR
     }
     await markSyncDirty(`release:${id}`, { releaseId: id, reason: "release.published" });
     await markSyncDirty("catalog", { releaseId: id, reason: "release.published" });
+
+    const { queueStorefrontCatalogSync } = await import("@/server/sync/frontendCatalogSyncService");
+    queueStorefrontCatalogSync({ releaseIds: [id], reason: "release.published" });
   }
 
   return result;

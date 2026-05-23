@@ -7,6 +7,9 @@ import { persistSyncEvent } from "@/server/events/syncEventPersistenceService";
 import { listVaultItems, type VaultItemRecord } from "@/server/vault/vaultItemService";
 import { upsertSyncState } from "@/server/sync/syncStateService";
 import { publicPathToUrl } from "@/server/media/catalogMediaUrl";
+import { getServerSupabase } from "@/server/supabase/client";
+
+const FULL_AUDIO_ROLES = ["full_audio", "master_audio", "audio", "audio_full_song", "track_audio"];
 
 type StorefrontVaultRow = {
   slug: string;
@@ -39,6 +42,8 @@ type StorefrontProductRow = {
   cover_url?: string | null;
   storage_path?: string | null;
   preview_path?: string | null;
+  content_type?: string | null;
+  content_id?: string | null;
   gifting_enabled?: boolean;
   active: boolean;
   metadata: Record<string, unknown>;
@@ -124,6 +129,120 @@ function mapCollectorCardToStorefrontProduct(card: CollectorCardRecord): Storefr
       features: Array.isArray(card.metadata?.features) ? card.metadata.features : []
     }
   };
+}
+
+function mapReleaseTypeToStorefrontProductType(releaseType: string | null | undefined) {
+  if (releaseType === "feature") return "feature";
+  if (releaseType === "album" || releaseType === "ep") return "album";
+  return "single";
+}
+
+async function resolveReleasePrimaryStoragePath(
+  supabase: NonNullable<ReturnType<typeof getServerSupabase>>,
+  releaseId: string
+) {
+  const { data: tracks } = await supabase
+    .from("tracks")
+    .select("id")
+    .eq("release_id", releaseId)
+    .order("position", { ascending: true })
+    .limit(1);
+
+  const trackId = tracks?.[0]?.id as string | undefined;
+  if (!trackId) return null;
+
+  const { data: linked } = await supabase
+    .from("release_media")
+    .select("media_assets(storage_path)")
+    .eq("track_id", trackId)
+    .eq("is_active", true)
+    .in("asset_role", FULL_AUDIO_ROLES)
+    .order("is_primary", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  const nested = linked?.media_assets as { storage_path?: string } | { storage_path?: string }[] | null | undefined;
+  const asset = Array.isArray(nested) ? nested[0] : nested;
+  if (asset?.storage_path) return asset.storage_path;
+
+  const { data: owned } = await supabase
+    .from("media_assets")
+    .select("storage_path")
+    .eq("owner_type", "track")
+    .eq("owner_id", trackId)
+    .order("created_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  return (owned?.storage_path as string | undefined) ?? null;
+}
+
+export async function listReleaseProductsForStorefrontSync(releaseIds?: string[]) {
+  const supabase = getServerSupabase();
+  if (!supabase) return [];
+
+  const { data: products, error: productError } = await supabase
+    .from("products")
+    .select("slug, name, label, content_id, content_type, price_cents, gifting_enabled, active")
+    .eq("content_type", "release")
+    .eq("active", true)
+    .not("price_cents", "is", null);
+
+  if (productError || !products?.length) return [];
+
+  const contentIds = products.map((row) => row.content_id as string).filter(Boolean);
+  if (!contentIds.length) return [];
+
+  let releaseQuery = supabase
+    .from("releases")
+    .select("id, slug, title, release_type, status, cover_art_r2_key, cs_cover")
+    .in("id", contentIds)
+    .eq("status", "published");
+
+  if (releaseIds?.length) {
+    releaseQuery = releaseQuery.in("id", releaseIds);
+  }
+
+  const { data: releases, error: releaseError } = await releaseQuery;
+  if (releaseError || !releases?.length) return [];
+
+  const releaseById = new Map(releases.map((row) => [row.id as string, row]));
+  const rows: StorefrontProductRow[] = [];
+
+  for (const product of products) {
+    const release = releaseById.get(product.content_id as string);
+    if (!release) continue;
+
+    const storagePath = await resolveReleasePrimaryStoragePath(supabase, release.id as string);
+    const rawCover = (release.cs_cover as string | null) ?? (release.cover_art_r2_key as string | null);
+    const coverUrl = rawCover
+      ? /^https?:\/\//i.test(rawCover)
+        ? rawCover
+        : publicPathToUrl(rawCover)
+      : null;
+
+    rows.push({
+      slug: product.slug as string,
+      title: (product.label as string) ?? (product.name as string) ?? (release.title as string),
+      product_type: mapReleaseTypeToStorefrontProductType(release.release_type as string),
+      price_cents: product.price_cents as number,
+      cover_url: coverUrl,
+      storage_path: storagePath,
+      preview_path: null,
+      content_type: "release",
+      content_id: release.id as string,
+      gifting_enabled: Boolean(product.gifting_enabled),
+      active: true,
+      metadata: {
+        content_type: "release",
+        content_id: release.id,
+        release_slug: release.slug,
+        release_type: release.release_type
+      }
+    });
+  }
+
+  return rows;
 }
 
 function mapVaultItemToStorefrontProduct(item: VaultItemRecord): StorefrontProductRow | null {
@@ -219,9 +338,14 @@ async function runWithRetries<T>(fn: () => Promise<T>, attempts = 2) {
 export async function syncPublishedCatalogToStorefront(input?: {
   vaultItemIds?: string[];
   collectorCardIds?: string[];
+  releaseIds?: string[];
   reason?: string;
 }) {
-  const [vaultItems, cards] = await Promise.all([listVaultItems(), listCollectorCards()]);
+  const [vaultItems, cards, releaseProducts] = await Promise.all([
+    listVaultItems(),
+    listCollectorCards(),
+    listReleaseProductsForStorefrontSync(input?.releaseIds)
+  ]);
 
   const vaultPublished = vaultItems.filter((item) => item.visibility === "published");
   const vaultTarget = input?.vaultItemIds?.length
@@ -235,6 +359,7 @@ export async function syncPublishedCatalogToStorefront(input?: {
 
   const vaultContent = vaultTarget.map(mapVaultItemToStorefrontContent);
   const products = [
+    ...releaseProducts,
     ...cardTarget.map(mapCollectorCardToStorefrontProduct),
     ...vaultTarget.map(mapVaultItemToStorefrontProduct).filter(Boolean)
   ] as StorefrontProductRow[];
@@ -268,6 +393,7 @@ export async function syncPublishedCatalogToStorefront(input?: {
 export function queueStorefrontCatalogSync(input?: {
   vaultItemIds?: string[];
   collectorCardIds?: string[];
+  releaseIds?: string[];
   reason?: string;
 }) {
   void runWithRetries(() => syncPublishedCatalogToStorefront(input), 2).catch((error) => {
