@@ -111,19 +111,79 @@ function grantMatchesContext(grant: unknown, context: PersistedEntitlementContex
   );
 }
 
+async function userOwnsProductIds(
+  supabase: NonNullable<ReturnType<typeof getServerSupabase>>,
+  userId: string,
+  productIds: string[]
+) {
+  if (!productIds.length) return false;
+
+  const { data: byProductId } = await supabase
+    .from("library_items")
+    .select("id")
+    .eq("user_id", userId)
+    .in("product_id", productIds)
+    .limit(1);
+  if ((byProductId ?? []).length > 0) return true;
+
+  const { data: byLegacyItemId } = await supabase
+    .from("library_items")
+    .select("id")
+    .eq("user_id", userId)
+    .in("item_id", productIds)
+    .limit(1);
+  return (byLegacyItemId ?? []).length > 0;
+}
+
+async function productIdsForContent(
+  supabase: NonNullable<ReturnType<typeof getServerSupabase>>,
+  contentIds: string[]
+) {
+  if (!contentIds.length) return [];
+
+  const { data: products } = await supabase.from("products").select("id").in("content_id", contentIds);
+  return (products ?? []).map((row) => row.id).filter((id): id is string => Boolean(id));
+}
+
+async function userHasStorefrontLibraryEntitlement(
+  supabase: NonNullable<ReturnType<typeof getServerSupabase>>,
+  userId: string,
+  context: PersistedEntitlementContext
+) {
+  const contentIds = [context.trackId, context.releaseId].filter((value): value is string => Boolean(value));
+  const productIds = await productIdsForContent(supabase, contentIds);
+  if (await userOwnsProductIds(supabase, userId, productIds)) return true;
+
+  if (context.trackId && !context.releaseId) {
+    const { data: track } = await supabase
+      .from("tracks")
+      .select("release_id")
+      .eq("id", context.trackId)
+      .maybeSingle();
+    if (track?.release_id) {
+      const releaseProductIds = await productIdsForContent(supabase, [track.release_id]);
+      if (await userOwnsProductIds(supabase, userId, releaseProductIds)) return true;
+    }
+  }
+
+  const legacyItemIds = [context.trackId, context.releaseId].filter((value): value is string => Boolean(value));
+  if (!legacyItemIds.length) return false;
+
+  const { data: legacyLibrary } = await supabase
+    .from("library_items")
+    .select("id")
+    .eq("user_id", userId)
+    .in("item_id", legacyItemIds)
+    .limit(1);
+  return (legacyLibrary ?? []).length > 0;
+}
+
 async function userHasPersistedEntitlement(userId: string, context: PersistedEntitlementContext) {
   const supabase = getServerSupabase();
   if (!supabase || !isUuid(userId)) return false;
 
-  const libraryItemIds = [context.trackId, context.releaseId].filter((value): value is string => Boolean(value));
-  if (libraryItemIds.length > 0) {
-    const { data } = await supabase
-      .from("library_items")
-      .select("id")
-      .eq("user_id", userId)
-      .in("item_id", libraryItemIds)
-      .limit(1);
-    if ((data ?? []).length > 0) return true;
+  if (await userHasStorefrontLibraryEntitlement(supabase, userId, context)) {
+    return true;
   }
 
   if (context.vaultCollectionId) {
