@@ -1125,46 +1125,6 @@ function testPhase2CatalogSyncMapping() {
   assert.equal(resolveAudioQualityBadge({ format: "mp3" }), "mp3");
 }
 
-await testAccountState();
-testPhase2CatalogSyncMapping();
-testEntitlementResolution();
-await testWebhookIdempotency();
-await testSignedMediaAccess();
-testVaultPublicPreviewContract();
-testSignalSuppression();
-testRadioIndependence();
-testPlaybackPersistence();
-testPlaybackQueueAndRecentlyPlayed();
-testSupabaseServerKeyFallback();
-testYouTubeAudioVisualUrlParser();
-testReleaseTypeValidation();
-testContributorSplitValidation();
-testContributorDirectoryMemory();
-testTaxonomyCompleteness();
-testGlobalSearchAndFrontendMetadataContract();
-testReleaseReadinessGates();
-testStorefrontSectionRouting();
-testCreatorSessionContinuityAndFlowIntelligence();
-testRelationalLifecycleContracts();
-testProductionResilienceContracts();
-testPlatformGovernanceContracts();
-testMediaReadinessAndStreamAnalytics();
-testCircleEventFoundation();
-await testMediaUploadIntentFoundation();
-await testFrontendReleaseIngestion();
-testPublishPropagatesToExperienceReads();
-testNotReadyReleaseDoesNotPublish();
-testLibraryUsesSharedMediaContract();
-testPlaybackEventContract();
-testAnimatedSinglePrimaryAssetsPreferVideoLoop();
-testSchedulePastDateRejectedByApiPayload();
-testReleaseScheduleUtcConversion();
-testReleaseLiveStatusEngine();
-testUniversalCommerceValidation();
-testReleaseCommerceValidation();
-testReleaseTypeFiltering();
-await testAudioVisualPublishedFiltering();
-
 function testAdminSessionPersistence() {
   const startedAt = Date.now() - ADMIN_SESSION_MAX_AGE_MS - 1000;
   const cookie = `${ADMIN_SESSION_COOKIE}=${startedAt}`;
@@ -1173,6 +1133,49 @@ function testAdminSessionPersistence() {
   assert.equal(isAdminSessionExpired(null), true);
 }
 
-testAdminSessionPersistence();
-
-console.log("backend foundation verification passed");
+void (async () => {
+  await testAccountState();
+  testPhase2CatalogSyncMapping();
+  testEntitlementResolution();
+  await testWebhookIdempotency();
+  await testSignedMediaAccess();
+  testVaultPublicPreviewContract();
+  testSignalSuppression();
+  testRadioIndependence();
+  testPlaybackPersistence();
+  testPlaybackQueueAndRecentlyPlayed();
+  testSupabaseServerKeyFallback();
+  testYouTubeAudioVisualUrlParser();
+  testReleaseTypeValidation();
+  testContributorSplitValidation();
+  testContributorDirectoryMemory();
+  testTaxonomyCompleteness();
+  testGlobalSearchAndFrontendMetadataContract();
+  testReleaseReadinessGates();
+  testStorefrontSectionRouting();
+  testCreatorSessionContinuityAndFlowIntelligence();
+  testRelationalLifecycleContracts();
+  testProductionResilienceContracts();
+  testPlatformGovernanceContracts();
+  testMediaReadinessAndStreamAnalytics();
+  testCircleEventFoundation();
+  await testMediaUploadIntentFoundation();
+  await testFrontendReleaseIngestion();
+  testPublishPropagatesToExperienceReads();
+  testNotReadyReleaseDoesNotPublish();
+  testLibraryUsesSharedMediaContract();
+  testPlaybackEventContract();
+  testAnimatedSinglePrimaryAssetsPreferVideoLoop();
+  testSchedulePastDateRejectedByApiPayload();
+  testReleaseScheduleUtcConversion();
+  testReleaseLiveStatusEngine();
+  testUniversalCommerceValidation();
+  testReleaseCommerceValidation();
+  testReleaseTypeFiltering();
+  await testAudioVisualPublishedFiltering();
+  testAdminSessionPersistence();
+  console.log("backend foundation verification passed");
+})().catch((error: unknown) => {
+  console.error(error);
+  process.exit(1);
+});
