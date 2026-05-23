@@ -1,8 +1,7 @@
 import { buildReleasePrimaryAsset } from "@/lib/media/releasePrimaryAsset";
-import { buildStudioCatalogFallback } from "@/server/catalog/studioCatalogFallback";
 import { getLatestReleasesDurable } from "@/server/releases/releaseReadService";
 import { publicPathToUrl } from "@/server/media/catalogMediaUrl";
-import { ok } from "@/server/http";
+import { fail, ok } from "@/server/http";
 
 const PUBLIC_FRONTEND_ORIGINS = new Set([
   "https://2mrrw.com",
@@ -89,24 +88,14 @@ export async function GET(request: Request) {
     })
   ]);
   if (!releases.length) {
-    const fallback = buildStudioCatalogFallback().slice(0, Number.isFinite(limit) ? limit : 100);
-    const enriched = fallback.map((row) => ({
-      id: row.id,
-      slug: row.slug,
-      title: row.title,
-      artist: { id: "artist_2mrrw", name: row.artistName ?? "2MRRW", slug: "2mrrw" },
-      releaseDate: row.releaseDate ?? "2026-01-01",
-      releaseType: row.releaseType,
-      releaseCategory: row.releaseCategory ?? "album",
-      status: "published" as const,
-      coverUrl: row.posterUrl ?? row.coverUrl,
-      loopUrl: row.motionUrl ?? row.loopUrl,
-      primaryAsset: row.primaryAsset,
-      tracks: [],
-      entitlement: { canStream: false, canDownload: false, canAccessLyrics: false, requiredGrant: "release" as const },
-      playback: { totalDurationSeconds: 0, trackCount: 0, saved: false }
-    }));
-    return ok({ releases: enriched, count: enriched.length }, { headers: publicReadCorsHeaders(request) });
+    const unavailable = fail("Catalog temporarily unavailable. Retry shortly.", 503, {
+      reason: "catalog_unavailable",
+      demoFallbackDisabled: true
+    });
+    publicReadCorsHeaders(request).forEach((value, key) => {
+      unavailable.headers.set(key, value);
+    });
+    return unavailable;
   }
   const publishedOnly = releases.filter((release) => release.status === "published");
   const enriched = publishedOnly.map((release) => enrichPublicRelease(release, apiBase));
