@@ -1,4 +1,6 @@
 import Link from "next/link";
+import { getPublicR2Url } from "@/lib/storage/r2";
+import { artworkPublicFallbackUrl } from "@/server/media/artworkPublicFallback";
 import { EmptyState, FormSection, PageHeader, StatusStrip, DataTable, WorkflowStepper } from "@/components/control/OperationalPrimitives";
 import { AddTrackButton, CreateReleaseDraftForm, LyricsEditorForm, ReleaseMetadataForm, SongwriterContributionForm, TrackInformationForm } from "@/components/control/ReleaseForms";
 import { ReleaseReviewSchedulePanel } from "@/components/control/ReleaseReviewSchedulePanel";
@@ -74,17 +76,22 @@ function isMotionArtworkPath(path: string) {
 }
 
 function releaseArtworkPath(draft: ReleaseManagementDraft) {
-  return draft.coverArtPath ?? draft.motionArtworkPath;
+  return draft.coverArtPath ?? draft.csCover ?? draft.motionArtworkPath;
 }
 
 function mediaSrc(path: string) {
-  return /^(https?:|data:|blob:|\/)/i.test(path) ? path : `/${path}`;
+  if (/^(https?:|data:|blob:|\/)/i.test(path)) return path;
+  return getPublicR2Url(path) ?? artworkPublicFallbackUrl(path) ?? `/${path.replace(/^\//, "")}`;
 }
 
 function ReleaseArtwork({ draft }: { draft: ReleaseManagementDraft }) {
   const artworkPath = releaseArtworkPath(draft);
   if (!artworkPath) {
-    return <span className="release-card-art" aria-hidden="true">{releaseArtworkLabel(draft)}</span>;
+    return (
+      <span className="release-card-art" aria-hidden="true" style={{ background: "#1a1a1a" }}>
+        {releaseArtworkLabel(draft)}
+      </span>
+    );
   }
 
   return (
@@ -215,8 +222,39 @@ export function ReleaseWizardPage({ step }: { step: ReleaseStepId }) {
         description={pageDescriptions[step]}
         actions={draft ? [{ label: "Save Draft", href: `/releases/${draft.id}` }] : [{ label: "Save Draft", href: "/releases" }]}
       />
-      <div className="release-flow-layout">
-        <WorkflowStepper current={step} />
+      <style>{`
+        .release-wizard-shell {
+          display: flex;
+          flex-direction: column;
+          gap: 0;
+          min-height: 0;
+        }
+        .release-wizard-sticky-nav {
+          position: sticky;
+          top: 0;
+          z-index: 20;
+          background: var(--bg, #0a0a0a);
+          padding-bottom: 12px;
+          border-bottom: 1px solid var(--bord, rgba(255, 255, 255, 0.08));
+        }
+        .release-wizard-scroll {
+          min-height: 0;
+        }
+        @media (max-width: 820px) {
+          .release-wizard-shell {
+            max-height: calc(100vh - 56px);
+          }
+          .release-wizard-scroll {
+            overflow-y: auto;
+            max-height: calc(100vh - var(--release-wizard-nav-height, 220px));
+          }
+        }
+      `}</style>
+      <div className="release-wizard-shell">
+        <div className="release-wizard-sticky-nav">
+          <WorkflowStepper current={step} />
+        </div>
+        <div className="release-wizard-scroll">
         <section className="panel release-workflow-panel">
           <Link className="workflow-back-link" href={previousStep ?? "/releases"}>
             Back
@@ -239,7 +277,7 @@ export function ReleaseWizardPage({ step }: { step: ReleaseStepId }) {
               </Link>
               {draft ? (
                 <Link className="workflow-continue-card" href="/releases/new/details">
-                  <span className="release-card-art" aria-hidden="true">{releaseArtworkLabel(draft)}</span>
+                  <ReleaseArtwork draft={draft} />
                   <span>
                     <strong>Continue existing draft: {draft.title}</strong>
                     <small>{draft.releaseType.replaceAll("_", " ")} / {completionPercent(draft)}% complete / autosaved</small>
@@ -267,7 +305,7 @@ export function ReleaseWizardPage({ step }: { step: ReleaseStepId }) {
                 </div>
                 <div className="release-summary-panel">
                   <p className="meta-label">Release type summary</p>
-                  <span className="release-card-art" aria-hidden="true">{releaseArtworkLabel(draft)}</span>
+                  <ReleaseArtwork draft={draft} />
                   <strong>{draft.releaseType.replaceAll("_", " ")} / {draft.tracks.length} tracks</strong>
                   <span>{releaseTypeRule(draft)}</span>
                   <span>Release date feeds scheduling and review readiness.</span>
@@ -365,6 +403,7 @@ export function ReleaseWizardPage({ step }: { step: ReleaseStepId }) {
             <EmptyState title="Create a release first" detail="Choose a release type before continuing." action={{ label: "Create Release", href: "/releases/new" }} />
           ) : null}
         </section>
+        </div>
       </div>
       <nav className="workflow-actions" aria-label="Workflow navigation">
         <span className="autosave-indicator">Autosave ready</span>
@@ -608,7 +647,7 @@ function ReviewPanel({ draft }: { draft: ReleaseManagementDraft }) {
     <FormSection title="Review & publish" description="Confirm the release summary, resolve warnings, preview, publish, or schedule for later.">
       <div className="review-publish-grid">
         <article className="review-summary-card">
-          <span className="release-card-art" aria-hidden="true">{releaseArtworkLabel(draft)}</span>
+          <ReleaseArtwork draft={draft} />
           <div>
             <p className="meta-label">Release summary</p>
             <strong>{draft.title}</strong>

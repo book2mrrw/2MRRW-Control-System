@@ -16,7 +16,7 @@ const shellStyle: CSSProperties = {
   alignItems: "center",
   justifyContent: "center",
   padding: 24,
-  background: "#0a0a0a"
+  background: "#000"
 };
 
 const cardStyle: CSSProperties = {
@@ -63,12 +63,18 @@ const inputStyle: CSSProperties = {
   outline: "none"
 };
 
-const otpInputStyle: CSSProperties = {
-  ...inputStyle,
-  fontSize: 24,
-  letterSpacing: "0.35em",
+const otpBoxStyle: CSSProperties = {
+  width: 36,
+  height: 48,
+  padding: 0,
+  fontSize: 20,
   textAlign: "center",
-  fontVariantNumeric: "tabular-nums"
+  fontVariantNumeric: "tabular-nums",
+  color: "#fff",
+  background: "#1a1a1a",
+  border: "1px solid #2a2a2a",
+  borderRadius: 10,
+  outline: "none"
 };
 
 const primaryBtnStyle: CSSProperties = {
@@ -77,8 +83,8 @@ const primaryBtnStyle: CSSProperties = {
   marginTop: 20,
   border: "none",
   borderRadius: 10,
-  background: "#7c3aed",
-  color: "#fff",
+  background: "#00b4b4",
+  color: "#000",
   fontSize: 15,
   fontWeight: 700,
   cursor: "pointer"
@@ -102,12 +108,84 @@ const mutedStyle: CSSProperties = {
 const linkBtnStyle: CSSProperties = {
   background: "none",
   border: "none",
-  color: "#7c3aed",
+  color: "#00b4b4",
   fontSize: 13,
   fontWeight: 600,
   cursor: "pointer",
   padding: 0
 };
+
+const OTP_LENGTH = 8;
+
+function OtpDigitRow({
+  digits,
+  disabled,
+  onChange,
+  onComplete
+}: {
+  digits: string[];
+  disabled?: boolean;
+  onChange: (next: string[]) => void;
+  onComplete?: (token: string) => void;
+}) {
+  const refs = useRef<Array<HTMLInputElement | null>>([]);
+
+  const applyDigits = (raw: string) => {
+    const cleaned = raw.replace(/\D/g, "").slice(0, OTP_LENGTH);
+    const next = Array.from({ length: OTP_LENGTH }, (_, index) => cleaned[index] ?? "");
+    onChange(next);
+    const focusIndex = Math.min(cleaned.length, OTP_LENGTH - 1);
+    refs.current[focusIndex]?.focus();
+    if (cleaned.length === OTP_LENGTH) {
+      onComplete?.(cleaned);
+    }
+  };
+
+  return (
+    <div
+      style={{ display: "flex", gap: 8, justifyContent: "center", marginTop: 4 }}
+      onPaste={(event) => {
+        event.preventDefault();
+        applyDigits(event.clipboardData.getData("text"));
+      }}
+    >
+      {digits.map((digit, index) => (
+        <input
+          key={index}
+          ref={(element) => {
+            refs.current[index] = element;
+          }}
+          style={otpBoxStyle}
+          type="tel"
+          inputMode="numeric"
+          autoComplete={index === 0 ? "one-time-code" : "off"}
+          maxLength={1}
+          value={digit}
+          disabled={disabled}
+          aria-label={`Digit ${index + 1}`}
+          onChange={(event) => {
+            const value = event.target.value.replace(/\D/g, "").slice(-1);
+            const next = [...digits];
+            next[index] = value;
+            onChange(next);
+            if (value && index < OTP_LENGTH - 1) {
+              refs.current[index + 1]?.focus();
+            }
+            const token = next.join("");
+            if (token.length === OTP_LENGTH) {
+              onComplete?.(token);
+            }
+          }}
+          onKeyDown={(event) => {
+            if (event.key === "Backspace" && !digits[index] && index > 0) {
+              refs.current[index - 1]?.focus();
+            }
+          }}
+        />
+      ))}
+    </div>
+  );
+}
 
 function AuthCard({ children }: { children: ReactNode }) {
   return (
@@ -129,7 +207,7 @@ export function AdminAuthGate({ children }: { children: ReactNode }) {
   const router = useRouter();
   const [phase, setPhase] = useState<GatePhase>("loading");
   const [email, setEmail] = useState(ADMIN_EMAIL);
-  const [otp, setOtp] = useState("");
+  const [otpDigits, setOtpDigits] = useState<string[]>(() => Array.from({ length: OTP_LENGTH }, () => ""));
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
   const [resendIn, setResendIn] = useState(0);
@@ -203,11 +281,11 @@ export function AdminAuthGate({ children }: { children: ReactNode }) {
     setPhase("otp");
   };
 
-  const verifyCode = async (event: FormEvent) => {
-    event.preventDefault();
+  const verifyCode = async (event?: FormEvent, tokenOverride?: string) => {
+    event?.preventDefault();
     setError("");
-    const token = otp.replace(/\D/g, "").slice(0, 6);
-    if (token.length !== 6) {
+    const token = (tokenOverride ?? otpDigits.join("")).replace(/\D/g, "").slice(0, OTP_LENGTH);
+    if (token.length < 6) {
       setError("Incorrect code.");
       return;
     }
@@ -263,10 +341,13 @@ export function AdminAuthGate({ children }: { children: ReactNode }) {
     await supabase.auth.signOut();
     await clearAdminBrowserSession();
     setBusy(false);
-    setOtp("");
+    setOtpDigits(Array.from({ length: OTP_LENGTH }, () => ""));
     setError("");
     setPhase("login");
   };
+
+  const otpToken = otpDigits.join("").replace(/\D/g, "");
+  const otpReady = otpToken.length >= 6;
 
   if (phase === "loading") {
     return (
@@ -305,25 +386,19 @@ export function AdminAuthGate({ children }: { children: ReactNode }) {
       <AuthCard>
         <h1 style={titleStyle}>2MRRW Control System</h1>
         <p style={subtitleStyle}>Admin access only.</p>
-        <p style={{ ...mutedStyle, marginTop: 0, marginBottom: 20 }}>Check your email — we sent a 6-digit code to {ADMIN_EMAIL}.</p>
+        <p style={{ ...mutedStyle, marginTop: 0, marginBottom: 20 }}>Check your email — we sent a verification code to {ADMIN_EMAIL}.</p>
         <form onSubmit={(event) => void verifyCode(event)}>
-          <label style={labelStyle} htmlFor="admin-otp">
+          <label style={labelStyle} htmlFor="admin-otp-0">
             Verification code
           </label>
-          <input
-            id="admin-otp"
-            style={otpInputStyle}
-            type="tel"
-            inputMode="numeric"
-            autoComplete="one-time-code"
-            maxLength={6}
-            value={otp}
-            onChange={(event) => setOtp(event.target.value.replace(/\D/g, "").slice(0, 6))}
-            placeholder="000000"
-            required
+          <OtpDigitRow
+            digits={otpDigits}
+            disabled={busy}
+            onChange={setOtpDigits}
+            onComplete={(token) => void verifyCode(undefined, token)}
           />
           {error ? <p style={errorStyle}>{error}</p> : null}
-          <button type="submit" style={primaryBtnStyle} disabled={busy || otp.length !== 6}>
+          <button type="submit" style={primaryBtnStyle} disabled={busy || !otpReady}>
             {busy ? "Verifying…" : "Verify code"}
           </button>
         </form>
@@ -342,7 +417,7 @@ export function AdminAuthGate({ children }: { children: ReactNode }) {
             style={linkBtnStyle}
             onClick={() => {
               setPhase("login");
-              setOtp("");
+              setOtpDigits(Array.from({ length: OTP_LENGTH }, () => ""));
               setError("");
             }}
           >

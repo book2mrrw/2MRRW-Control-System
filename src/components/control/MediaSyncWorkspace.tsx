@@ -97,12 +97,30 @@ function MediaVisualCard({
     <ReleaseMediaCard
       alt={ui.title}
       className={className}
-      coverUrl={release?.posterUrl ?? release?.coverUrl ?? ui.posterUrl ?? ui.coverUrl}
+      coverUrl={
+        release?.posterUrl ??
+        release?.coverUrl ??
+        (release as { cover_art_url?: string | null })?.cover_art_url ??
+        ui.posterUrl ??
+        ui.coverUrl
+      }
       emoji={ui.emoji}
       grad={ui.grad}
       lazy
-      loopUrl={release?.motionUrl ?? release?.loopUrl ?? ui.motionUrl ?? ui.loopUrl}
-      motionUrl={release?.motionUrl ?? release?.loopUrl ?? ui.motionUrl ?? ui.loopUrl}
+      loopUrl={
+        release?.motionUrl ??
+        release?.loopUrl ??
+        (release as { motion_cover_url?: string | null })?.motion_cover_url ??
+        ui.motionUrl ??
+        ui.loopUrl
+      }
+      motionUrl={
+        release?.motionUrl ??
+        release?.loopUrl ??
+        (release as { motion_cover_url?: string | null })?.motion_cover_url ??
+        ui.motionUrl ??
+        ui.loopUrl
+      }
       posterUrl={release?.posterUrl ?? ui.posterUrl}
       primaryAsset={release?.primaryAsset ?? ui.primaryAsset}
       slug={release?.slug ?? ui.slug}

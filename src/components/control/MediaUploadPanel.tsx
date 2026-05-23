@@ -633,6 +633,18 @@ export function MediaUploadPanel({
   if (studioLayout && compact && (coverSelected || audioSelected)) {
     return (
       <section className="upload-panel upload-panel-compact upload-panel-studio">
+        <style>{`
+          @media (max-width: 640px) {
+            .upload-panel .release-upload-controls,
+            .upload-panel .upload-ownership-card {
+              grid-template-columns: 1fr !important;
+            }
+            .upload-panel .release-upload-zone,
+            .upload-panel.upload-panel-studio .studio-media-dropzone {
+              min-height: 160px;
+            }
+          }
+        `}</style>
         <StudioMediaUpload
           mode={coverSelected ? "cover" : "audio"}
           accept={fileAccept}
@@ -665,6 +677,18 @@ export function MediaUploadPanel({
 
   return (
     <section className={`upload-panel${compact ? " upload-panel-compact" : ""}`}>
+      <style>{`
+        @media (max-width: 640px) {
+          .upload-panel .release-upload-controls,
+          .upload-panel .upload-ownership-card {
+            grid-template-columns: 1fr !important;
+          }
+          .upload-panel .release-upload-zone,
+          .upload-panel.upload-panel-studio .studio-media-dropzone {
+            min-height: 160px;
+          }
+        }
+      `}</style>
       {!compact ? (
       <div className="upload-ownership-card">
         <div>
