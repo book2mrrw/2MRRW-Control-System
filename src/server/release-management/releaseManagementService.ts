@@ -9,6 +9,7 @@ import { artists } from "@/server/data/seedData";
 import { hydrateDraftFromCatalogRelease } from "@/server/release-management/releaseCatalogHydrationService";
 import { buildSchedulePayload, persistReleaseSchedule, persistReleaseUnpublish } from "@/server/releases/scheduledPublishService";
 import { validateDraftCommerceFields, persistDraftCommerceColumns } from "@/server/commerce/releaseCommerceService";
+import { isStorefrontSyncPushReady } from "@/server/sync/storefrontSyncConfig";
 import { emitAfterSuccessfulAction } from "@/server/events/eventedWriteService";
 import { persistSyncEvent } from "@/server/events/syncEventPersistenceService";
 import { rememberContributorFromCredit, rememberReleaseMetadata } from "@/server/release-management/contributorDirectoryService";
@@ -1244,6 +1245,12 @@ export function validateReleaseStructure(draft: ReleaseManagementDraft): Readine
           : draft.priceInCents != null
             ? "Price must match the selected tier band"
             : "Storefront price is optional"
+    },
+    {
+      key: "storefront_sync",
+      passed: draft.priceInCents == null || isStorefrontSyncPushReady(),
+      message:
+        "Paid releases require STOREFRONT_SYNC_URL and ADMIN_SEED_SECRET so the storefront catalog can sync"
     }
   ];
 }

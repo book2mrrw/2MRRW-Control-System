@@ -918,6 +918,23 @@ export async function publishReleaseDurable(id: string): Promise<PublishReleaseR
     if (release) hydrateDraftFromCatalogRelease(release);
   }
 
+  const draftBeforePublish = getReleaseDraft(id);
+  if (draftBeforePublish?.priceInCents != null) {
+    const { assertPublishStorefrontReadiness } = await import("@/server/sync/frontendCatalogSyncService");
+    const syncReady = await assertPublishStorefrontReadiness({
+      releaseId: id,
+      priceInCents: draftBeforePublish.priceInCents
+    });
+    if (!syncReady.ok) {
+      return {
+        ok: false,
+        releaseId: id,
+        message: syncReady.message,
+        checks: getReadinessSummary(id).checks
+      };
+    }
+  }
+
   const result = publishRelease(id);
   if (!result?.ok) return result;
 

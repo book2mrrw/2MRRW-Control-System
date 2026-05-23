@@ -1,12 +1,13 @@
 import "server-only";
 
+import { createHash, randomBytes } from "crypto";
+
 import { collectorCardProductSlug, releaseProductSlug } from "@/server/commerce/pricingTaxonomies";
 import { getServerSupabase } from "@/server/supabase/client";
 
-const STOREFRONT_URL =
-  process.env.NEXT_PUBLIC_FRONTEND_URL ??
-  process.env.ARTIST_PLATFORM_PUBLIC_URL ??
-  "https://artist-platform-silk.vercel.app";
+import { storefrontSyncBaseUrl } from "@/server/sync/storefrontSyncConfig";
+
+const STOREFRONT_URL = storefrontSyncBaseUrl();
 
 export type GiftItemType = "single" | "ep" | "album" | "deluxe" | "collector_card";
 
@@ -23,6 +24,15 @@ export type SendGiftInput = {
 
 function normalizeEmail(email: string) {
   return email.trim().toLowerCase();
+}
+
+function hashGiftToken(raw: string) {
+  return createHash("sha256").update(raw).digest("hex");
+}
+
+function createGiftToken() {
+  const raw = randomBytes(32).toString("hex");
+  return { raw, hash: hashGiftToken(raw) };
 }
 
 async function resolveProductId(itemType: GiftItemType, itemId: string) {
@@ -132,6 +142,8 @@ export async function sendAdminGift(input: SendGiftInput) {
   const recipientId = await findRecipientId(recipientEmail);
   const expiresAt = new Date(Date.now() + 15 * 24 * 60 * 60 * 1000).toISOString();
 
+  const { raw: giftTokenRaw, hash: giftTokenHash } = createGiftToken();
+
   const { data: gift, error } = await supabase
     .from("gifts")
     .insert({
@@ -143,14 +155,16 @@ export async function sendAdminGift(input: SendGiftInput) {
       item_id: product.id,
       item_title: input.item_title || product.title,
       message: input.message?.trim() || null,
-      expires_at: expiresAt
+      expires_at: expiresAt,
+      gift_link_token_hash: giftTokenHash,
+      gift_link_token: null
     })
     .select("*")
     .single();
 
   if (error) throw error;
 
-  const giftLink = `${STOREFRONT_URL.replace(/\/+$/, "")}/gift/${gift.gift_link_token}`;
+  const giftLink = `${STOREFRONT_URL.replace(/\/+$/, "")}/gift/${giftTokenRaw}`;
   const emailResult = await sendGiftEmail({
     to: recipientEmail,
     itemTitle: gift.item_title || product.title,
@@ -183,6 +197,16 @@ export async function revokeAdminGift(giftId: string) {
   if (gift.status === "claimed") {
     await supabase.from("library_items").delete().eq("gift_id", gift.id);
     await supabase.from("purchases").update({ status: "revoked" }).eq("gift_id", gift.id);
+    if (gift.recipient_id && gift.item_id) {
+      await supabase
+        .from("entitlements")
+        .update({ status: "revoked", updated_at: new Date().toISOString() })
+        .eq("user_id", gift.recipient_id)
+        .eq("resource_type", "product")
+        .eq("resource_id", gift.item_id)
+        .eq("source_type", "gifted")
+        .eq("status", "active");
+    }
   }
 
   const { error: updateError } = await supabase.from("gifts").update({ status: "revoked", updated_at: new Date().toISOString() }).eq("id", gift.id);

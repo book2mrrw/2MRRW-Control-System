@@ -6,6 +6,7 @@ import { getServerSupabase } from "@/server/supabase/client";
 
 function storefrontApiBase() {
   return (
+    process.env.STOREFRONT_SYNC_URL ??
     process.env.ARTIST_PLATFORM_API_URL ??
     process.env.NEXT_PUBLIC_FRONTEND_URL ??
     process.env.ARTIST_PLATFORM_PUBLIC_URL ??

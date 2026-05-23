@@ -5,7 +5,13 @@ import { collectorCardProductSlug, vaultItemProductSlug } from "@/server/commerc
 import { audioQualityBadgeFromMetadata } from "@/lib/media/audioQualityBadge";
 import { persistSyncEvent } from "@/server/events/syncEventPersistenceService";
 import { listVaultItems, type VaultItemRecord } from "@/server/vault/vaultItemService";
-import { upsertSyncState } from "@/server/sync/syncStateService";
+import { upsertSyncState, markSyncDirty } from "@/server/sync/syncStateService";
+import { normalizeStoragePathForStorefront } from "@/server/sync/normalizeStoragePath";
+import {
+  isStorefrontSyncPushReady,
+  storefrontSyncBaseUrl,
+  validateStorefrontSyncEnv
+} from "@/server/sync/storefrontSyncConfig";
 import { publicPathToUrl } from "@/server/media/catalogMediaUrl";
 import { getServerSupabase } from "@/server/supabase/client";
 
@@ -50,13 +56,10 @@ type StorefrontProductRow = {
 };
 
 function storefrontApiBase() {
-  return (
-    process.env.ARTIST_PLATFORM_API_URL ??
-    process.env.NEXT_PUBLIC_FRONTEND_URL ??
-    process.env.ARTIST_PLATFORM_PUBLIC_URL ??
-    "http://localhost:3000"
-  ).replace(/\/+$/, "");
+  return storefrontSyncBaseUrl();
 }
+
+export { validateStorefrontSyncEnv, isStorefrontSyncPushReady };
 
 function storagePublicUrl(path?: string | null) {
   if (!path) return null;
@@ -221,13 +224,14 @@ export async function listReleaseProductsForStorefrontSync(releaseIds?: string[]
         : publicPathToUrl(rawCover)
       : null;
 
+    const canonicalPath = normalizeStoragePathForStorefront(storagePath);
     rows.push({
       slug: product.slug as string,
       title: (product.label as string) ?? (product.name as string) ?? (release.title as string),
       product_type: mapReleaseTypeToStorefrontProductType(release.release_type as string),
       price_cents: product.price_cents as number,
       cover_url: coverUrl,
-      storage_path: storagePath,
+      storage_path: canonicalPath || null,
       preview_path: null,
       content_type: "release",
       content_id: release.id as string,
@@ -237,7 +241,8 @@ export async function listReleaseProductsForStorefrontSync(releaseIds?: string[]
         content_type: "release",
         content_id: release.id,
         release_slug: release.slug,
-        release_type: release.release_type
+        release_type: release.release_type,
+        canonical_media_path: canonicalPath || null
       }
     });
   }
@@ -247,20 +252,24 @@ export async function listReleaseProductsForStorefrontSync(releaseIds?: string[]
 
 function mapVaultItemToStorefrontProduct(item: VaultItemRecord): StorefrontProductRow | null {
   if (item.priceInCents == null) return null;
+  const canonicalPath = normalizeStoragePathForStorefront(
+    item.contentStoragePath ?? item.mediaStoragePath ?? null
+  );
   return {
     slug: vaultItemProductSlug(item.slug),
     title: item.title,
     product_type: "vault",
     price_cents: item.priceInCents,
     cover_url: item.shelfUrl ?? item.coverUrl ?? null,
-    storage_path: item.contentStoragePath ?? item.mediaStoragePath ?? null,
-    preview_path: item.shelfStoragePath ?? item.previewStoragePath ?? null,
+    storage_path: canonicalPath || null,
+    preview_path: normalizeStoragePathForStorefront(item.shelfStoragePath ?? item.previewStoragePath ?? null) || null,
     gifting_enabled: item.giftingEnabled,
     active: item.visibility === "published",
     metadata: {
       content_type: "vault_item",
       content_id: item.id,
-      category: item.category
+      category: item.category,
+      canonical_media_path: canonicalPath || null
     }
   };
 }
@@ -294,31 +303,29 @@ export async function pushCatalogSyncPayload(input: {
     error?: string;
     vaultUpserted?: number;
     productUpserted?: number;
+    failed?: Array<{ slug?: string; error?: string }>;
   };
 
   if (!response.ok) {
     return { ok: false as const, message: payload.error ?? `Storefront sync failed (${response.status})` };
   }
 
+  const failed = Array.isArray(payload.failed) ? payload.failed : [];
+
   return {
-    ok: true as const,
+    ok: failed.length === 0,
     vaultUpserted: payload.vaultUpserted ?? input.vaultContent?.length ?? 0,
-    productUpserted: payload.productUpserted ?? input.products?.length ?? 0
+    productUpserted: payload.productUpserted ?? input.products?.length ?? 0,
+    failed,
+    partial: failed.length > 0
   };
 }
 
-function storefrontSyncUrlConfigured() {
-  return Boolean(
-    process.env.NEXT_PUBLIC_STOREFRONT_URL?.trim() ||
-      process.env.STOREFRONT_URL?.trim() ||
-      process.env.NEXT_PUBLIC_ARTIST_PLATFORM_URL?.trim()
-  );
-}
-
 async function runWithRetries<T>(fn: () => Promise<T>, attempts = 2) {
-  if (!storefrontSyncUrlConfigured()) {
-    console.warn("[sync] storefront URL not configured; skipping catalog sync");
-    throw new Error("Storefront URL not configured");
+  validateStorefrontSyncEnv();
+  if (!isStorefrontSyncPushReady()) {
+    console.warn("[sync] storefront sync URL or ADMIN_SEED_SECRET not configured; skipping catalog sync");
+    throw new Error("Storefront sync not configured");
   }
 
   let lastError: unknown;
@@ -341,6 +348,10 @@ export async function syncPublishedCatalogToStorefront(input?: {
   releaseIds?: string[];
   reason?: string;
 }) {
+  if (process.env.DISABLE_CATALOG_SYNC === "1") {
+    return { ok: false as const, message: "Catalog sync disabled (DISABLE_CATALOG_SYNC=1)" };
+  }
+
   const [vaultItems, cards, releaseProducts] = await Promise.all([
     listVaultItems(),
     listCollectorCards(),
@@ -368,7 +379,9 @@ export async function syncPublishedCatalogToStorefront(input?: {
     pushCatalogSyncPayload({ vaultContent, products, reason: input?.reason })
   );
 
-  if (result.ok) {
+  const failedSlugs = "failed" in result && result.failed ? result.failed : [];
+
+  if (result.ok && failedSlugs.length === 0) {
     await upsertSyncState({
       key: "catalog",
       dirty: false,
@@ -376,6 +389,7 @@ export async function syncPublishedCatalogToStorefront(input?: {
         lastStorefrontSyncAt: new Date().toISOString(),
         vaultUpserted: result.vaultUpserted,
         productUpserted: result.productUpserted,
+        failedSlugs: [],
         reason: input?.reason
       }
     });
@@ -385,9 +399,75 @@ export async function syncPublishedCatalogToStorefront(input?: {
       timestamp: Date.now(),
       data: { storefrontSync: true, ...result, reason: input?.reason }
     });
+  } else {
+    await markSyncDirty("catalog", {
+      reason: input?.reason ?? "catalog.sync_partial_failure",
+      failedSlugs,
+      vaultUpserted: "vaultUpserted" in result ? result.vaultUpserted : 0,
+      productUpserted: "productUpserted" in result ? result.productUpserted : 0,
+      message: "message" in result ? result.message : "Partial catalog sync failure"
+    });
+    await persistSyncEvent({
+      type: "vault.updated",
+      entityId: "catalog",
+      timestamp: Date.now(),
+      data: { storefrontSync: false, failedSlugs, reason: input?.reason }
+    });
   }
 
   return result;
+}
+
+export async function resolveReleasePrimaryStoragePathForPublish(releaseId: string) {
+  const supabase = getServerSupabase();
+  if (!supabase) return null;
+  return resolveReleasePrimaryStoragePath(supabase, releaseId);
+}
+
+export async function assertPublishStorefrontReadiness(input: {
+  releaseId: string;
+  priceInCents: number | null | undefined;
+}) {
+  if (input.priceInCents == null) {
+    return { ok: true as const };
+  }
+
+  if (!isStorefrontSyncPushReady()) {
+    return {
+      ok: false as const,
+      message:
+        "Paid releases require STOREFRONT_SYNC_URL and ADMIN_SEED_SECRET before publish so the storefront product can sync."
+    };
+  }
+
+  const storagePath = await resolveReleasePrimaryStoragePathForPublish(input.releaseId);
+  if (!storagePath) {
+    return {
+      ok: false as const,
+      message: "Paid release is missing a primary audio storage path for storefront playback."
+    };
+  }
+
+  const supabase = getServerSupabase();
+  if (!supabase) {
+    return { ok: false as const, message: "Database is not configured for publish validation." };
+  }
+
+  const { data: product } = await supabase
+    .from("products")
+    .select("slug, active")
+    .eq("content_type", "release")
+    .eq("content_id", input.releaseId)
+    .maybeSingle();
+
+  if (!product?.slug) {
+    return {
+      ok: false as const,
+      message: "Paid release must have an active control product row before publish."
+    };
+  }
+
+  return { ok: true as const, storagePath: normalizeStoragePathForStorefront(storagePath) };
 }
 
 export function queueStorefrontCatalogSync(input?: {
