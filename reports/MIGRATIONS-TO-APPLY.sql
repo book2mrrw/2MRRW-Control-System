@@ -1,0 +1,5 @@
+-- Sprint 4: no new migrations.
+-- Apply if not already done from Sprint 3:
+--
+-- artist-platform/supabase/migrations/20260602000000_gift_token_hash.sql
+-- artist-platform/supabase/migrations/20260601000000_unified_entitlements.sql

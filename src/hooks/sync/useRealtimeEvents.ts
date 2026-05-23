@@ -24,6 +24,11 @@ const EVENT_TYPES = [
 
 let sharedSource: EventSource | null = null;
 let refCount = 0;
+let reconnectTimer: ReturnType<typeof setTimeout> | null = null;
+let reconnectAttempt = 0;
+const RECONNECT_BASE_MS = 1200;
+const RECONNECT_MAX_MS = 30000;
+const MAX_RECONNECT_ATTEMPTS = 8;
 let connected = false;
 let events: EventPayload[] = [];
 const storeListeners = new Set<() => void>();
@@ -59,10 +64,33 @@ function handleMessage(message: MessageEvent<string>) {
   notifyStore();
 }
 
+function clearReconnectTimer() {
+  if (reconnectTimer) {
+    clearTimeout(reconnectTimer);
+    reconnectTimer = null;
+  }
+}
+
+function scheduleReconnect() {
+  if (refCount <= 0 || reconnectTimer) return;
+  if (reconnectAttempt >= MAX_RECONNECT_ATTEMPTS) {
+    connected = false;
+    notifyStore();
+    return;
+  }
+  const delay = Math.min(RECONNECT_MAX_MS, RECONNECT_BASE_MS * 2 ** reconnectAttempt);
+  reconnectAttempt += 1;
+  reconnectTimer = setTimeout(() => {
+    reconnectTimer = null;
+    connectSharedSource();
+  }, delay);
+}
+
 function connectSharedSource() {
   if (sharedSource && sharedSource.readyState !== EventSource.CLOSED) return;
   sharedSource = new EventSource("/api/sync/stream");
   sharedSource.addEventListener("connected", () => {
+    reconnectAttempt = 0;
     connected = true;
     notifyStore();
   });
@@ -75,12 +103,17 @@ function connectSharedSource() {
     sharedSource!.addEventListener(type, handleMessage);
   });
   sharedSource.onerror = () => {
+    sharedSource?.close();
+    sharedSource = null;
     connected = false;
     notifyStore();
+    scheduleReconnect();
   };
 }
 
 function disconnectSharedSource() {
+  clearReconnectTimer();
+  reconnectAttempt = 0;
   sharedSource?.close();
   sharedSource = null;
   connected = false;

@@ -51,7 +51,7 @@ export async function GET(request: Request) {
             data: { heartbeat: true }
           })}\n\n`)
         );
-      }, 10000);
+      }, 30000);
       const cleanup = () => {
         if (closed) return;
         closed = true;
