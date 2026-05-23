@@ -10,13 +10,31 @@ export function OPTIONS(request: Request) {
 export async function GET(request: Request, { params }: { params: Promise<{ assetId: string }> }) {
   const { assetId } = await params;
   const result = await createSignedMediaUrl(getUserId(request), assetId, {
-    publicKinds: [...PUBLIC_SIGNABLE_KINDS]
+    publicKinds: [...PUBLIC_SIGNABLE_KINDS],
+    studioBypass: false
   });
-  return withCors(result.ok ? ok(result) : fail(result.message, result.status), request);
+  if (!result.ok) {
+    return withCors(fail(result.message, result.status), request);
+  }
+  return withCors(
+    ok({
+      signedUrl: result.url,
+      url: result.url,
+      expiresIn: result.expiresIn ?? 3600
+    }),
+    request
+  );
 }
 
 export async function POST(request: Request, { params }: { params: Promise<{ assetId: string }> }) {
   const { assetId } = await params;
-  const result = await createSignedMediaUrl(getUserId(request), assetId);
-  return result.ok ? ok(result) : fail(result.message, result.status);
+  const result = await createSignedMediaUrl(getUserId(request), assetId, { studioBypass: false });
+  if (!result.ok) {
+    return fail(result.message, result.status);
+  }
+  return ok({
+    signedUrl: result.url,
+    url: result.url,
+    expiresIn: result.expiresIn ?? 3600
+  });
 }

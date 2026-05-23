@@ -1,5 +1,6 @@
 import "server-only";
 
+import { getPublicR2Url } from "@/lib/storage/r2";
 import { extensionFromPath, isMotionMedia } from "@/lib/media/mediaVisual";
 import {
   artworkPublicFallbackUrl,
@@ -12,9 +13,14 @@ import type { MediaAssetContract } from "@/server/media/mediaObjects";
 export { artworkPublicFallbackUrl, motionPublicFallbackUrl } from "@/server/media/artworkPublicFallback";
 
 export function publicPathToUrl(storagePath: string) {
+  if (!storagePath) return null;
   if (/^https?:\/\//i.test(storagePath)) return storagePath;
+  const normalized = storagePath.replace(/^\//, "");
+  const directR2 = getPublicR2Url(normalized);
+  if (directR2) return directR2;
   if (storagePath.startsWith("/")) {
-    return `${frontendPublicBaseUrl()}${storagePath}`;
+    const base = frontendPublicBaseUrl();
+    return base ? `${base}${storagePath}` : null;
   }
   if (isMotionMedia(storagePath)) {
     return motionPublicFallbackUrl(storagePath) ?? artworkPublicFallbackUrl(storagePath);

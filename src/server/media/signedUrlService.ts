@@ -227,9 +227,9 @@ export async function createSignedMediaUrl(
 
   const r2Key = buildR2Key(R2_PREFIX.PROTECTED_MEDIA, signableAsset.path);
   try {
-    const signedUrl = await createR2SignedGetUrl(r2Key, 300);
+    const signedUrl = await createR2SignedGetUrl(r2Key, 3600);
     console.log("[stabilize] createSignedMediaUrl ok", { assetId, ms: Date.now() - started });
-    return { ok: true as const, url: signedUrl, expiresIn: 300, mocked: false };
+    return { ok: true as const, url: signedUrl, expiresIn: 3600, mocked: false };
   } catch (err) {
     const fallback = artworkPublicFallbackUrl(signableAsset.path);
     if (fallback) {

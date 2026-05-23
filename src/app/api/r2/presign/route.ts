@@ -74,6 +74,14 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Invalid audio type" }, { status: 400 });
     }
     r2Key = `releases/${releaseId}/tracks/${trackId}/master.${ext}`;
+  } else if (type === "preview") {
+    if (!trackId) {
+      return NextResponse.json({ error: "trackId required for preview" }, { status: 400 });
+    }
+    if (!ALLOWED_AUDIO_TYPES.includes(contentType)) {
+      return NextResponse.json({ error: "Invalid audio type" }, { status: 400 });
+    }
+    r2Key = `releases/${releaseId}/tracks/${trackId}/preview.${ext}`;
   } else {
     return NextResponse.json({ error: "Invalid type" }, { status: 400 });
   }

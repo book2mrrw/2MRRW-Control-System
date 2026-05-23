@@ -47,9 +47,19 @@ export function buildR2Key(prefix: string, path: string): string {
   return `${normalizedPrefix}/${normalizedPath}`;
 }
 
+let warnedMissingR2PublicUrl = false;
+
 export function getPublicR2Url(path: string): string | null {
   const base = process.env.NEXT_PUBLIC_R2_PUBLIC_URL;
-  if (!base) return null;
+  if (!base) {
+    if (!warnedMissingR2PublicUrl) {
+      warnedMissingR2PublicUrl = true;
+      console.warn(
+        "[2MRRW Control] NEXT_PUBLIC_R2_PUBLIC_URL is not set — cover art, loop, and preview URLs will not resolve in API responses."
+      );
+    }
+    return null;
+  }
   const normalized = String(path || "").replace(/^\//, "");
   if (!normalized) return base.replace(/\/$/, "");
   return `${base.replace(/\/$/, "")}/${normalized}`;

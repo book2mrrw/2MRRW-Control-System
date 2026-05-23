@@ -28,6 +28,55 @@ export function OPTIONS(request: Request) {
   return new Response(null, { status: 204, headers: publicReadCorsHeaders(request) });
 }
 
+function enrichPublicAsset(asset: { sourcePath?: string | null; publicUrl?: string | null } | null | undefined) {
+  if (!asset) return asset;
+  const sourcePath = asset.sourcePath;
+  if (!sourcePath) return asset;
+  const publicUrl = publicPathToUrl(sourcePath);
+  return publicUrl ? { ...asset, publicUrl } : asset;
+}
+
+function enrichPublicRelease(release: Awaited<ReturnType<typeof getLatestReleasesDurable>>[number], apiBase: string) {
+  const resolvedCover = release.artwork?.sourcePath ? publicPathToUrl(release.artwork.sourcePath) : null;
+  const resolvedLoop = release.motionArtwork?.sourcePath ? publicPathToUrl(release.motionArtwork.sourcePath) : null;
+  const coverUrl =
+    resolvedCover ?? (release.artwork?.signedUrlEndpoint ? `${apiBase}${release.artwork.signedUrlEndpoint}` : null);
+  const loopUrl =
+    resolvedLoop ??
+    (release.motionArtwork?.signedUrlEndpoint ? `${apiBase}${release.motionArtwork.signedUrlEndpoint}` : null);
+  const primaryAsset = buildReleasePrimaryAsset({
+    slug: release.slug,
+    releaseType: release.releaseType,
+    releaseCategory: release.releaseCategory,
+    loopUrl,
+    motionUrl: loopUrl,
+    coverUrl: resolvedCover && !loopUrl ? resolvedCover : null,
+    posterUrl: resolvedCover
+  });
+  const tracks = Array.isArray(release.tracks)
+    ? release.tracks.map((track) => ({
+        ...track,
+        assets: {
+          preview: enrichPublicAsset(track.assets?.preview),
+          full: track.assets?.full,
+          loop: enrichPublicAsset(track.assets?.loop),
+          lyrics: track.assets?.lyrics
+        }
+      }))
+    : [];
+
+  return {
+    ...release,
+    status: release.status === "published" ? "published" : release.status,
+    coverUrl,
+    loopUrl,
+    primaryAsset,
+    tracks,
+    artwork: enrichPublicAsset(release.artwork),
+    motionArtwork: enrichPublicAsset(release.motionArtwork)
+  };
+}
+
 export async function GET(request: Request) {
   const url = new URL(request.url);
   const limit = Number(url.searchParams.get("limit") ?? 100);
@@ -59,29 +108,7 @@ export async function GET(request: Request) {
     }));
     return ok({ releases: enriched, count: enriched.length }, { headers: publicReadCorsHeaders(request) });
   }
-  const enriched = releases.map((release) => {
-      const resolvedCover = release.artwork?.sourcePath ? publicPathToUrl(release.artwork.sourcePath) : null;
-      const resolvedLoop = release.motionArtwork?.sourcePath ? publicPathToUrl(release.motionArtwork.sourcePath) : null;
-      const coverUrl =
-        resolvedCover ?? (release.artwork?.signedUrlEndpoint ? `${apiBase}${release.artwork.signedUrlEndpoint}` : null);
-      const loopUrl =
-        resolvedLoop ??
-        (release.motionArtwork?.signedUrlEndpoint ? `${apiBase}${release.motionArtwork.signedUrlEndpoint}` : null);
-      const primaryAsset = buildReleasePrimaryAsset({
-        slug: release.slug,
-        releaseType: release.releaseType,
-        releaseCategory: release.releaseCategory,
-        loopUrl,
-        motionUrl: loopUrl,
-        coverUrl: resolvedCover && !loopUrl ? resolvedCover : null,
-        posterUrl: resolvedCover
-      });
-      return {
-        ...release,
-        coverUrl,
-        loopUrl,
-        primaryAsset
-      };
-    });
+  const publishedOnly = releases.filter((release) => release.status === "published");
+  const enriched = publishedOnly.map((release) => enrichPublicRelease(release, apiBase));
   return ok({ releases: enriched, count: enriched.length }, { headers: publicReadCorsHeaders(request) });
 }
