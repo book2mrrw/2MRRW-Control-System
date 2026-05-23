@@ -1,5 +1,6 @@
 import type { Metadata, Viewport } from "next";
 import type { ReactNode } from "react";
+import { AdminAuthGate } from "@/components/auth/AdminAuthGate";
 import { OperationalShell } from "@/components/control/OperationalShell";
 import "./globals.css";
 
@@ -19,7 +20,9 @@ export default function RootLayout({ children }: Readonly<{ children: ReactNode 
   return (
     <html lang="en">
       <body>
-        <OperationalShell initialCatalog={[]}>{children}</OperationalShell>
+        <AdminAuthGate>
+          <OperationalShell initialCatalog={[]}>{children}</OperationalShell>
+        </AdminAuthGate>
       </body>
     </html>
   );

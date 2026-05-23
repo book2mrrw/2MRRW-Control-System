@@ -1150,15 +1150,14 @@ testReleaseCommerceValidation();
 testReleaseTypeFiltering();
 await testAudioVisualPublishedFiltering();
 
-function testAdminSessionTimeout() {
-  const startedAt = Date.now() - ADMIN_SESSION_MAX_AGE_MS + 1000;
+function testAdminSessionPersistence() {
+  const startedAt = Date.now() - ADMIN_SESSION_MAX_AGE_MS - 1000;
   const cookie = `${ADMIN_SESSION_COOKIE}=${startedAt}`;
   assert.equal(parseAdminSessionStartedAt(cookie), startedAt);
   assert.equal(isAdminSessionExpired(startedAt), false);
-  assert.equal(isAdminSessionExpired(startedAt - ADMIN_SESSION_MAX_AGE_MS - 1), true);
   assert.equal(isAdminSessionExpired(null), true);
 }
 
-testAdminSessionTimeout();
+testAdminSessionPersistence();
 
 console.log("backend foundation verification passed");

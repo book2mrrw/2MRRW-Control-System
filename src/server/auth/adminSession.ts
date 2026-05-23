@@ -1,11 +1,11 @@
 import type { NextResponse } from "next/server";
 
-/** Control System admin browser sessions — 24h sliding window from sign-in. */
+/** Control System admin browser sessions — persist until explicit sign-out. */
 export const ADMIN_SESSION_COOKIE = "2mrrw_admin_session_at";
-export const ADMIN_SESSION_MAX_AGE_MS = 24 * 60 * 60 * 1000;
-export const ADMIN_SESSION_MAX_AGE_SEC = 24 * 60 * 60;
-export const ADMIN_SESSION_EXPIRED_MESSAGE =
-  "Your admin session has expired. Please sign in again.";
+/** Legacy constant retained for API responses; elapsed time is not enforced. */
+export const ADMIN_SESSION_MAX_AGE_MS = 365 * 24 * 60 * 60 * 1000;
+export const ADMIN_SESSION_MAX_AGE_SEC = 365 * 24 * 60 * 60;
+export const ADMIN_SESSION_EXPIRED_MESSAGE = "Admin session required. Please sign in again.";
 export const ADMIN_SESSION_EXPIRED_QUERY = "expired=1";
 
 export function adminSessionLoginPath(requestUrl?: string | URL) {
@@ -22,9 +22,8 @@ export function parseAdminSessionStartedAt(cookieHeader: string | null): number 
   return Number.isFinite(startedAt) && startedAt > 0 ? startedAt : null;
 }
 
-export function isAdminSessionExpired(startedAt: number | null, now = Date.now()) {
-  if (startedAt === null) return true;
-  return now - startedAt >= ADMIN_SESSION_MAX_AGE_MS;
+export function isAdminSessionExpired(startedAt: number | null) {
+  return startedAt === null;
 }
 
 export function adminSessionCookieOptions() {

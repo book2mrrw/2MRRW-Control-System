@@ -2,11 +2,11 @@ import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
 import {
   ADMIN_SESSION_EXPIRED_MESSAGE,
-  adminSessionLoginPath,
   clearAdminSessionCookie,
   isAdminSessionExpired,
   parseAdminSessionStartedAt
 } from "@/server/auth/adminSession";
+import { isAdminUserId } from "@/lib/auth/adminAuth";
 import { getSupabasePublicConfig } from "@/utils/supabase/config";
 
 const DEFAULT_FRONTEND_ORIGINS = [
@@ -95,22 +95,7 @@ async function applyAuthGuard(request: NextRequest) {
     request.nextUrl.pathname === "/api/revalidate" ||
     request.nextUrl.pathname === "/api/auth/admin-session";
 
-  let isAdminUser = false;
-  if (session?.user?.id) {
-    const { data: profile } = await supabase.from("profiles").select("role").eq("id", session.user.id).maybeSingle();
-    isAdminUser = profile?.role === "admin";
-  }
-
-  const adminSessionStartedAt = parseAdminSessionStartedAt(request.headers.get("cookie") ?? "");
-  const adminSessionExpired = isAdminUser && isAdminSessionExpired(adminSessionStartedAt);
-
-  if (adminSessionExpired && !isLoginPage) {
-    await supabase.auth.signOut();
-    const loginUrl = new URL(adminSessionLoginPath(request.url), request.url);
-    const redirect = NextResponse.redirect(loginUrl);
-    clearAdminSessionCookie(redirect);
-    return redirect;
-  }
+  const isAdminUser = isAdminUserId(session?.user?.id);
 
   if (!session && !isPublicPage) {
     const loginUrl = new URL("/login", request.url);
@@ -121,7 +106,7 @@ async function applyAuthGuard(request: NextRequest) {
     return NextResponse.redirect(loginUrl);
   }
 
-  if (session && isLoginPage && isAdminUser && !adminSessionExpired) {
+  if (session && isLoginPage && isAdminUser) {
     const returnTo = request.nextUrl.searchParams.get("returnTo");
     const destination = returnTo && returnTo.startsWith("/") && !returnTo.startsWith("//") ? returnTo : "/dashboard";
     return NextResponse.redirect(new URL(destination, request.url));
