@@ -10,8 +10,8 @@
 
 | Repo | SHA | Message |
 |------|-----|---------|
-| Control | _(see `git rev-parse HEAD` after commit)_ | `fix(p4): signed url cache, sse stability, parity diagnostics` |
-| Storefront | _(see `git rev-parse HEAD` after commit)_ | `fix(p4): playback perf, gift reminders, stream e2e http` |
+| Control | `2304c9e3ea5ad54c1578ef3bc396a6b7079f45e5` | `fix(p4): signed url cache, sse stability, parity diagnostics` |
+| Storefront | `4d18dc2ef4bb1a459bcdbba577fc6913ef6ab3fe` | `fix(p4): playback perf, gift reminders, stream e2e http` |
 
 ---
 

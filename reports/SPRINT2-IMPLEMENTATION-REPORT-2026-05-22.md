@@ -10,7 +10,7 @@
 
 | Repo | SHA | Message |
 |------|-----|---------|
-| Control | `b50cc974ee1e72ed77ccd6a89a0cbf0f52792cf4` | `fix(p2): entitlements dual-write, catalog sync releases, seed webhook` |
+| Control | `cb2827dbe4c17cef124198bb8832e79890f0057e` | `fix(p2): entitlements dual-write, catalog sync releases, seed webhook` |
 | Storefront | `3c8b49e7f7b5d057515a67a8eb9b61d6e98b81c9` | `fix(p2): entitlements read path, products schema, e2e playback test` |
 
 ---

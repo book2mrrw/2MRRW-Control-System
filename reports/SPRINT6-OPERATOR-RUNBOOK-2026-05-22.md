@@ -123,7 +123,7 @@ cd /Users/recharge/2MRRW-Control-System
 npm run foundation:verify-platform
 ```
 
-**Current status (2026-05-23):** fails at control `npm run verify` because `tests/backend-foundation.test.ts` uses top-level `await` incompatible with tsx/esbuild CJS transform. **Workaround for deploy:** use `npm run typecheck && npm run build` + §4 smoke. Production smoke for releases count passes when `EXPECTED_RELEASES=9`.
+**Current status (2026-05-23, Sprint 6 `b2bfa57`):** top-level `await` fixed (async IIFE). `npm run verify` still fails on `testMediaUploadIntentFoundation` assertion drift (EP routing destinations). **Workaround:** `npm run typecheck && npm run build` + §4 smoke. Production smoke passes (`EXPECTED_RELEASES=9`). Storefront `verify:foundation` fails HEAD vs anchor until anchor updated.
 
 ---
 

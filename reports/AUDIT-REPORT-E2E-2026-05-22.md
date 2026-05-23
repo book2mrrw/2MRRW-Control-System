@@ -88,8 +88,8 @@
 
 | Repo | Message | SHA |
 |------|---------|-----|
-| Control | `feat: admin auth gate, fix cover art, mobile upload panels, sticky nav, simple lyrics textarea` | _(see below)_ |
-| Frontend | `audit: complete asset chain — cover art, motion cover, full audio, preview audio, lyrics across all release types` | _(see below)_ |
+| Control | `feat: admin auth gate, fix cover art, mobile upload panels, sticky nav, simple lyrics textarea` | `fe0facd49a0f7a08638895a1b98770fd8e88e53a` |
+| Frontend | `audit: complete asset chain — cover art, motion cover, full audio, preview audio, lyrics across all release types` | `0652ef1c8a6ac4484db3038f67015e4707fe38d2` |
 
 ## Blockers / follow-ups
 

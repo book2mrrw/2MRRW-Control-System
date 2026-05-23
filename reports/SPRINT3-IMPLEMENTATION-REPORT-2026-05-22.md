@@ -10,7 +10,7 @@
 
 | Repo | SHA | Message |
 |------|-----|---------|
-| Control | `cca3fdfe0072b4aab0a4694bd45c1b2f7f4e5502` | `fix(p3): sync reliability, publish gates, env validation` |
+| Control | `5e9b7b270d92e632a5d006493bdb419cb0e53e08` | `fix(p3): sync reliability, publish gates, env validation` |
 | Storefront | `b17771a3ceff5dffdbe7ff41f1086563ec8f3fac` | `fix(p3): gift security, sync consumer hardening` |
 
 ---
