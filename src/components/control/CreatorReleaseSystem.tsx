@@ -1453,7 +1453,24 @@ function ReleaseFlow({ onBack, onDone, onRefresh }: { onBack: () => void; onDone
           </div>
         </div>
         <StepBar current={step} />
-        {step === 0 ? <StepChooseType selected={selectedType} onSelect={selectType} /> : null}
+        {step === 0 ? (
+          <StepChooseType
+            selected={selectedType}
+            onSelect={(type) => {
+              if (saving) return;
+              selectType(type);
+              void (async () => {
+                setSaving(true);
+                const ok = await persistStep(1);
+                setSaving(false);
+                if (ok) {
+                  triggerSave();
+                  setStep(1);
+                }
+              })();
+            }}
+          />
+        ) : null}
         {step === 1 ? <StepReleaseDetails data={releaseData} onChange={setReleaseData} /> : null}
         {step === 2 ? <StepTracks releaseType={selectedType} tracks={tracks} onTracks={setTracks} credits={credits} onCredits={setCredits} /> : null}
         {step === 3 ? <StepArtwork stores={stores} onStores={setStores} pricing={pricing} onPricing={setPricing} /> : null}
@@ -1480,6 +1497,11 @@ function ReleaseFlow({ onBack, onDone, onRefresh }: { onBack: () => void; onDone
             }}
           />
         ) : null}
+        {error && step !== 0 ? (
+          <p style={{ fontSize: 12, color: "var(--err)", textAlign: "center", marginBottom: 10 }}>
+            <CircleAlert size={12} /> {error}
+          </p>
+        ) : null}
         <div className="release-flow-nav">
           <div className="row gap-10">
             {step > 0 ? (
@@ -1505,7 +1527,7 @@ function ReleaseFlow({ onBack, onDone, onRefresh }: { onBack: () => void; onDone
             <CircleAlert size={12} /> {step === 0 ? "Select a release type to continue." : step === 1 ? "Release title, artist, and date are required." : "Add at least one track with a title."}
           </p>
         ) : null}
-        {error ? (
+        {error && step === 0 ? (
           <p style={{ fontSize: 12, color: "var(--err)", textAlign: "center", marginTop: 10 }}>
             <CircleAlert size={12} /> {error}
           </p>
@@ -1847,11 +1869,11 @@ export function CreatorReleaseSystem({ initialCatalog = [] }: { initialCatalog?:
     (nextPage: Page) => {
       setPage(nextPage);
       const href = PAGE_ROUTES[nextPage];
-      if (href && href !== pathname) {
+      if (href) {
         router.push(href);
       }
     },
-    [pathname, router]
+    [router]
   );
 
   const activeNav = page === "flow" || page === "release-detail" ? "releases" : page;
@@ -1862,7 +1884,15 @@ export function CreatorReleaseSystem({ initialCatalog = [] }: { initialCatalog?:
       <Sidebar active={activeNav} onNav={navigate} collapsed={collapsed} onToggle={() => setCollapsed((c) => !c)} releaseCount={releases.length} />
       <div className="main">
         <TopBar title={pageTitle} onNewRelease={() => navigate("flow")} />
-        <div className={`page active${page === "media" || page === "release-detail" ? " page-scroll" : ""}`} key={page}>
+        <div
+          className={`page active${page === "media" || page === "release-detail" ? " page-scroll" : ""}`}
+          key={page}
+          style={
+            page === "flow"
+              ? { display: "flex", flexDirection: "column" }
+              : undefined
+          }
+        >
           <StudioToastBanner toast={toast} />
           {catalogLoading && catalog.length === 0 ? (
             <div style={{ padding: "20px 28px", display: "flex", flexDirection: "column", gap: 12 }}>
