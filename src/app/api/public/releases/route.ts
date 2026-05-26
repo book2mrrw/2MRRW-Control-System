@@ -59,7 +59,7 @@ function enrichPublicRelease(release: Awaited<ReturnType<typeof getLatestRelease
         csCover: track.csCover ?? null,
         csCoverType: track.csCoverType ?? "image",
         coverArtType: track.coverArtType ?? "image",
-        hasCs: Boolean(track.csAudio),
+        hasCs: Boolean(track.csAudio || track.csCover),
         assets: {
           preview: enrichPublicAsset(track.assets?.preview),
           full: track.assets?.full,
@@ -74,6 +74,7 @@ function enrichPublicRelease(release: Awaited<ReturnType<typeof getLatestRelease
     csAudio: release.csAudio ?? null,
     csCover: release.csCover ?? null,
     csCoverType: release.csCoverType ?? "image",
+    hasCs: Boolean(release.csAudio || release.csCover) || tracks.some((t) => t.hasCs),
     coverArtType: release.coverArtType ?? "image",
     status: release.status === "published" ? "published" : release.status,
     coverUrl,

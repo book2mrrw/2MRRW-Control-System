@@ -45,7 +45,9 @@ type UploadCategory =
   | "signal_asset"
   | "radio_asset"
   | "collector_card_asset"
-  | "vault_asset";
+  | "vault_asset"
+  | "cs_cover"
+  | "cs_audio";
 
 const professionalAudioAccept = [
   ...professionalAudioExtensions.map((extension) => `.${extension}`),
@@ -185,7 +187,9 @@ const routingDefaultsByCategory: Record<UploadCategory, { destination: MediaDest
   signal_asset: { destination: "hero", mediaType: "image" },
   radio_asset: { destination: "audio_visuals", mediaType: "video" },
   collector_card_asset: { destination: "release_media", mediaType: "image" },
-  vault_asset: { destination: "vault", mediaType: "video" }
+  vault_asset: { destination: "vault", mediaType: "video" },
+  cs_cover: { destination: "cover_art", mediaType: "image" },
+  cs_audio: { destination: "full_song_files", mediaType: "audio" }
 };
 
 const coverArtworkHelperText = "Upload square cover artwork. Minimum size: 1400x1400. Recommended size: 3000x3000. MP4 animated covers: max 50MB, no resolution requirement.";
@@ -205,11 +209,11 @@ function parseStudioAudioFormat(value: string): Pick<AudioUploadMetadata, "bitDe
 }
 
 function isCoverCategory(category: UploadCategory) {
-  return category === "release_cover" || category === "single_cover_art" || category === "album_cover_art";
+  return category === "release_cover" || category === "single_cover_art" || category === "album_cover_art" || category === "cs_cover";
 }
 
 function isAudioCategory(category: UploadCategory) {
-  return category === "track_audio" || category === "audio_full_song" || category === "audio_preview" || category === "preview_snippets" || category === "full_song_files";
+  return category === "track_audio" || category === "audio_full_song" || category === "audio_preview" || category === "preview_snippets" || category === "full_song_files" || category === "cs_audio";
 }
 
 function extensionFor(name: string) {

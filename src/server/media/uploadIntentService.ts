@@ -77,7 +77,9 @@ export const mediaUploadCategories = [
   "signal_asset",
   "radio_asset",
   "collector_card_asset",
-  "vault_asset"
+  "vault_asset",
+  "cs_cover",
+  "cs_audio"
 ] as const;
 export type MediaUploadCategory = (typeof mediaUploadCategories)[number];
 
@@ -246,7 +248,11 @@ function mediaTypeForUpload(category: MediaUploadCategory, mimeType?: string): R
 }
 
 function isAudioUploadCategory(category: MediaUploadCategory) {
-  return category === "audio_full_song" || category === "audio_preview" || category === "track_audio" || category === "preview_snippets" || category === "full_song_files";
+  return category === "audio_full_song" || category === "audio_preview" || category === "track_audio" || category === "preview_snippets" || category === "full_song_files" || category === "cs_audio";
+}
+
+function isCsCoverUploadCategory(category: MediaUploadCategory) {
+  return category === "cs_cover";
 }
 
 function audioAssetRoleFor(category: MediaUploadCategory): AudioAssetRole | undefined {
@@ -525,6 +531,28 @@ const UPLOAD_POLICIES: Record<MediaUploadCategory, UploadPolicy> = {
     mimeTypes: [...imageMimeTypes, ...mp4MimeTypes, ...audioMimeTypes, ...docMimeTypes],
     extensions: [...imageExtensions, "mp4", ...audioExtensions, ...docExtensions],
     ownerField: "vaultContentId"
+  },
+  cs_cover: {
+    bucket: R2_BUCKET || "2mrrw-media",
+    folder: "singles",
+    maxSizeMb: 70,
+    mimeTypes: coverMimeTypes,
+    extensions: coverExtensions,
+    ownerField: "trackId",
+    requiresRelease: true,
+    requiresTrack: true,
+    artworkQualityTarget: coverArtworkTarget
+  },
+  cs_audio: {
+    bucket: R2_BUCKET || "2mrrw-media",
+    folder: "masters",
+    maxSizeMb: 250,
+    mimeTypes: audioMimeTypes,
+    extensions: audioExtensions,
+    ownerField: "trackId",
+    requiresRelease: true,
+    requiresTrack: true,
+    audioQualityTarget: professionalAudioQualityTarget
   }
 };
 
@@ -609,11 +637,15 @@ function assertCompletionPath(input: MediaUploadOwnerInput & { path: string }, c
   const releaseId = sanitizePathPart(input.releaseId ?? "release");
   const sanitizedOwnerId = sanitizePathPart(ownerId);
   const expectedPrefix =
-    category === "audio_preview" || category === "audio_full_song" || category === "track_audio" || category === "preview_snippets" || category === "full_song_files" || category === "lyrics"
-      ? `${policy.folder}/${releaseId}/${sanitizedOwnerId}/`
-      : category === "single_cover_art" || category === "album_cover_art" || category === "release_cover"
-        ? `${policy.folder}/${sanitizedOwnerId}/cover/`
-        : `${policy.folder}/${sanitizedOwnerId}/`;
+    category === "cs_cover"
+      ? `${policy.folder}/${releaseId}/${sanitizedOwnerId}/cs-cover/`
+      : category === "cs_audio"
+        ? `${policy.folder}/${releaseId}/${sanitizedOwnerId}/cs-audio/`
+        : category === "audio_preview" || category === "audio_full_song" || category === "track_audio" || category === "preview_snippets" || category === "full_song_files" || category === "lyrics"
+          ? `${policy.folder}/${releaseId}/${sanitizedOwnerId}/`
+          : category === "single_cover_art" || category === "album_cover_art" || category === "release_cover"
+            ? `${policy.folder}/${sanitizedOwnerId}/cover/`
+            : `${policy.folder}/${sanitizedOwnerId}/`;
 
   if (!input.path.startsWith(expectedPrefix)) {
     throw new Error(`Completed upload path must start with ${expectedPrefix}`);
@@ -666,6 +698,14 @@ export function buildMediaUploadPath(input: MediaUploadIntentInput) {
     folder: policy.folder
   });
   const stampedName = `${Date.now()}-${storagePlan.canonicalFileName.replace(/\.[a-z0-9]+$/i, "")}.${extension}`;
+
+  if (category === "cs_cover") {
+    return `${policy.folder}/${sanitizePathPart(input.releaseId ?? "release")}/${sanitizePathPart(ownerId)}/cs-cover/${stampedName}`;
+  }
+
+  if (category === "cs_audio") {
+    return `${policy.folder}/${sanitizePathPart(input.releaseId ?? "release")}/${sanitizePathPart(ownerId)}/cs-audio/${stampedName}`;
+  }
 
   if (category === "audio_preview" || category === "audio_full_song" || category === "track_audio" || category === "preview_snippets" || category === "full_song_files" || category === "lyrics") {
     return `${policy.folder}/${sanitizePathPart(input.releaseId ?? "release")}/${sanitizePathPart(ownerId)}/${stampedName}`;
@@ -767,7 +807,7 @@ export function createReleaseMediaUploadIntent(input: MediaUploadIntentInput) {
 
 function ownerTypeFor(category: MediaUploadCategory): ManagedMediaAssetRecord["ownerType"] {
   if (category === "single_cover_art" || category === "album_cover_art" || category === "release_cover" || category === "latest_singles" || category === "albums" || category === "features") return "release";
-  if (category === "audio_preview" || category === "audio_full_song" || category === "track_audio" || category === "preview_snippets" || category === "full_song_files" || category === "lyrics") return "track";
+  if (category === "audio_preview" || category === "audio_full_song" || category === "track_audio" || category === "preview_snippets" || category === "full_song_files" || category === "lyrics" || category === "cs_cover" || category === "cs_audio") return "track";
   if (category === "signal_asset" || category === "hero_media") return "signal";
   if (category === "radio_asset" || category === "audio_visual") return "radio";
   if (category === "collector_card_asset" || category === "collectible_media" || category === "merch_media") return "collector";
@@ -815,9 +855,9 @@ export function confirmMediaUpload(input: {
   });
   const processingJobs = enqueueMediaOptimizationJobs(
     recordId,
-    category === "audio_full_song" || category === "audio_preview" || category === "track_audio" || category === "preview_snippets" || category === "full_song_files"
+    category === "audio_full_song" || category === "audio_preview" || category === "track_audio" || category === "preview_snippets" || category === "full_song_files" || category === "cs_audio"
       ? ["waveform_preview", "optimized_preview", "compressed_delivery"]
-      : category === "single_cover_art" || category === "album_cover_art" || category === "release_cover" || category === "latest_singles" || category === "albums" || category === "features" || category === "collector_card_asset" || category === "collectible_media" || category === "merch_media"
+      : category === "single_cover_art" || category === "album_cover_art" || category === "release_cover" || category === "cs_cover" || category === "latest_singles" || category === "albums" || category === "features" || category === "collector_card_asset" || category === "collectible_media" || category === "merch_media"
         ? ["thumbnail", "responsive_image", "image_optimization"]
         : category === "signal_asset" || category === "hero_media" || category === "radio_asset" || category === "audio_visual" || category === "vault_asset" || category === "vault_media"
           ? ["thumbnail", "optimized_preview"]
@@ -968,11 +1008,30 @@ export function confirmMediaUpload(input: {
     updateTrackInformation(input.releaseId, input.trackId, {
       audioState: "uploaded",
       audioFile: record.path,
-      csAudio: record.path,
       ...(audioAssetRole === "preview_audio" ? { previewAudioFile: record.path } : { fullAudioFile: record.path })
     });
-    void persistTrackMediaColumns(input.releaseId, input.trackId, { csAudio: record.path });
     recordReleaseActivity({ releaseId: input.releaseId, kind: "processing", message: previewGeneration?.state === "pending" ? "Audio waveform and preview generation queued" : "Audio preview and waveform metadata recorded" });
+  }
+
+  if (isCsCoverUploadCategory(category) && input.releaseId && input.trackId) {
+    const coverType = coverArtTypeForPath(record.path);
+    updateTrackInformation(input.releaseId, input.trackId, {
+      csCover: record.path,
+      csCoverType: coverType
+    });
+    void persistTrackMediaColumns(input.releaseId, input.trackId, {
+      csCover: record.path,
+      csCoverType: coverType
+    });
+    recordReleaseActivity({ releaseId: input.releaseId, kind: "processing", message: "CS cover saved to track" });
+  }
+
+  if (category === "cs_audio" && input.releaseId && input.trackId) {
+    updateTrackInformation(input.releaseId, input.trackId, {
+      csAudio: record.path
+    });
+    void persistTrackMediaColumns(input.releaseId, input.trackId, { csAudio: record.path });
+    recordReleaseActivity({ releaseId: input.releaseId, kind: "processing", message: "CS audio saved to track" });
   }
 
   if (category === "lyrics" && input.releaseId && input.trackId) {

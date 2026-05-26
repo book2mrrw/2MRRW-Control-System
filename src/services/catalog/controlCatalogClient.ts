@@ -10,6 +10,10 @@ export type DurableCatalogTrack = {
   audioAssetId?: string | null;
   previewUrl?: string | null;
   audioUrl?: string | null;
+  csCover?: string | null;
+  csCoverType?: "image" | "video";
+  csAudio?: string | null;
+  hasCs?: boolean;
 };
 
 export type DurableCatalogReleaseMedia = {

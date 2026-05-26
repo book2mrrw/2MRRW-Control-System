@@ -178,7 +178,11 @@ export async function buildControlCatalogPayload(options?: {
         previewUrl: null,
         audioUrl: null,
         lyricsText: track.lyricsText ?? null,
-        lyricsMode: track.lyricsMode ?? "static"
+        lyricsMode: track.lyricsMode ?? "static",
+        csCover: track.csCover ?? null,
+        csCoverType: track.csCoverType ?? "image",
+        csAudio: track.csAudio ?? null,
+        hasCs: Boolean(track.csAudio || track.csCover)
       })),
       releaseMedia: release.releaseMedia.map((link) => ({
         id: link.id,

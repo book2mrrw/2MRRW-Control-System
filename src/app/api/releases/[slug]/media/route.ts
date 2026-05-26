@@ -15,7 +15,7 @@ export async function GET(_request: Request, { params }: { params: Promise<{ slu
     ...release,
     csAudio: release.csAudio ?? null,
     csCover: release.csCover ?? null,
-    hasCs: Boolean(release.csAudio),
+    hasCs: Boolean(release.csAudio || release.csCover),
     assets
   });
 }

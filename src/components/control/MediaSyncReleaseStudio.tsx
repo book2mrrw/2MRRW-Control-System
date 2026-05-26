@@ -3,6 +3,7 @@
 import { ChevronDown, ChevronUp, GripVertical, Headphones, Maximize2, MoreHorizontal, Pencil, Play, Plus, RefreshCw, Rocket, Trash2 } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { MediaUploadPanel } from "@/components/control/MediaUploadPanel";
+import { CsMediaUploadSection } from "@/components/control/CsMediaUploadSection";
 import type { ControlUiRelease, DurableCatalogRelease, DurableCatalogTrack, ReleaseLiveStatus } from "@/services/catalog/controlCatalogClient";
 import { ScheduledCountdown } from "@/components/control/ReleaseScheduleSection";
 import { formatWhen } from "@/lib/formatWhen";
@@ -676,6 +677,17 @@ function ReleaseWorkspacePanel({
                 <div className="media-sync-asset-preview empty">No cover yet</div>
               )}
               <MediaUploadPanel draft={draft} mode="artwork" fixedCategory="release_cover" compact studioLayout acceptOverride={isAlbumLike ? undefined : `${motionAccept},image/*`} onUploadComplete={onUploadComplete} />
+              {track ? (
+                <CsMediaUploadSection
+                  draft={draft}
+                  trackId={track.id}
+                  csCover={track.csCover}
+                  csCoverType={track.csCoverType}
+                  csAudio={track.csAudio}
+                  audioDurationSeconds={track.durationSeconds}
+                  onUploadComplete={onUploadComplete}
+                />
+              ) : null}
             </AssetPanel>
             {isAlbumLike ? (
               <AssetPanel title="Motion Cover" status={release.loopUrl ? "Linked" : "Missing"} ok={Boolean(release.loopUrl)} hint="MP4 / MOV / WebM · up to 90s loop">
@@ -713,6 +725,15 @@ function ReleaseWorkspacePanel({
                         {t.previewUrl ? <button type="button" className="btn btn-ghost btn-sm" onClick={() => setPreviewUrl(t.previewUrl!)}><Maximize2 size={12} /> Play</button> : null}
                         <MediaUploadPanel draft={{ ...draft, tracks: [{ id: t.id, title: t.title, position: t.position }] }} fixedCategory="preview_snippets" compact studioLayout onUploadComplete={onUploadComplete} />
                       </AssetPanel>
+                      <CsMediaUploadSection
+                        draft={draft}
+                        trackId={t.id}
+                        csCover={t.csCover}
+                        csCoverType={t.csCoverType}
+                        csAudio={t.csAudio}
+                        audioDurationSeconds={t.durationSeconds}
+                        onUploadComplete={onUploadComplete}
+                      />
                     </div>
                   </details>
                 ))}
@@ -750,6 +771,17 @@ function ReleaseWorkspacePanel({
                   onUploadComplete={onUploadComplete}
                 />
               </AssetPanel>
+              {track ? (
+                <CsMediaUploadSection
+                  draft={draft}
+                  trackId={track.id}
+                  csCover={track.csCover}
+                  csCoverType={track.csCoverType}
+                  csAudio={track.csAudio}
+                  audioDurationSeconds={track.durationSeconds}
+                  onUploadComplete={onUploadComplete}
+                />
+              ) : null}
             </div>
           )
         ) : null}
