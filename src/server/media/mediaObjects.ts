@@ -47,6 +47,10 @@ export type TrackMediaObject = {
   };
   entitlement: EntitlementSummary;
   playback: PlaybackStatsContract;
+  csAudio?: string | null;
+  csCover?: string | null;
+  csCoverType?: "image" | "video";
+  coverArtType?: "image" | "video";
 };
 
 export type ReleaseMediaObject = {
@@ -92,6 +96,10 @@ export type ReleaseMediaObject = {
     trackCount: number;
     saved: boolean;
   };
+  csAudio?: string | null;
+  csCover?: string | null;
+  csCoverType?: "image" | "video";
+  coverArtType?: "image" | "video";
 };
 
 function releaseCategoryFor(release: Release): ReleaseCategory {
@@ -235,7 +243,11 @@ export function buildTrackMediaObject(
       durationSeconds: track.durationSeconds,
       completionPercent: track.durationSeconds > 0 ? Math.min(100, Math.round((positionSeconds / track.durationSeconds) * 100)) : 0,
       updatedAt: progress?.updatedAt
-    }
+    },
+    csAudio: (track as { csAudio?: string | null; cs_audio?: string | null }).csAudio ?? (track as { cs_audio?: string | null }).cs_audio ?? null,
+    csCover: (track as { csCover?: string | null; cs_cover?: string | null }).csCover ?? (track as { cs_cover?: string | null }).cs_cover ?? null,
+    csCoverType: ((track as { csCoverType?: string | null; cs_cover_type?: string | null }).csCoverType ?? (track as { cs_cover_type?: string | null }).cs_cover_type) === "video" ? "video" : "image",
+    coverArtType: ((track as { coverArtType?: string | null; cover_art_type?: string | null }).coverArtType ?? (track as { cover_art_type?: string | null }).cover_art_type) === "video" ? "video" : "image"
   };
 }
 
@@ -295,6 +307,10 @@ export function buildReleaseMediaObject(input: MediaObjectInput): ReleaseMediaOb
       totalDurationSeconds: tracks.reduce((sum, track) => sum + track.durationSeconds, 0),
       trackCount: tracks.length,
       saved: input.savedReleaseIds?.includes(input.release.id) ?? false
-    }
+    },
+    csAudio: (input.release as { csAudio?: string | null; cs_audio?: string | null }).csAudio ?? (input.release as { cs_audio?: string | null }).cs_audio ?? null,
+    csCover: (input.release as { csCover?: string | null; cs_cover?: string | null }).csCover ?? (input.release as { cs_cover?: string | null }).cs_cover ?? null,
+    csCoverType: ((input.release as { csCoverType?: string | null; cs_cover_type?: string | null }).csCoverType ?? (input.release as { cs_cover_type?: string | null }).cs_cover_type) === "video" ? "video" : "image",
+    coverArtType: ((input.release as { coverArtType?: string | null; cover_art_type?: string | null }).coverArtType ?? (input.release as { cover_art_type?: string | null }).cover_art_type) === "video" ? "video" : "image"
   };
 }

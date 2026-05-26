@@ -55,6 +55,11 @@ function enrichPublicRelease(release: Awaited<ReturnType<typeof getLatestRelease
   const tracks = Array.isArray(release.tracks)
     ? release.tracks.map((track) => ({
         ...track,
+        csAudio: track.csAudio ?? null,
+        csCover: track.csCover ?? null,
+        csCoverType: track.csCoverType ?? "image",
+        coverArtType: track.coverArtType ?? "image",
+        hasCs: Boolean(track.csAudio),
         assets: {
           preview: enrichPublicAsset(track.assets?.preview),
           full: track.assets?.full,
@@ -66,6 +71,10 @@ function enrichPublicRelease(release: Awaited<ReturnType<typeof getLatestRelease
 
   return {
     ...release,
+    csAudio: release.csAudio ?? null,
+    csCover: release.csCover ?? null,
+    csCoverType: release.csCoverType ?? "image",
+    coverArtType: release.coverArtType ?? "image",
     status: release.status === "published" ? "published" : release.status,
     coverUrl,
     loopUrl,
