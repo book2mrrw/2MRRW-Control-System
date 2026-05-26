@@ -80,8 +80,24 @@ function publicReadCorsHeaders(request: Request) {
   return headers;
 }
 
-export function OPTIONS(request: Request) {
-  return new Response(null, { status: 204, headers: publicReadCorsHeaders(request) });
+export async function OPTIONS(request: Request) {
+  const origin = request.headers.get("origin") ?? "";
+  const allowed = [
+    "https://www.2mrrw.com",
+    "https://2mrrw.com",
+    "https://artist-platform-silk.vercel.app",
+    "http://localhost:3000",
+  ];
+  const allowOrigin = allowed.includes(origin) ? origin : allowed[0];
+  return new Response(null, {
+    status: 204,
+    headers: {
+      "Access-Control-Allow-Origin": allowOrigin,
+      "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
+      "Access-Control-Allow-Headers": "Content-Type, Authorization",
+      "Access-Control-Max-Age": "86400",
+    },
+  });
 }
 
 function withPublicReadCors(response: Response, request: Request) {
