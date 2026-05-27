@@ -88,13 +88,13 @@ export async function OPTIONS(request: Request) {
     "https://artist-platform-silk.vercel.app",
     "http://localhost:3000",
   ];
-  const allowOrigin = allowed.includes(origin) ? origin : allowed[0];
+  const allowOrigin = allowed.includes(origin) ? origin : "https://www.2mrrw.com";
   return new Response(null, {
     status: 204,
     headers: {
       "Access-Control-Allow-Origin": allowOrigin,
       "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
-      "Access-Control-Allow-Headers": "Content-Type, Authorization",
+      "Access-Control-Allow-Headers": "Content-Type, Authorization, x-control-session-id",
       "Access-Control-Max-Age": "86400",
     },
   });
