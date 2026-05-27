@@ -1,4 +1,4 @@
-import { fail, getSessionId, getUserId, ok, withCors } from "@/server/http";
+import { corsPreflight, fail, getSessionId, getUserId, ok, withCors } from "@/server/http";
 import { trackPlaybackEventDurable } from "@/server/releases/releaseReadService";
 import { z } from "zod";
 
@@ -48,21 +48,5 @@ export async function POST(request: Request) {
 }
 
 export async function OPTIONS(request: Request) {
-  const origin = request.headers.get("origin") ?? "";
-  const allowed = [
-    "https://www.2mrrw.com",
-    "https://2mrrw.com",
-    "https://artist-platform-silk.vercel.app",
-    "http://localhost:3000",
-  ];
-  const allowOrigin = allowed.includes(origin) ? origin : "https://www.2mrrw.com";
-  return new Response(null, {
-    status: 204,
-    headers: {
-      "Access-Control-Allow-Origin": allowOrigin,
-      "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
-      "Access-Control-Allow-Headers": "Content-Type, Authorization, x-control-session-id",
-      "Access-Control-Max-Age": "86400",
-    },
-  });
+  return corsPreflight(request);
 }

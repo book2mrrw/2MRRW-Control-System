@@ -9,7 +9,9 @@ const DEFAULT_FRONTEND_ORIGINS = [
   "https://artist-platform-silk.vercel.app",
   "https://2mrrw-official.vercel.app",
   "http://localhost:3000",
-  "http://127.0.0.1:3000"
+  "http://127.0.0.1:3000",
+  "http://localhost:5173",
+  "http://127.0.0.1:5173"
 ];
 
 const IDENTITY_HEADER_NAMES = ["x-user-id", "x-control-user-id", "x-guest-user-id"];
