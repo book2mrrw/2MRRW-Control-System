@@ -4,6 +4,8 @@ import crypto from "node:crypto";
 import { assertAdminSessionActive, ADMIN_SESSION_EXPIRED_MESSAGE } from "@/server/auth/adminSession";
 
 const DEFAULT_FRONTEND_ORIGINS = [
+  "https://2mrrw.com",
+  "https://www.2mrrw.com",
   "https://artist-platform-silk.vercel.app",
   "https://2mrrw-official.vercel.app",
   "http://localhost:3000",

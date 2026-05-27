@@ -10,6 +10,8 @@ import { isAdminUserId } from "@/lib/auth/adminAuth";
 import { getSupabasePublicConfig } from "@/utils/supabase/config";
 
 const DEFAULT_FRONTEND_ORIGINS = [
+  "https://2mrrw.com",
+  "https://www.2mrrw.com",
   "https://artist-platform-silk.vercel.app",
   "https://2mrrw-official.vercel.app",
   "http://localhost:3000",

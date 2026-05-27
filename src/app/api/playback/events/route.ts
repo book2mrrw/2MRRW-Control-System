@@ -1,4 +1,4 @@
-import { fail, getSessionId, getUserId, ok } from "@/server/http";
+import { corsPreflight, fail, getSessionId, getUserId, ok, withCors } from "@/server/http";
 import { trackPlaybackEventDurable } from "@/server/releases/releaseReadService";
 import { z } from "zod";
 
@@ -33,33 +33,20 @@ export async function POST(request: Request) {
   });
 
   if (!parsed.success) {
-    return fail("Invalid playback event payload", 400, parsed.error.flatten());
+    return withCors(fail("Invalid playback event payload", 400, parsed.error.flatten()), request);
   }
 
-  return ok(
-    await trackPlaybackEventDurable(getUserId(request), {
-      ...parsed.data,
-      sessionId: getSessionId(request)
-    })
+  return withCors(
+    ok(
+      await trackPlaybackEventDurable(getUserId(request), {
+        ...parsed.data,
+        sessionId: getSessionId(request)
+      })
+    ),
+    request
   );
 }
 
-export async function OPTIONS(request: Request) {
-  const origin = request.headers.get("origin") ?? "";
-  const allowed = [
-    "https://www.2mrrw.com",
-    "https://2mrrw.com",
-    "https://artist-platform-silk.vercel.app",
-    "http://localhost:3000",
-  ];
-  const allowOrigin = allowed.includes(origin) ? origin : allowed[0];
-  return new Response(null, {
-    status: 204,
-    headers: {
-      "Access-Control-Allow-Origin": allowOrigin,
-      "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
-      "Access-Control-Allow-Headers": "Content-Type, Authorization",
-      "Access-Control-Max-Age": "86400",
-    },
-  });
+export function OPTIONS(request: Request) {
+  return corsPreflight(request);
 }
