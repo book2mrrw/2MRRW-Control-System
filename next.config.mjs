@@ -31,6 +31,33 @@ const nextConfig = {
   images: {
     remotePatterns,
   },
+  async headers() {
+    const allowedOrigins = [
+      "https://www.2mrrw.com",
+      "https://2mrrw.com",
+      "https://artist-platform-silk.vercel.app",
+      "http://localhost:3000",
+    ];
+    return [
+      {
+        source: "/api/:path*",
+        headers: [
+          {
+            key: "Access-Control-Allow-Methods",
+            value: "GET, POST, OPTIONS",
+          },
+          {
+            key: "Access-Control-Allow-Headers",
+            value: "Content-Type, Authorization",
+          },
+          {
+            key: "Access-Control-Allow-Origin",
+            value: allowedOrigins.join(","),
+          },
+        ],
+      },
+    ];
+  },
 };
 
 export default nextConfig;
